@@ -1,0 +1,1997 @@
+[
+ {
+  "id": 1,
+  "descripcion": "Reparación Fisuras cielo",
+  "pu": 11760
+ },
+ {
+  "id": 2,
+  "descripcion": "Preparación de Superficie Cielo",
+  "pu": 2160
+ },
+ {
+  "id": 3,
+  "descripcion": "Empaste y Lijado Cielo",
+  "pu": 4680
+ },
+ {
+  "id": 4,
+  "descripcion": "Cuadraturas de Marcos y Puertas",
+  "pu": 39600
+ },
+ {
+  "id": 5,
+  "descripcion": "Reparación fisuras Muros",
+  "pu": 11760
+ },
+ {
+  "id": 6,
+  "descripcion": "Preparación de Superficie Muros",
+  "pu": 2160
+ },
+ {
+  "id": 7,
+  "descripcion": "Empaste y Lijado Muros",
+  "pu": 4680
+ },
+ {
+  "id": 8,
+  "descripcion": "Aplicación Base Aparejo Sipa",
+  "pu": 4680
+ },
+ {
+  "id": 9,
+  "descripcion": "Aplicación Pintura Terminacion Esmalte al Agua",
+  "pu": 8400
+ },
+ {
+  "id": 10,
+  "descripcion": "Reparación Fisuras Muro (epóxico)",
+  "pu": 12000
+ },
+ {
+  "id": 11,
+  "descripcion": "Aplicación Pintura Terminacion Texturada",
+  "pu": 9360
+ },
+ {
+  "id": 12,
+  "descripcion": "Retiro Cornisas Dañadas",
+  "pu": 2400
+ },
+ {
+  "id": 13,
+  "descripcion": "Reposición Cornisas",
+  "pu": 5400
+ },
+ {
+  "id": 14,
+  "descripcion": "Pintura Terminación Cornisas",
+  "pu": 2400
+ },
+ {
+  "id": 15,
+  "descripcion": "Retiro de cerámicos",
+  "pu": 3600
+ },
+ {
+  "id": 16,
+  "descripcion": "Retiro de excedentes pegamento cerámico",
+  "pu": 3600
+ },
+ {
+  "id": 17,
+  "descripcion": "Suministro e instalación de cerámicos",
+  "pu": 27600
+ },
+ {
+  "id": 18,
+  "descripcion": "Retiro de guardapolvos",
+  "pu": 2400
+ },
+ {
+  "id": 19,
+  "descripcion": "Suministro e Instalación de guardapolvos",
+  "pu": 6240
+ },
+ {
+  "id": 20,
+  "descripcion": "Empastado de Sectores Reparados",
+  "pu": 4680
+ },
+ {
+  "id": 21,
+  "descripcion": "Aplicación de Pintura en Cielo",
+  "pu": 8400
+ },
+ {
+  "id": 22,
+  "descripcion": "Reparación de Fisuras en muros con masilla base",
+  "pu": 10680
+ },
+ {
+  "id": 23,
+  "descripcion": "Retiro de papel mural",
+  "pu": 2400
+ },
+ {
+  "id": 24,
+  "descripcion": "Suministro e instalación papel mural",
+  "pu": 12420
+ },
+ {
+  "id": 25,
+  "descripcion": "Retiro cornisa",
+  "pu": 2400
+ },
+ {
+  "id": 26,
+  "descripcion": "Suministro e Instalación cornisa",
+  "pu": 5400
+ },
+ {
+  "id": 27,
+  "descripcion": "Retiro de puerta en mal estado",
+  "pu": 12600
+ },
+ {
+  "id": 28,
+  "descripcion": "Retiro centro de puerta",
+  "pu": 12600
+ },
+ {
+  "id": 29,
+  "descripcion": "Suministro e Instalación centro de puerta",
+  "pu": 69480
+ },
+ {
+  "id": 30,
+  "descripcion": "Suministro e Instalación de puerta baño principal",
+  "pu": 69480
+ },
+ {
+  "id": 31,
+  "descripcion": "Retiro puertas closet",
+  "pu": 5400
+ },
+ {
+  "id": 32,
+  "descripcion": "Reinstalación puertas closet",
+  "pu": 6720
+ },
+ {
+  "id": 33,
+  "descripcion": "Reparación de Fisuras en cielo con masilla base",
+  "pu": 10680
+ },
+ {
+  "id": 34,
+  "descripcion": "Empastado Cielo",
+  "pu": 4680
+ },
+ {
+  "id": 35,
+  "descripcion": "Aplicación Puente Adherente Textura",
+  "pu": 6900
+ },
+ {
+  "id": 36,
+  "descripcion": "Aplicación Textura Cielo",
+  "pu": 9360
+ },
+ {
+  "id": 37,
+  "descripcion": "Aplicación Pintura Cielo",
+  "pu": 8400
+ },
+ {
+  "id": 38,
+  "descripcion": "Limpieza Fisuras",
+  "pu": 1800
+ },
+ {
+  "id": 39,
+  "descripcion": "Retiro Papel Mural",
+  "pu": 2400
+ },
+ {
+  "id": 40,
+  "descripcion": "Suministro e Instalacion Papel Mural",
+  "pu": 12420
+ },
+ {
+  "id": 41,
+  "descripcion": "Retiro Guardapolvos MDF o Similar",
+  "pu": 2400
+ },
+ {
+  "id": 42,
+  "descripcion": "Reinstalacion de Guardapolvos Retirados",
+  "pu": 3000
+ },
+ {
+  "id": 43,
+  "descripcion": "Suministro e Instalacion Guardapolvos",
+  "pu": 6240
+ },
+ {
+  "id": 44,
+  "descripcion": "Reinstalacion Cornisa Retirada",
+  "pu": 2640
+ },
+ {
+  "id": 45,
+  "descripcion": "Suministro e Instalacion Cornisa",
+  "pu": 5400
+ },
+ {
+  "id": 46,
+  "descripcion": "Aplicación de Pintura en Muros",
+  "pu": 8400
+ },
+ {
+  "id": 47,
+  "descripcion": "Reparación de fisuras grado 1 en cielo",
+  "pu": 11760
+ },
+ {
+  "id": 48,
+  "descripcion": "Reparación de fisuras grado 1 en muros",
+  "pu": 11760
+ },
+ {
+  "id": 49,
+  "descripcion": "Aplicación Base Aparejo Sipa Muro",
+  "pu": 4680
+ },
+ {
+  "id": 50,
+  "descripcion": "Aplicación de Pintura en Muro",
+  "pu": 8400
+ },
+ {
+  "id": 51,
+  "descripcion": "Cuadratura de Marcos y Ventanas",
+  "pu": 39600
+ },
+ {
+  "id": 52,
+  "descripcion": "Sellado de Fisuras Puerta",
+  "pu": 4320
+ },
+ {
+  "id": 53,
+  "descripcion": "Sellado de Fisuras Ventanas",
+  "pu": 4320
+ },
+ {
+  "id": 54,
+  "descripcion": "Retiro Cerámicas Muro",
+  "pu": 3600
+ },
+ {
+  "id": 55,
+  "descripcion": "Aplicación Fragüe Impermeable Topex",
+  "pu": 3600
+ },
+ {
+  "id": 56,
+  "descripcion": "Instalación Cerámica Cordillera Muro",
+  "pu": 27600
+ },
+ {
+  "id": 57,
+  "descripcion": "instalación Cerámicos",
+  "pu": 27600
+ },
+ {
+  "id": 58,
+  "descripcion": "Retiro Estucos Agrietados Muro Bulldog",
+  "pu": 4140
+ },
+ {
+  "id": 59,
+  "descripcion": "Cambio de Pastelón Muro Bulldog",
+  "pu": 34200
+ },
+ {
+  "id": 60,
+  "descripcion": "Sellado de Fisuras Emboquillado Muro",
+  "pu": 4320
+ },
+ {
+  "id": 61,
+  "descripcion": "Reparación Fisuras Piso (epóxico)",
+  "pu": 12000
+ },
+ {
+  "id": 62,
+  "descripcion": "Retiro Flexit",
+  "pu": 3480
+ },
+ {
+  "id": 63,
+  "descripcion": "Instalación Flexit",
+  "pu": 9600
+ },
+ {
+  "id": 64,
+  "descripcion": "Preparación de Superficie",
+  "pu": 2160
+ },
+ {
+  "id": 65,
+  "descripcion": "Retiro Placas Cierre Pastelón Vibrado",
+  "pu": 4080
+ },
+ {
+  "id": 66,
+  "descripcion": "Retiro Placas Cierre Pastelón Vibrado",
+  "pu": 4080
+ },
+ {
+  "id": 67,
+  "descripcion": "Reposición Placas Cierre Pastelón Vibrado",
+  "pu": 34200
+ },
+ {
+  "id": 68,
+  "descripcion": "Sellado de Fisuras Emboquillado Muro Bulldog",
+  "pu": 4320
+ },
+ {
+  "id": 69,
+  "descripcion": "Cambio Pilares Muro Bulldog",
+  "pu": 10800
+ },
+ {
+  "id": 70,
+  "descripcion": "Picado en Grieta para reparación de Muro",
+  "pu": 3120
+ },
+ {
+  "id": 71,
+  "descripcion": "Limpieza Grieta con Hidropresión",
+  "pu": 1800
+ },
+ {
+  "id": 72,
+  "descripcion": "Aplicación Puente de Adherencia",
+  "pu": 3120
+ },
+ {
+  "id": 73,
+  "descripcion": "Relleno con Mortero",
+  "pu": 3840
+ },
+ {
+  "id": 74,
+  "descripcion": "Retiro Cierre Perimetral",
+  "pu": 4080
+ },
+ {
+  "id": 75,
+  "descripcion": "Reposición Cierre Pandereta Vibrado",
+  "pu": 34200
+ },
+ {
+  "id": 76,
+  "descripcion": "Preparación de Superficie",
+  "pu": 2160
+ },
+ {
+  "id": 77,
+  "descripcion": "Instalación Cerámica Cordillera",
+  "pu": 27600
+ },
+ {
+  "id": 78,
+  "descripcion": "Aplicación Fragüe Impermeable Topex",
+  "pu": 3600
+ },
+ {
+  "id": 79,
+  "descripcion": "Instalación Cerámica Cordillera Piso",
+  "pu": 27600
+ },
+ {
+  "id": 80,
+  "descripcion": "Preparación de Superficie Piso",
+  "pu": 3480
+ },
+ {
+  "id": 81,
+  "descripcion": "Retiro Cerámicas Piso",
+  "pu": 3600
+ },
+ {
+  "id": 82,
+  "descripcion": "Retiro Junquillos Dañados",
+  "pu": 2400
+ },
+ {
+  "id": 83,
+  "descripcion": "Reposición Junquillos",
+  "pu": 3600
+ },
+ {
+  "id": 84,
+  "descripcion": "Pintura Terminación Junquillos",
+  "pu": 2400
+ },
+ {
+  "id": 85,
+  "descripcion": "Reposición Siding",
+  "pu": 21480
+ },
+ {
+  "id": 86,
+  "descripcion": "Retiro de Siding",
+  "pu": 2400
+ },
+ {
+  "id": 87,
+  "descripcion": "Limpieza Grieta",
+  "pu": 1800
+ },
+ {
+  "id": 88,
+  "descripcion": "Reparación Fisuras Muro Tabique",
+  "pu": 9360
+ },
+ {
+  "id": 89,
+  "descripcion": "Retiro tejas dañadas",
+  "pu": 3840
+ },
+ {
+  "id": 90,
+  "descripcion": "Reposición tejas",
+  "pu": 26160
+ },
+ {
+  "id": 91,
+  "descripcion": "Retiro fieltro asfaltico",
+  "pu": 1800
+ },
+ {
+  "id": 92,
+  "descripcion": "Reposicion fieltro asfaltico",
+  "pu": 4440
+ },
+ {
+  "id": 93,
+  "descripcion": "Retiro encamisado OSB",
+  "pu": 2400
+ },
+ {
+  "id": 94,
+  "descripcion": "Reposición encamisado OSB",
+  "pu": 14760
+ },
+ {
+  "id": 95,
+  "descripcion": "Retiro Aislación",
+  "pu": 1560
+ },
+ {
+  "id": 96,
+  "descripcion": "Reposición Aislación",
+  "pu": 6120
+ },
+ {
+  "id": 97,
+  "descripcion": "Retiro encamisado OSB",
+  "pu": 2400
+ },
+ {
+  "id": 98,
+  "descripcion": "Reposición encamisado OSB",
+  "pu": 14760
+ },
+ {
+  "id": 99,
+  "descripcion": "Retiro Aislación",
+  "pu": 1560
+ },
+ {
+  "id": 100,
+  "descripcion": "Reposición Aislación",
+  "pu": 6120
+ },
+ {
+  "id": 101,
+  "descripcion": "Retiro alero dañado",
+  "pu": 1800
+ },
+ {
+  "id": 102,
+  "descripcion": "Reposición alero",
+  "pu": 11520
+ },
+ {
+  "id": 103,
+  "descripcion": "Preparación de Superficie Cielo-Alero",
+  "pu": 3120
+ },
+ {
+  "id": 104,
+  "descripcion": "Empaste y Lijado Cielo-Alero",
+  "pu": 4680
+ },
+ {
+  "id": 105,
+  "descripcion": "Aplicación Base Aparejo Sipa Cielo",
+  "pu": 4680
+ },
+ {
+  "id": 106,
+  "descripcion": "Aplicación Pintura Terminación Esmalte al Agua",
+  "pu": 8400
+ },
+ {
+  "id": 107,
+  "descripcion": "Reposición fieltro asfaltico",
+  "pu": 4440
+ },
+ {
+  "id": 108,
+  "descripcion": "Retiro planchas dañadas",
+  "pu": 3360
+ },
+ {
+  "id": 109,
+  "descripcion": "Reposición planchas",
+  "pu": 16200
+ },
+ {
+  "id": 110,
+  "descripcion": "Retiro cielo dañado madera",
+  "pu": 2400
+ },
+ {
+  "id": 111,
+  "descripcion": "Reposición cielo madera",
+  "pu": 13080
+ },
+ {
+  "id": 112,
+  "descripcion": "Aplicación barniz de terminación",
+  "pu": 7680
+ },
+ {
+  "id": 113,
+  "descripcion": "Reposición fieltro asfaltico",
+  "pu": 4440
+ },
+ {
+  "id": 114,
+  "descripcion": "Retiro planchas dañadas",
+  "pu": 3360
+ },
+ {
+  "id": 115,
+  "descripcion": "Reposición planchas",
+  "pu": 16200
+ },
+ {
+  "id": 116,
+  "descripcion": "Retiro cielo dañado madera",
+  "pu": 2400
+ },
+ {
+  "id": 117,
+  "descripcion": "Reposición cielo madera",
+  "pu": 13080
+ },
+ {
+  "id": 118,
+  "descripcion": "Aplicación barniz de terminación",
+  "pu": 7680
+ },
+ {
+  "id": 119,
+  "descripcion": "Aplicación pintura",
+  "pu": 8400
+ },
+ {
+  "id": 120,
+  "descripcion": "Retiro caballete",
+  "pu": 4140
+ },
+ {
+  "id": 121,
+  "descripcion": "Reposición caballete",
+  "pu": 9960
+ },
+ {
+  "id": 122,
+  "descripcion": "Retiro cielo yeso cartón",
+  "pu": 3840
+ },
+ {
+  "id": 123,
+  "descripcion": "Reposición cielo",
+  "pu": 9960
+ },
+ {
+  "id": 124,
+  "descripcion": "Aplicación base aparejo sipa",
+  "pu": 4680
+ },
+ {
+  "id": 125,
+  "descripcion": "Picado en Grieta para Reparación de Losa",
+  "pu": 3120
+ },
+ {
+  "id": 126,
+  "descripcion": "Limpieza Grieta",
+  "pu": 1800
+ },
+ {
+  "id": 127,
+  "descripcion": "Relleno con Mortero Losa",
+  "pu": 3840
+ },
+ {
+  "id": 128,
+  "descripcion": "Preparación de Superficie Muro",
+  "pu": 2160
+ },
+ {
+  "id": 129,
+  "descripcion": "Reparación Fisuras Múltiples Muros.",
+  "pu": 11760
+ },
+ {
+  "id": 130,
+  "descripcion": "Preparación de Superficie Muros.",
+  "pu": 2160
+ },
+ {
+  "id": 131,
+  "descripcion": "Aplicación Base Aparejo Sipa.",
+  "pu": 4680
+ },
+ {
+  "id": 132,
+  "descripcion": "Aplicación Pintura Terminación Esmalte al Agua.",
+  "pu": 8400
+ },
+ {
+  "id": 133,
+  "descripcion": "Fijación y Sellos Marco Puerta.",
+  "pu": 23400
+ },
+ {
+  "id": 134,
+  "descripcion": "Aplicación Pintura Muro Terminación Esmalte al Agua.",
+  "pu": 8400
+ },
+ {
+  "id": 135,
+  "descripcion": "Retiro Estucos Agrietados Muro Bulldog.",
+  "pu": 4140
+ },
+ {
+  "id": 136,
+  "descripcion": "Sellado de Fisuras Emboquillado Muro Bulldog.",
+  "pu": 4320
+ },
+ {
+  "id": 137,
+  "descripcion": "Reparación Fisuras Cielos.",
+  "pu": 11760
+ },
+ {
+  "id": 138,
+  "descripcion": "Preparación de Superficie Cielos.",
+  "pu": 2160
+ },
+ {
+  "id": 139,
+  "descripcion": "Aplicación Base Aparejo Sipa.",
+  "pu": 4680
+ },
+ {
+  "id": 140,
+  "descripcion": "Reparación Fisuras Muros.",
+  "pu": 11760
+ },
+ {
+  "id": 141,
+  "descripcion": "Pintura y Sellos Cornisas.",
+  "pu": 3600
+ },
+ {
+  "id": 142,
+  "descripcion": "Aplicación Pintura Cielo Terminación Esmalte al Agua.",
+  "pu": 8400
+ },
+ {
+  "id": 143,
+  "descripcion": "Aplicación Pintura Cielos Terminación Esmalte al Agua.",
+  "pu": 8400
+ },
+ {
+  "id": 144,
+  "descripcion": "Pintura y Sellos Guardapolvo.",
+  "pu": 6900
+ },
+ {
+  "id": 145,
+  "descripcion": "Fijación y Sellos Marco Ventana.",
+  "pu": 39600
+ },
+ {
+  "id": 146,
+  "descripcion": "Retiro Cerámicas (Muro).",
+  "pu": 3600
+ },
+ {
+  "id": 147,
+  "descripcion": "Retiro  Placa Muro (Yeso Cartón RH).",
+  "pu": 3840
+ },
+ {
+  "id": 148,
+  "descripcion": "Reposición Placa Muro (Yeso Cartón RH).",
+  "pu": 16178
+ },
+ {
+  "id": 149,
+  "descripcion": "Preparación de Superficie (Muro).",
+  "pu": 2160
+ },
+ {
+  "id": 150,
+  "descripcion": "Instalación Cerámica Cordillera (Muro).",
+  "pu": 27600
+ },
+ {
+  "id": 151,
+  "descripcion": "Aplicación Fragüe Impermeable Topex (Muro).",
+  "pu": 3600
+ },
+ {
+  "id": 152,
+  "descripcion": "Pintura y Sellos Molduras.",
+  "pu": 3600
+ },
+ {
+  "id": 153,
+  "descripcion": "Retiro Poste de Hormigón Vibrado tipo Bulldog h=1.80m.",
+  "pu": 4800
+ },
+ {
+  "id": 154,
+  "descripcion": "Instalación Poste de Hormigón Vibrado tipo Bulldog h=1.80m.",
+  "pu": 10800
+ },
+ {
+  "id": 155,
+  "descripcion": "Retiro Placa Pandereta 2,0 x 0,6 M. Bulldog.",
+  "pu": 4800
+ },
+ {
+  "id": 156,
+  "descripcion": "Instalación Placa Pandereta 2,0 x 0,6 M. Bulldog.",
+  "pu": 34200
+ },
+ {
+  "id": 157,
+  "descripcion": "Retiro de ceramico pavimento",
+  "pu": 3600
+ },
+ {
+  "id": 158,
+  "descripcion": "Instalación de ceramico pavimento",
+  "pu": 27600
+ },
+ {
+  "id": 159,
+  "descripcion": "Frague ceramicas",
+  "pu": 3600
+ },
+ {
+  "id": 160,
+  "descripcion": "Reparación de fisuras y postura de huinchas en cielo",
+  "pu": 11760
+ },
+ {
+  "id": 161,
+  "descripcion": "Limpieza  y reparación superficie de cielo",
+  "pu": 1800
+ },
+ {
+  "id": 162,
+  "descripcion": "Aplicación de pintura E. al Agua 2 manos",
+  "pu": 8400
+ },
+ {
+  "id": 163,
+  "descripcion": "Retiro de cornisa",
+  "pu": 2400
+ },
+ {
+  "id": 164,
+  "descripcion": "Reposición de Cornisa",
+  "pu": 5400
+ },
+ {
+  "id": 165,
+  "descripcion": "Reparación de fisuras y postura de huinchas en muro",
+  "pu": 11760
+ },
+ {
+  "id": 166,
+  "descripcion": "Limpieza  y reparación superficie de pared",
+  "pu": 1800
+ },
+ {
+  "id": 167,
+  "descripcion": "Retiro de guardapolvos",
+  "pu": 2400
+ },
+ {
+  "id": 168,
+  "descripcion": "Reposicón de guardapolvos",
+  "pu": 6240
+ },
+ {
+  "id": 169,
+  "descripcion": "Retiro de ceramico muros",
+  "pu": 3600
+ },
+ {
+  "id": 170,
+  "descripcion": "Instalación de ceramico muros",
+  "pu": 27600
+ },
+ {
+  "id": 171,
+  "descripcion": "Retiro de vulcanita HR",
+  "pu": 3840
+ },
+ {
+  "id": 172,
+  "descripcion": "Instalación de vulcanita HR",
+  "pu": 18600
+ },
+ {
+  "id": 173,
+  "descripcion": "Retiro de excedentes de obra y traslado a botadero",
+  "pu": 48000
+ },
+ {
+  "id": 174,
+  "descripcion": "Limpieza terreno y compactación suelo natural",
+  "pu": 8640
+ },
+ {
+  "id": 175,
+  "descripcion": "Trazado y nivelación de terreno",
+  "pu": 5520
+ },
+ {
+  "id": 176,
+  "descripcion": "Instalación nueva pandereta",
+  "pu": 34200
+ },
+ {
+  "id": 177,
+  "descripcion": "Aplicación Pintura Terminación Esmalte al Agua (2 manos)",
+  "pu": 8400
+ },
+ {
+  "id": 178,
+  "descripcion": "Empaste y Lijado de Muros (Incluye Imprimante o puente adherente)",
+  "pu": 4680
+ },
+ {
+  "id": 179,
+  "descripcion": "Empaste y Lijado de Cielos (Incluye Imprimante o puente adherente)",
+  "pu": 4680
+ },
+ {
+  "id": 180,
+  "descripcion": "Limpieza y Preparación de Superficie Cielos",
+  "pu": 2160
+ },
+ {
+  "id": 181,
+  "descripcion": "Reparación Fisuras Marco puerta",
+  "pu": 4320
+ },
+ {
+  "id": 182,
+  "descripcion": "Pintura y Sellos Puerta",
+  "pu": 4320
+ },
+ {
+  "id": 183,
+  "descripcion": ",",
+  "pu": 4320
+ },
+ {
+  "id": 184,
+  "descripcion": "Pintura y Sellos ventana",
+  "pu": 4320
+ },
+ {
+  "id": 185,
+  "descripcion": "Preparación de Superficie (Muro)",
+  "pu": 2160
+ },
+ {
+  "id": 186,
+  "descripcion": "Aplicación Fragüe Impermeable Topex (Muro)",
+  "pu": 3120
+ },
+ {
+  "id": 187,
+  "descripcion": "Preparación de Superficie (Muro)",
+  "pu": 2160
+ },
+ {
+  "id": 188,
+  "descripcion": "Aplicación Fragüe Impermeable Topex (Muro)",
+  "pu": 3600
+ },
+ {
+  "id": 189,
+  "descripcion": "Limpieza y Preparacion de Superficie de Muro",
+  "pu": 2160
+ },
+ {
+  "id": 190,
+  "descripcion": "Reparacion de Fisura y postura huincha en Muro Volcometal",
+  "pu": 9600
+ },
+ {
+  "id": 191,
+  "descripcion": "Empaste y Lijado Total de Muro (incluye imprimante o puente adherente)",
+  "pu": 4680
+ },
+ {
+  "id": 192,
+  "descripcion": "Aplicación de Pintura de Terminacion Esmalte al agua Muros (2 manos)",
+  "pu": 8400
+ },
+ {
+  "id": 193,
+  "descripcion": "Limpieza y Preparacion de Superficie de Cielo",
+  "pu": 2160
+ },
+ {
+  "id": 194,
+  "descripcion": "Reparacion de Fisura y postura huincha en Cielo Volcometal",
+  "pu": 9600
+ },
+ {
+  "id": 195,
+  "descripcion": "Empaste y Lijado Total de Cielo (incluye imprimante o puente adherente)",
+  "pu": 4680
+ },
+ {
+  "id": 196,
+  "descripcion": "Aplicación de Pintura de Terminacion Esmalte al agua Cielo (2 manos).",
+  "pu": 8400
+ },
+ {
+  "id": 197,
+  "descripcion": "Reparación de fisura",
+  "pu": 11760
+ },
+ {
+  "id": 198,
+  "descripcion": "Sellado de cornisas",
+  "pu": 3480
+ },
+ {
+  "id": 199,
+  "descripcion": "Retiro de papel mural",
+  "pu": 2400
+ },
+ {
+  "id": 200,
+  "descripcion": "Preparación superficie",
+  "pu": 2160
+ },
+ {
+  "id": 201,
+  "descripcion": "Provisión e instalación de papel mural",
+  "pu": 12420
+ },
+ {
+  "id": 202,
+  "descripcion": "Pintura esmalte en cornisas",
+  "pu": 2400
+ },
+ {
+  "id": 203,
+  "descripcion": "Aplicación de granito",
+  "pu": 7680
+ },
+ {
+  "id": 204,
+  "descripcion": "Preparación superficie cielo",
+  "pu": 2160
+ },
+ {
+  "id": 205,
+  "descripcion": "Pintura esmalte al agua",
+  "pu": 8400
+ },
+ {
+  "id": 206,
+  "descripcion": "Reparación fisura muro",
+  "pu": 11760
+ },
+ {
+  "id": 207,
+  "descripcion": "Preparación superficie",
+  "pu": 2160
+ },
+ {
+  "id": 208,
+  "descripcion": "Pintura esmalte al agua 2 manos",
+  "pu": 8400
+ },
+ {
+  "id": 209,
+  "descripcion": "Retiro de Placas afectada Buldog",
+  "pu": 4080
+ },
+ {
+  "id": 210,
+  "descripcion": "Provisión e instalación de placas Buldog",
+  "pu": 34200
+ },
+ {
+  "id": 211,
+  "descripcion": "Provisión e instalación de pilares soportantes de placas",
+  "pu": 10800
+ },
+ {
+  "id": 212,
+  "descripcion": "Emboquillado",
+  "pu": 4320
+ },
+ {
+  "id": 213,
+  "descripcion": "Retiro de cerámica",
+  "pu": 3600
+ },
+ {
+  "id": 214,
+  "descripcion": "Preparación de superficie y afinado",
+  "pu": 2160
+ },
+ {
+  "id": 215,
+  "descripcion": "Provisión e instalación de cerámica",
+  "pu": 27600
+ },
+ {
+  "id": 216,
+  "descripcion": "Limpieza  y reparación superficie de muro",
+  "pu": 1800
+ },
+ {
+  "id": 217,
+  "descripcion": "Limpieza  y reparación superficie de cielo",
+  "pu": 1800
+ },
+ {
+  "id": 218,
+  "descripcion": "Aplicación de pintura E. al Agua 2 manos",
+  "pu": 8400
+ },
+ {
+  "id": 219,
+  "descripcion": "Reparacion de fisura",
+  "pu": 11760
+ },
+ {
+  "id": 220,
+  "descripcion": "Preparacion superficie",
+  "pu": 2160
+ },
+ {
+  "id": 221,
+  "descripcion": "Retiro de ceramica",
+  "pu": 3600
+ },
+ {
+  "id": 222,
+  "descripcion": "Preparacion de superficie y afinado",
+  "pu": 2160
+ },
+ {
+  "id": 223,
+  "descripcion": "Instalacion de ceramica",
+  "pu": 27600
+ },
+ {
+  "id": 224,
+  "descripcion": "Retiro de placas buldog",
+  "pu": 4080
+ },
+ {
+  "id": 225,
+  "descripcion": "Instalacion de placas buldog",
+  "pu": 9240
+ },
+ {
+  "id": 226,
+  "descripcion": "instalacion de pilares",
+  "pu": 10080
+ },
+ {
+  "id": 227,
+  "descripcion": "Provisión y aplicación sello marco puerta",
+  "pu": 4320
+ },
+ {
+  "id": 228,
+  "descripcion": "Ajuste y recorrido puerta",
+  "pu": 23400
+ },
+ {
+  "id": 229,
+  "descripcion": "Provi. y aplicación  Pintura muros",
+  "pu": 8400
+ },
+ {
+  "id": 230,
+  "descripcion": "Provisión y aplicación sello cornisa alero",
+  "pu": 3360
+ },
+ {
+  "id": 231,
+  "descripcion": "Provi. y aplicación  Pintura alero (ancho 60 cm)",
+  "pu": 8400
+ },
+ {
+  "id": 232,
+  "descripcion": "Tratamiento de juntas de terminación (Epóxico)",
+  "pu": 11760
+ },
+ {
+  "id": 233,
+  "descripcion": "Provi y aplicación Empaste y lijado",
+  "pu": 4680
+ },
+ {
+  "id": 234,
+  "descripcion": "Provisión, retiro y reposición sello cornisas y/o esquineros",
+  "pu": 7800
+ },
+ {
+  "id": 235,
+  "descripcion": "Provi. y aplicación  Pintura cielo",
+  "pu": 8400
+ },
+ {
+  "id": 236,
+  "descripcion": "Tratamiento de juntas de terminación y fisuras",
+  "pu": 11760
+ },
+ {
+  "id": 237,
+  "descripcion": "Retiro de Ceramicos y adhesivo",
+  "pu": 3600
+ },
+ {
+  "id": 238,
+  "descripcion": "Provisión y reposicion de planchas de fibrocemento rotas por retiro de cerámica",
+  "pu": 18960
+ },
+ {
+  "id": 239,
+  "descripcion": "Provi. y Colocación de Cerámicos",
+  "pu": 27600
+ },
+ {
+  "id": 240,
+  "descripcion": "Frague",
+  "pu": 3600
+ },
+ {
+  "id": 241,
+  "descripcion": "Retiro y reposición sello cornisas",
+  "pu": 6600
+ },
+ {
+  "id": 242,
+  "descripcion": "Limpieza y Preparacion de Superficie de Fachada",
+  "pu": 2160
+ },
+ {
+  "id": 243,
+  "descripcion": "Reparacion de Fisura Fachada con Albañileria",
+  "pu": 11760
+ },
+ {
+  "id": 244,
+  "descripcion": "Empaste y Lijado Total de Fachada (incluye imprimante o puente adherente)",
+  "pu": 4680
+ },
+ {
+  "id": 245,
+  "descripcion": "Retiro Ceramica de Piso",
+  "pu": 3600
+ },
+ {
+  "id": 246,
+  "descripcion": "Reparacion de Fisura en Piso HA",
+  "pu": 11760
+ },
+ {
+  "id": 247,
+  "descripcion": "Preparacion de Superficie Piso",
+  "pu": 3480
+ },
+ {
+  "id": 248,
+  "descripcion": "Prov. E Inst. Ceramicos Piso",
+  "pu": 27600
+ },
+ {
+  "id": 249,
+  "descripcion": "Reparación de Fisura en Cielo HA",
+  "pu": 11760
+ },
+ {
+  "id": 250,
+  "descripcion": "Aplicación de Texturado Martelina Cielo.",
+  "pu": 9360
+ },
+ {
+  "id": 251,
+  "descripcion": "Retiro volcanita yeso cartón",
+  "pu": 3840
+ },
+ {
+  "id": 252,
+  "descripcion": "Reposición volcanita yeso cartón",
+  "pu": 16178
+ },
+ {
+  "id": 253,
+  "descripcion": "Preparación superficie",
+  "pu": 2160
+ },
+ {
+  "id": 254,
+  "descripcion": "Pintura esmalte al agua",
+  "pu": 8400
+ },
+ {
+  "id": 255,
+  "descripcion": "Retiro de lana mineral",
+  "pu": 2160
+ },
+ {
+  "id": 256,
+  "descripcion": "Instalación de lana mineral",
+  "pu": 3840
+ },
+ {
+  "id": 257,
+  "descripcion": "Retiro cornisas",
+  "pu": 2400
+ },
+ {
+  "id": 258,
+  "descripcion": "Instalación cornisas",
+  "pu": 2640
+ },
+ {
+  "id": 259,
+  "descripcion": "Pintura cornisa",
+  "pu": 3480
+ },
+ {
+  "id": 260,
+  "descripcion": "Retiro y reinstalación punto eléctrico",
+  "pu": 4680
+ },
+ {
+  "id": 261,
+  "descripcion": "Retiro piso flotante",
+  "pu": 2760
+ },
+ {
+  "id": 262,
+  "descripcion": "Instalación piso flotante (incluye espuma niveladora)",
+  "pu": 22080
+ },
+ {
+  "id": 263,
+  "descripcion": "Retiro guardapolvos",
+  "pu": 2400
+ },
+ {
+  "id": 264,
+  "descripcion": "Instalación guardapolvos",
+  "pu": 3000
+ },
+ {
+  "id": 265,
+  "descripcion": "Pintura guardapolvos",
+  "pu": 2400
+ },
+ {
+  "id": 266,
+  "descripcion": "Retiro cubierta zinc acanalado",
+  "pu": 3120
+ },
+ {
+  "id": 267,
+  "descripcion": "Instalación cubierta zinc acanalado",
+  "pu": 12480
+ },
+ {
+  "id": 268,
+  "descripcion": "Retiro de papel fieltro",
+  "pu": 1800
+ },
+ {
+  "id": 269,
+  "descripcion": "Instalación de papel fieltro",
+  "pu": 2640
+ },
+ {
+  "id": 270,
+  "descripcion": "Hojalaterías varias y sellos",
+  "pu": 114240
+ },
+ {
+  "id": 271,
+  "descripcion": "Reparación sello cornisa",
+  "pu": 3360
+ },
+ {
+  "id": 272,
+  "descripcion": "Reparación fisura",
+  "pu": 11760
+ },
+ {
+  "id": 273,
+  "descripcion": "Reparación fisura ventanas",
+  "pu": 4320
+ },
+ {
+  "id": 274,
+  "descripcion": "Reparación fisuras ventanas y puertas",
+  "pu": 4320
+ },
+ {
+  "id": 275,
+  "descripcion": "Retiro cerámica",
+  "pu": 3600
+ },
+ {
+  "id": 276,
+  "descripcion": "Reposición cerámica",
+  "pu": 27600
+ },
+ {
+  "id": 277,
+  "descripcion": "Retiro papel mural (incluye raspado y prep. superficie)",
+  "pu": 2400
+ },
+ {
+  "id": 278,
+  "descripcion": "Reposición papel mural (incluye adhesivo)",
+  "pu": 12420
+ },
+ {
+  "id": 279,
+  "descripcion": "Retiro Guardapolvo Dañado",
+  "pu": 2400
+ },
+ {
+  "id": 280,
+  "descripcion": "Reposición Guardapolvo",
+  "pu": 6240
+ },
+ {
+  "id": 281,
+  "descripcion": "Pintura Terminación Guardapolvo",
+  "pu": 2400
+ },
+ {
+  "id": 282,
+  "descripcion": "Reparación Fisura en Albañilería.",
+  "pu": 10200
+ },
+ {
+  "id": 283,
+  "descripcion": "Reparación piso",
+  "pu": 3000
+ },
+ {
+  "id": 284,
+  "descripcion": "Retiro ceramica",
+  "pu": 3600
+ },
+ {
+  "id": 285,
+  "descripcion": "Aplicación frague",
+  "pu": 3600
+ },
+ {
+  "id": 286,
+  "descripcion": "Faena de limpieza del recinto",
+  "pu": 1800
+ },
+ {
+  "id": 287,
+  "descripcion": "Aplicación pintura esmalte al agua",
+  "pu": 8400
+ },
+ {
+  "id": 288,
+  "descripcion": "Reparación cielo",
+  "pu": 10200
+ },
+ {
+  "id": 289,
+  "descripcion": "Preparación de superficie cielo",
+  "pu": 2160
+ },
+ {
+  "id": 290,
+  "descripcion": "Reparación muros",
+  "pu": 10200
+ },
+ {
+  "id": 291,
+  "descripcion": "Barniz 2 manos",
+  "pu": 7680
+ },
+ {
+  "id": 292,
+  "descripcion": "Retiro cornisas",
+  "pu": 2400
+ },
+ {
+  "id": 293,
+  "descripcion": "Instalación cornisas",
+  "pu": 2640
+ },
+ {
+  "id": 294,
+  "descripcion": "Pintura cornisas",
+  "pu": 2400
+ },
+ {
+  "id": 295,
+  "descripcion": "Retiro y reinstalacion punto electrico",
+  "pu": 5040
+ },
+ {
+  "id": 296,
+  "descripcion": "Retiro cubierta zinc acanalado",
+  "pu": 3120
+ },
+ {
+  "id": 297,
+  "descripcion": "Instalación cubierta zinc acanalado",
+  "pu": 12480
+ },
+ {
+  "id": 298,
+  "descripcion": "Reparación emboquillado suelto Placas de Hormigón Vibrado",
+  "pu": 4320
+ },
+ {
+  "id": 299,
+  "descripcion": "Retiro, provisión e Instalación de Pilares Trizados",
+  "pu": 10080
+ },
+ {
+  "id": 300,
+  "descripcion": "Retiro, provisión e Instalación de Pilares Trizados",
+  "pu": 10080
+ },
+ {
+  "id": 301,
+  "descripcion": "Retiro de ceramica piso quebrada",
+  "pu": 3600
+ },
+ {
+  "id": 302,
+  "descripcion": "Retiro de cerámicas quebrada muros",
+  "pu": 3600
+ },
+ {
+  "id": 303,
+  "descripcion": "Reparación Fisuras muros",
+  "pu": 10200
+ },
+ {
+  "id": 304,
+  "descripcion": "Empaste Paredes",
+  "pu": 4680
+ },
+ {
+  "id": 305,
+  "descripcion": "Provisión e Intalación cerámica piso",
+  "pu": 27600
+ },
+ {
+  "id": 306,
+  "descripcion": "Provisión e Intalación cerámica muros",
+  "pu": 27600
+ },
+ {
+  "id": 307,
+  "descripcion": "Empaste Cielo",
+  "pu": 4680
+ },
+ {
+  "id": 308,
+  "descripcion": "Pintura Cielo",
+  "pu": 8400
+ },
+ {
+  "id": 309,
+  "descripcion": "Reparación sellos marco de puertas y ventanas",
+  "pu": 4320
+ },
+ {
+  "id": 310,
+  "descripcion": "Provisión e Intalación cerámica piso",
+  "pu": 27600
+ },
+ {
+  "id": 311,
+  "descripcion": "Retiro artefactos sanitarios",
+  "pu": 8400
+ },
+ {
+  "id": 312,
+  "descripcion": "Retiro piso flotante",
+  "pu": 2760
+ },
+ {
+  "id": 313,
+  "descripcion": "Provisión e instalación guardapolvos",
+  "pu": 6240
+ },
+ {
+  "id": 314,
+  "descripcion": "Provisión e instalación cornizas",
+  "pu": 5400
+ },
+ {
+  "id": 315,
+  "descripcion": "Provisión e instalación piso flotante",
+  "pu": 22080
+ },
+ {
+  "id": 316,
+  "descripcion": "Reparación Fisuras Paredes",
+  "pu": 10200
+ },
+ {
+  "id": 317,
+  "descripcion": "Empaste Paredes",
+  "pu": 4680
+ },
+ {
+  "id": 318,
+  "descripcion": "Pintura Paredes",
+  "pu": 8400
+ },
+ {
+  "id": 319,
+  "descripcion": "Reparación grietas paredes y cielo",
+  "pu": 10200
+ },
+ {
+  "id": 320,
+  "descripcion": "Reparación sellos marco de puertas y ventanas",
+  "pu": 4320
+ },
+ {
+  "id": 321,
+  "descripcion": "Retiro de ceramica piso quebrada",
+  "pu": 3600
+ },
+ {
+  "id": 322,
+  "descripcion": "Retiro de cubierta \"zinc acanalado\"",
+  "pu": 3120
+ },
+ {
+  "id": 323,
+  "descripcion": "Instalación de zinc acanalado",
+  "pu": 12480
+ },
+ {
+  "id": 324,
+  "descripcion": "Pintura cubierta",
+  "pu": 6720
+ },
+ {
+  "id": 325,
+  "descripcion": "Retiro de lana mineral",
+  "pu": 2160
+ },
+ {
+  "id": 326,
+  "descripcion": "Instalación de lana mineral",
+  "pu": 3840
+ },
+ {
+  "id": 327,
+  "descripcion": "Retiro de papel fieltro",
+  "pu": 2400
+ },
+ {
+  "id": 328,
+  "descripcion": "Instalación de papel fieltro",
+  "pu": 2640
+ },
+ {
+  "id": 329,
+  "descripcion": "Reclave de cubierta",
+  "pu": 3240
+ },
+ {
+  "id": 330,
+  "descripcion": "Retiro de escantillón de combustión",
+  "pu": 13800
+ },
+ {
+  "id": 331,
+  "descripcion": "Confección e instalación de escantillón",
+  "pu": 62100
+ },
+ {
+  "id": 332,
+  "descripcion": "Sellado de silicona en  terminaciones",
+  "pu": 2400
+ },
+ {
+  "id": 333,
+  "descripcion": "Retiro de Caballete",
+  "pu": 4140
+ },
+ {
+  "id": 334,
+  "descripcion": "Confección e instalación Caballete",
+  "pu": 9960
+ },
+ {
+  "id": 335,
+  "descripcion": "Retiro de cornisas",
+  "pu": 2400
+ },
+ {
+  "id": 336,
+  "descripcion": "Reposición de cornisas",
+  "pu": 5400
+ },
+ {
+  "id": 337,
+  "descripcion": "Retiro de junquillos",
+  "pu": 2400
+ },
+ {
+  "id": 338,
+  "descripcion": "Reposición de junquillos",
+  "pu": 3600
+ },
+ {
+  "id": 339,
+  "descripcion": "Limpieza y reparación superficie pared",
+  "pu": 1800
+ },
+ {
+  "id": 340,
+  "descripcion": "Retiro de cerámica piso",
+  "pu": 3600
+ },
+ {
+  "id": 341,
+  "descripcion": "Instalación de cerámica piso",
+  "pu": 27600
+ },
+ {
+  "id": 342,
+  "descripcion": "Instalación de fragüé cerámica",
+  "pu": 3600
+ },
+ {
+  "id": 343,
+  "descripcion": "Retiro de guardapolvo",
+  "pu": 2400
+ },
+ {
+  "id": 344,
+  "descripcion": "Instalación de guardapolvo",
+  "pu": 3000
+ },
+ {
+  "id": 345,
+  "descripcion": "Retiro de cerámica muro",
+  "pu": 3600
+ },
+ {
+  "id": 346,
+  "descripcion": "Instalación de cerámica muro",
+  "pu": 27600
+ },
+ {
+  "id": 347,
+  "descripcion": "Instalación de fragüe cerámica",
+  "pu": 3600
+ },
+ {
+  "id": 348,
+  "descripcion": "Retiro de plancha internit base cerámica",
+  "pu": 3600
+ },
+ {
+  "id": 349,
+  "descripcion": "Instalación de plancha internit base cerámica",
+  "pu": 11520
+ },
+ {
+  "id": 350,
+  "descripcion": "Reparación de fisuras y emboquillado con postura de mortero de hormigon",
+  "pu": 4320
+ },
+ {
+  "id": 351,
+  "descripcion": "Reparación Fisuras Encuentro Muro Cielo.",
+  "pu": 9600
+ },
+ {
+  "id": 352,
+  "descripcion": "Reparación Fisuras Muros.",
+  "pu": 9600
+ },
+ {
+  "id": 353,
+  "descripcion": "Reparación Fisuras Muros.",
+  "pu": 9600
+ },
+ {
+  "id": 354,
+  "descripcion": "Pintura y Sellos Cornisas.",
+  "pu": 3600
+ },
+ {
+  "id": 355,
+  "descripcion": "Reparación Fisuras Cielos.",
+  "pu": 10200
+ },
+ {
+  "id": 356,
+  "descripcion": "Sellado de Fisuras en Cornisas",
+  "pu": 3480
+ },
+ {
+  "id": 357,
+  "descripcion": "Reparacion y fijacion marco puerta y ventanas con muro",
+  "pu": 11400
+ },
+ {
+  "id": 358,
+  "descripcion": "Reparacion de Fisura en Muro",
+  "pu": 10200
+ },
+ {
+  "id": 359,
+  "descripcion": "Limpieza y Preparacion de Superficie para pintar Muro",
+  "pu": 2160
+ },
+ {
+  "id": 360,
+  "descripcion": "Empaste y Lijado de Muro",
+  "pu": 4680
+ },
+ {
+  "id": 361,
+  "descripcion": "Aplicación base aparejo",
+  "pu": 4680
+ },
+ {
+  "id": 362,
+  "descripcion": "Aplicación de Pintura de Terminacion texturizada o granito",
+  "pu": 9360
+ },
+ {
+  "id": 363,
+  "descripcion": "Retiro y reposicion de Panderetas Bulldog Fisuradas",
+  "pu": 34200
+ },
+ {
+  "id": 364,
+  "descripcion": "Retiro Emboquillado en Muro Bulldog",
+  "pu": 4320
+ },
+ {
+  "id": 365,
+  "descripcion": "Sellado de Fisuras en Emboquillado de Muro Bulldog",
+  "pu": 4320
+ },
+ {
+  "id": 366,
+  "descripcion": "Aplicación base aparejo en muros",
+  "pu": 4680
+ },
+ {
+  "id": 367,
+  "descripcion": "Aplicación de Pintura de Terminacion Esmalte al agua Muros",
+  "pu": 8400
+ },
+ {
+  "id": 368,
+  "descripcion": "Limpieza y Preparacion de Superficie para pintar Muro",
+  "pu": 2160
+ },
+ {
+  "id": 369,
+  "descripcion": "Aplicación Reboque de panderetas",
+  "pu": 4800
+ },
+ {
+  "id": 370,
+  "descripcion": "Retiro reboque dañado y preparación superficie",
+  "pu": 4680
+ },
+ {
+  "id": 371,
+  "descripcion": "Alfombra",
+  "pu": 24000
+ },
+ {
+  "id": 372,
+  "descripcion": "Retiro cielo dañado yeso cartón",
+  "pu": 3840
+ },
+ {
+  "id": 373,
+  "descripcion": "Reposición tejuela asfaltica",
+  "pu": 19560
+ },
+ {
+  "id": 374,
+  "descripcion": "Retiro tejuelas dañadas",
+  "pu": 4080
+ },
+ {
+  "id": 375,
+  "descripcion": "Reparación de fisura cielo",
+  "pu": 10680
+ },
+ {
+  "id": 376,
+  "descripcion": "Aplicación de empaste",
+  "pu": 4440
+ },
+ {
+  "id": 377,
+  "descripcion": "Aplicación de pintura E. al Agua 2 manos cielo",
+  "pu": 8400
+ },
+ {
+  "id": 378,
+  "descripcion": "Sellado Cornisas",
+  "pu": 3480
+ },
+ {
+  "id": 379,
+  "descripcion": "Reparación de fisura muro",
+  "pu": 9600
+ },
+ {
+  "id": 380,
+  "descripcion": "Aplicación de pintura E. al Agua 2 manos muro",
+  "pu": 8400
+ },
+ {
+  "id": 381,
+  "descripcion": "Sellado de junquillos",
+  "pu": 3600
+ },
+ {
+  "id": 382,
+  "descripcion": "Aplicación de pintura",
+  "pu": 8400
+ },
+ {
+  "id": 383,
+  "descripcion": "Reparación Fisuras en Muro Albañilería Ext.",
+  "pu": 9600
+ },
+ {
+  "id": 384,
+  "descripcion": "Preparación Superficie Muro Albañilería Exterior",
+  "pu": 2160
+ },
+ {
+  "id": 385,
+  "descripcion": "Aplicación Base Aparejo Sipa Muro Exterior",
+  "pu": 3600
+ },
+ {
+  "id": 386,
+  "descripcion": "Aplicación Terminación Pintura Esmalte al Agua Muro Exterior",
+  "pu": 8400
+ },
+ {
+  "id": 387,
+  "descripcion": "Retiro Base Texturizada Muro Exterior",
+  "pu": 2400
+ },
+ {
+  "id": 388,
+  "descripcion": "Aplicación Base Texturizada Muros Exterior",
+  "pu": 9360
+ },
+ {
+  "id": 389,
+  "descripcion": "Retiro Revestimiento Cerámica Piso",
+  "pu": 3600
+ },
+ {
+  "id": 390,
+  "descripcion": "Instalación Revestimiento Cerámica Piso",
+  "pu": 27600
+ },
+ {
+  "id": 391,
+  "descripcion": "Aplicación Fragúe Impermeable Topex Piso",
+  "pu": 1800
+ },
+ {
+  "id": 392,
+  "descripcion": "Retiro Placa Hormigón Vibrado",
+  "pu": 3600
+ },
+ {
+  "id": 393,
+  "descripcion": "Aplicación Pintura Esmalte al Agua Cierre Perimetral",
+  "pu": 8400
+ },
+ {
+  "id": 394,
+  "descripcion": "Reposición Placa Pandereta Hormigón Armado",
+  "pu": 14400
+ },
+ {
+  "id": 395,
+  "descripcion": "Reparación Fisuras en Muro Tabique",
+  "pu": 4200
+ },
+ {
+  "id": 396,
+  "descripcion": "Preparación de Superficie Muros Interiores",
+  "pu": 2160
+ },
+ {
+  "id": 397,
+  "descripcion": "Aplicación Base Aparejo Sipa Muro Interior",
+  "pu": 3600
+ },
+ {
+  "id": 398,
+  "descripcion": "Aplicación Pintura Terminación Esmalte al Agua Sipa Muro Interior",
+  "pu": 8400
+ },
+ {
+  "id": 399,
+  "descripcion": "Fijación y Sellos Marco Puerta",
+  "pu": 23400
+ }
+]

@@ -1,0 +1,52 @@
+name: Strix Security Scan & Test Battery
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master, dev ]
+  workflow_dispatch:
+
+jobs:
+  security-audit:
+    name: Security Vulnerability & Secrets Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        if: hashFiles('package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run NPM Audit
+        if: hashFiles('package.json') != ''
+        run: |
+          npm audit --audit-level=high || echo "::warning::Se encontraron vulnerabilidades de dependencias en npm"
+
+      - name: Scan Secrets & Credentials
+        run: |
+          echo "Scanning for sensitive keys and tokens..."
+          # Regex search for credentials
+          ! grep -rEI "(eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}|sb_secret_[a-zA-Z0-9_-]{16,}|sk-(live-)?[a-zA-Z0-9_-]{20,}|ghp_[a-zA-Z0-9]{20,}|AIza[0-9A-Za-z-_]{35}|-----BEGIN .* PRIVATE KEY-----)" . \
+            --exclude-dir={.git,node_modules,.next,dist,build,bitacora} \
+            --exclude="*.md" \
+            || { echo "::error::Credencial o secreto detectado en el repositorio!"; exit 1; }
+
+      - name: Run Strix AppSec Scan
+        continue-on-error: true
+        env:
+          STRIX_LLM: ${{ secrets.STRIX_LLM }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ -n "$LLM_API_KEY" ]; then
+            echo "Running automated Strix penetration test..."
+            curl -sSL https://strix.ai/install | bash
+            strix -n -t ./ --scan-mode quick
+          else
+            echo "LLM_API_KEY no configurado en GitHub Secrets; se omite escaneo dinámico de Strix."
+          fi

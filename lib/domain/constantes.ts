@@ -1,0 +1,33 @@
+/** Única fuente de las constantes técnicas: UI, motor y validadores leen de aquí. */
+
+export const PLANCHA_M2 = 2.88; // 1,2 × 2,4 m: mínimo técnico en yeso-cartón / OSB / terciado
+export const CANTIDAD_PREVENTIVA = 1; // "Regla del 1"
+export const FACTOR_VANOS = 0.7; // el muro neto descuenta 30 % de puertas y ventanas
+export const IVA = 0.19;
+export const GG_UTILIDADES_UNIFICADO = 0.25;
+
+export const LETRAS_OBS = ["A", "B", "C", "D", "E", "F"] as const;
+export type LetraObs = (typeof LETRAS_OBS)[number];
+
+/** Leyenda exacta pedida por el dueño; se escribe tal cual en el Excel y en el cuadro de pérdida. */
+export const LEYENDA: Record<LetraObs, string> = {
+  A: "Daños por mantenimiento, oxidación y deterioro progresivo.",
+  B: 'Precio unitario ajustado luego de consultar con proveedores de la región / baremo oficial a todo costo.',
+  C: "Cantidad de trabajo o material ajustada a la medición exacta del acta o al mínimo técnico constructivo (Ej: m² a ml, o unidades a m² instalados).",
+  D: "No se registran daños atribuibles al siniestro en esta magnitud (Ajuste a mínimo preventivo).",
+  E: 'Actividad incluida como gastos generales o absorbida en partidas a "Todo Costo".',
+  F: "Se respeta valor o cantidad reclamada por estar acorde a mercado o declaración original.",
+};
+
+export const MARCADOR_FALTA_DATO = "[FALTA DATO: Rellenar con XXX]";
+
+export const FRASES_PROHIBIDAS = [
+  "se presume",
+  "no se especifica",
+  "no hay información",
+  "no hay informacion",
+  "se supone",
+];
+
+/** Cantidad 0 solo es válida con estas letras (daño ajeno al evento o actividad absorbida). */
+export const LETRAS_CANTIDAD_CERO: readonly LetraObs[] = ["A", "D", "E"];
