@@ -22,3 +22,9 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 
 ## Verificado el 03/10/2026
 15 pruebas en verde; build y typecheck limpios; 4 casos de punta a punta (UF 46,73 · 26,49 · 27,41 · 40,44); contraste claro/oscuro sin fallos; batería de seguridad aprobada.
+
+## Despliegue en Coolify (03/10/2026)
+- **Primer despliegue fallido: `Remote branch main not found in upstream origin`.** El repositorio de GitHub estaba vacío y la rama local se llamaba `master`; Coolify clona `main`. Regla: `git init -b main` y verificar con `git ls-remote` que la rama existe antes de redesplegar.
+- «No autenticado» en el panel RunWebX era la sesión caducada, no el repositorio.
+- RunSup muestra «No hay tablas visibles» hasta que la app arranca y aplica las migraciones (`instrumentation.ts`) en el schema del tenant.
+- Variables de entorno de producción (solo ejecución): `DATABASE_URL`, `DB_SCHEMA`, `GEMINI_API_KEY`, `GEMINI_MODEL`.
