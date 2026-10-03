@@ -20,7 +20,7 @@
 
 ## Lo que NO está probado
 
-1. **Gemini real.** Falta `GEMINI_API_KEY` en `.env.local`. El ajuste de los casos de prueba entró por la ruta manual (planilla emitida). La primera ejecución real puede necesitar afinar el prompt; cada intento queda en `llm_runs`.
+1. **Gemini real.** Falta una clave real: cada usuario la ingresa en «Ajustes de IA» (BYOK). El ajuste de los casos de prueba entró por la ruta manual (planilla emitida). La primera ejecución real puede necesitar afinar el prompt; cada intento queda en `llm_runs`.
 2. **Base de datos de runwebx.com.** Desde este equipo el puerto 5432 no responde (`runwebx.com:5432` cerrado; el 443 sí). Todo se probó con **PGlite** (Postgres embebido con las mismas migraciones). El camino `pg` está escrito pero no se ejecutó contra su servidor.
 3. **PDF idéntico al Word.** Usa LibreOffice si está instalado (lo trae el `Dockerfile`). Aquí no lo hay, así que los PDF de prueba salieron con el conversor de respaldo (contenido e imágenes sí, formato no exacto). La app avisa cuando pasa.
 4. **El `Dockerfile`** no se construyó (no hay Docker en este equipo).
@@ -55,18 +55,25 @@ npx tsx scripts/e2e.mts 1981023
 |---|---|
 | `DATABASE_URL` | Conexión Postgres del tenant (ya derivada en `.env.local`) |
 | `DB_SCHEMA` | Schema del tenant (ya derivada) |
-| `GEMINI_API_KEY` | **Falta.** Google AI Studio |
-| `GEMINI_MODEL` | Identificador del modelo; hoy `gemini-2.5-pro`. Verificar el vigente |
+| `APP_SECRET` | **Obligatoria en producción.** Clave maestra (64 hex) que cifra las claves de IA de los usuarios. Ya hay una en `.env.local` para desarrollo; en Coolify hay que crear **otra** y no cambiarla después (si cambia, cada usuario debe reingresar su clave) |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Opcionales: respaldo del administrador. Cada usuario usa su propia clave desde **Ajustes de IA** (BYOK) |
 | `CHROME_PATH`, `SOFFICE_PATH` | Navegador y LibreOffice (el `Dockerfile` ya los define) |
 | `DB_MODE=pglite` | Solo desarrollo sin red a la base |
 
 ## Despliegue en Coolify (cuando usted lo ordene)
 
 1. Crear la aplicación desde el repositorio con *Build Pack: Dockerfile*, puerto 3000.
-2. Cargar `DATABASE_URL`, `DB_SCHEMA`, `GEMINI_API_KEY`, `GEMINI_MODEL`. **Las variables van como «solo ejecución» (Build time: no disponible)**.
+2. Cargar `DATABASE_URL`, `DB_SCHEMA` y `APP_SECRET` (nueva, aleatoria, guardada en un lugar seguro). **Las variables van como «solo ejecución» (Build time: no disponible)**.
 3. El servidor aplica las migraciones al arrancar (`instrumentation.ts`, con bloqueo asesor).
 4. Primer ingreso: la pantalla de login pide crear el administrador. Después el registro queda cerrado; solo un admin crea usuarios.
 5. Cada `git push` a la rama configurada **redespliega automáticamente** por el webhook: por eso no se ha hecho ningún push.
+
+## BYOK (clave de IA por usuario)
+
+- Pantalla **Ajustes de IA** (enlace en la cabecera): el usuario pega su clave de Google AI Studio, pulsa «Probar clave» y elige el modelo de una lista que Google entrega para esa clave (no se inventan identificadores).
+- La clave se guarda **cifrada** (AES-256-GCM con `APP_SECRET`) en `credenciales_ia`; al navegador solo llega el modelo y los últimos 4 caracteres. La auditoría registra el hecho, nunca la clave.
+- El ajuste usa la clave y el modelo del usuario que lo ejecuta; `GEMINI_API_KEY` solo actúa de respaldo.
+- Verificado: guardar, cambiar solo el modelo, borrar, rechazo de claves con caracteres no válidos, y Google rechaza una clave falsa con mensaje claro. No probado con una clave real.
 
 ## Pendientes recomendados
 

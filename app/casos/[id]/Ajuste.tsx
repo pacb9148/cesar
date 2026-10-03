@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Caso } from "@/lib/caso/repositorio";
@@ -22,7 +23,7 @@ const reclamacionVacia: Reclamacion = { secciones: [], lineas: [], totalDirectoD
 
 type Resp = { version: number; intentos: number; errores: string[]; advertencias: string[] };
 
-export default function Ajuste({ caso, reclamacion, ajuste }: { caso: Caso; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null }) {
+export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { caso: Caso; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; iaConfigurada: boolean }) {
   const router = useRouter();
   const ia = useAccion<Resp>(`/api/casos/${caso.id}/ajustar`);
   const [salida, setSalida] = useState<SalidaAgente | null>(ajuste?.salida ?? null);
@@ -81,6 +82,11 @@ export default function Ajuste({ caso, reclamacion, ajuste }: { caso: Caso; recl
           {ia.cargando ? "Analizando con el agente (puede tardar unos minutos)…" : ajuste ? "Volver a ejecutar el agente" : "Ejecutar ajuste con IA"}
         </button>
         {!puedeAjustar && <p className="aviso aviso-alerta">Lee primero los documentos (paso 1).</p>}
+        {!iaConfigurada && (
+          <p className="aviso aviso-alerta">
+            Aún no has configurado tu clave de Gemini. <Link href="/ajustes" className="underline">Ir a Ajustes de IA</Link>.
+          </p>
+        )}
         {ia.error && <p role="alert" className="aviso aviso-error">{ia.error}</p>}
         {ia.resultado && ia.resultado.errores.length > 0 && (
           <div role="alert" className="aviso aviso-error">

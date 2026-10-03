@@ -7,6 +7,7 @@ export default function Cabecera({ nombre }: { nombre: string }) {
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
         <Link href="/casos" className="font-bold">Ajustador de Siniestros</Link>
         <div className="flex items-center gap-3 text-sm">
+          <Link href="/ajustes" className="underline">Ajustes de IA</Link>
           <span className="texto-suave">{nombre}</span>
           <BotonSalir />
         </div>

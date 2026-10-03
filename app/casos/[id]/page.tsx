@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { exigirUsuario } from "@/lib/auth";
 import { listarArchivos, leerReclamacion, obtenerCaso, ultimoAjuste } from "@/lib/caso/repositorio";
 import Cabecera from "@/components/Cabecera";
+import { estadoCredencial } from "@/lib/ia/credenciales";
 import PanelCaso from "./PanelCaso";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export default async function PaginaCaso({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const caso = await obtenerCaso(id, u.id);
   if (!caso) notFound();
-  const [archivos, recl, ajuste] = await Promise.all([listarArchivos(id), leerReclamacion(id), ultimoAjuste(id)]);
+  const [archivos, recl, ajuste, ia] = await Promise.all([listarArchivos(id), leerReclamacion(id), ultimoAjuste(id), estadoCredencial(u.id)]);
   return (
     <>
       <Cabecera nombre={u.nombre} />
@@ -22,6 +23,7 @@ export default async function PaginaCaso({ params }: { params: Promise<{ id: str
           archivos={JSON.parse(JSON.stringify(archivos))}
           reclamacion={recl ? JSON.parse(JSON.stringify(recl.datos)) : null}
           ajuste={ajuste ? JSON.parse(JSON.stringify(ajuste)) : null}
+          iaConfigurada={ia.configurada || !!process.env.GEMINI_API_KEY}
         />
       </main>
     </>

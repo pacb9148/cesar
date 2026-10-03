@@ -12,6 +12,7 @@ import type { ActaInspeccion } from "../extraccion/acta";
 import { esEscaneado, textoPdf } from "../extraccion/pdf";
 import { ajustarCaso, type FotoModelo, type ResultadoAgente } from "../ia/agente";
 import { ClienteGemini, type ClienteLlm } from "../ia/gemini";
+import { credencialDe } from "../ia/credenciales";
 import { evidenciaMeteorologica } from "../meteo/inia";
 import { consulta } from "../db";
 import {
@@ -64,7 +65,10 @@ export async function ejecutarAjuste(casoId: string, usuarioId: string, cliente?
   const { acta, datos, valorUF, recl } = await cargar(casoId, usuarioId);
   const modo = datos.modo;
   if (modo === "reclamacion" && !recl) throw new Error("No hay reclamación leída: sube el presupuesto del contratista.");
-  const cli = cliente ?? new ClienteGemini();
+  // BYOK: se usa la clave y el modelo del propio usuario; la variable de entorno queda solo como respaldo del administrador.
+  const cred = cliente ? null : await credencialDe(usuarioId);
+  const cli = cliente ?? (cred ? new ClienteGemini(cred.clave, cred.modelo) : process.env.GEMINI_API_KEY ? new ClienteGemini() : null);
+  if (!cli) throw new Error("Falta tu clave de Gemini: ingrésala en «Ajustes de IA» (menú superior).");
   const fotos = await fotosParaModelo(casoId);
   try {
     const r = await ajustarCaso(
@@ -76,7 +80,7 @@ export async function ejecutarAjuste(casoId: string, usuarioId: string, cliente?
     await actualizarCaso(casoId, { estado: "ajustado" });
     return { ...r, version };
   } catch (e) {
-    await registrarLlm({ casoId, tarea: "ajuste", modelo: process.env.GEMINI_MODEL ?? "?", promptVersion: "v0.1", ok: false, error: String(e).slice(0, 500) });
+    await registrarLlm({ casoId, tarea: "ajuste", modelo: cred?.modelo ?? process.env.GEMINI_MODEL ?? "?", promptVersion: "v0.1", ok: false, error: String(e).slice(0, 500) });
     throw e;
   }
 }
