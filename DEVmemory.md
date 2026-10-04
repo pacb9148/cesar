@@ -53,3 +53,7 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - La prueba (`ping`, `max_tokens: 20`) pasaba, pero el ajuste real (`max_tokens: 16000`, imágenes) recibía 400 «credit balance is too low». Es facturación de la cuenta de Anthropic, no un fallo del sistema: una prueba corta no detecta saldo justo.
 - `clasificarFallo` reconoce la falta de saldo (`esFaltaDeSaldo`: 402, «credit balance», «insufficient_quota»…) y lo explica como tal; `ClienteAnthropic` baja el tope de salida (16000→8192→4096) también ante ese 400, por si el saldo alcanza para un tope menor.
 - Para el usuario: recargar en Plans & Billing de Anthropic, o agregar otro proveedor (la rotación salta solo).
+
+## 404 al probar modelos de NVIDIA bajo «Google Gemini» (04/10/2026)
+- Causa: el proveedor elegido era Google Gemini con una clave `nvapi-…` y el modelo `google/gemma-4-31b-it` (id del catálogo de NVIDIA). Gemini no conoce ese modelo → 404. Los modelos de Google/otras marcas servidos por NVIDIA se agregan con proveedor **NVIDIA**.
+- `incoherencia()` (proveedores.ts) detecta clave con prefijo de otro proveedor (`nvapi-`, `sk-ant-`, `sk-or-`, `AIza`) y modelos «marca/nombre» bajo Gemini/Anthropic; se aplica al agregar (se rechaza sin guardar) y al probar uno ya guardado, con el motivo en claro.

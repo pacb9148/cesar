@@ -270,3 +270,23 @@ export function mensajeAmable(e: ErrorHttp): string {
   if (e.estado === 0) return e.message;
   return `Error ${e.estado}: ${e.message}`.slice(0, 300);
 }
+
+const ORIGEN_CLAVE: { prefijo: string; tipo: TipoProveedor; de: string }[] = [
+  { prefijo: "nvapi-", tipo: "nvidia", de: "NVIDIA" },
+  { prefijo: "sk-ant-", tipo: "anthropic", de: "Anthropic" },
+  { prefijo: "sk-or-", tipo: "openrouter", de: "OpenRouter" },
+  { prefijo: "AIza", tipo: "gemini", de: "Google Gemini" },
+];
+
+/**
+ * Detecta combinaciones que no pueden funcionar y que el proveedor contestaría con un 404/401 confuso: una clave con el prefijo
+ * de otro proveedor, o un modelo «marca/nombre» (como los del catálogo de NVIDIA) bajo un proveedor que no usa ese formato.
+ * Devuelve el motivo en claro, o null si no hay incoherencia evidente.
+ */
+export function incoherencia(p: Pick<ConfigProveedor, "tipo" | "modelo" | "clave">): string | null {
+  const origen = ORIGEN_CLAVE.find((o) => p.clave.startsWith(o.prefijo));
+  if (origen && origen.tipo !== p.tipo) return `Esa clave es de ${origen.de}, pero el proveedor elegido es «${PRESETS[p.tipo].etiqueta}». Elige «${PRESETS[origen.tipo].etiqueta}» en la lista de proveedores. Para usar con ella modelos de otras marcas (p. ej. google/…), el proveedor sigue siendo el de la clave.`;
+  if ((p.tipo === "gemini" || p.tipo === "anthropic") && p.modelo.includes("/") && !p.modelo.startsWith("models/"))
+    return `«${p.modelo}» es un identificador de catálogo de un intermediario (NVIDIA, OpenRouter…), no de ${PRESETS[p.tipo].etiqueta}. Si la clave es del intermediario, elígelo como proveedor.`;
+  return null;
+}

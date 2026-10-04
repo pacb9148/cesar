@@ -196,3 +196,14 @@ describe("prueba de conexión y lista de modelos", () => {
     expect(vistos[2].cab).toMatchObject({ Authorization: "Bearer k" });
   });
 });
+
+describe("incoherencia entre proveedor, clave y modelo", () => {
+  it("una clave de NVIDIA bajo Gemini se explica en vez de dar un 404", async () => {
+    const { incoherencia } = await import("../lib/ia/proveedores");
+    const clave = ["nvapi", "-abcdefghijklmnop"].join("");
+    expect(incoherencia({ tipo: "gemini", modelo: "google/gemma-4-31b-it", clave })).toMatch(/clave es de NVIDIA/);
+    expect(incoherencia({ tipo: "nvidia", modelo: "google/gemma-4-31b-it", clave })).toBeNull();
+    expect(incoherencia({ tipo: "gemini", modelo: "google/gemma-4-31b-it", clave: "x".repeat(20) })).toMatch(/intermediario/);
+    expect(incoherencia({ tipo: "gemini", modelo: "gemini-2.5-flash", clave: "x".repeat(20) })).toBeNull();
+  });
+});

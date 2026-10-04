@@ -2,7 +2,7 @@ import { z } from "zod";
 import { conUsuario, fallo, json } from "@/lib/api";
 import { auditar } from "@/lib/caso/repositorio";
 import { campoClave, campoModelo } from "@/lib/ia/validacion";
-import { PRESETS, TIPOS, baseUrlDe } from "@/lib/ia/proveedores";
+import { PRESETS, TIPOS, baseUrlDe, incoherencia } from "@/lib/ia/proveedores";
 import { crearProveedor, listarProveedores } from "@/lib/ia/repo-proveedores";
 import { probarYRegistrar } from "@/lib/ia/servicio-proveedores";
 
@@ -22,6 +22,8 @@ export const GET = conUsuario(async (_req, u) => json({ proveedores: await lista
 export const POST = conUsuario(async (req, u) => {
   const p = nuevo.safeParse(await req.json().catch(() => null));
   if (!p.success) return fallo(p.error.issues[0]?.message ?? "Datos inválidos");
+  const motivo = incoherencia(p.data);
+  if (motivo) return fallo(motivo);
   let baseUrl: string | null;
   try {
     baseUrl = baseUrlDe({ tipo: p.data.tipo, baseUrl: p.data.baseUrl ?? null });
