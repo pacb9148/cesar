@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { consulta, uno } from "./db";
 
@@ -45,7 +45,11 @@ async function abrirSesion(usuarioId: string) {
   const token = randomBytes(32).toString("hex");
   await consulta("insert into sesiones(token_hash, usuario_id, expira) values ($1,$2,$3)", [hashToken(token), usuarioId, new Date(Date.now() + DURACION_MS)]);
   const c = await cookies();
-  c.set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: DURACION_MS / 1000 });
+  // `Secure` solo si la petición llegó por HTTPS (el proxy lo indica en x-forwarded-proto): un navegador descarta
+  // en silencio una cookie Secure recibida por http, y el usuario quedaba en un bucle de login sin ningún error.
+  const h = await headers();
+  const https = (h.get("x-forwarded-proto") ?? "").split(",")[0].trim() === "https" || h.get("x-forwarded-ssl") === "on";
+  c.set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: https, path: "/", maxAge: DURACION_MS / 1000 });
 }
 
 export async function iniciarSesion(email: string, clave: string): Promise<Usuario | null> {
