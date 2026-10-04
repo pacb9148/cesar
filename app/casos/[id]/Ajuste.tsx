@@ -5,8 +5,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Caso } from "@/lib/caso/repositorio";
 import { LETRAS_OBS, LEYENDA, MARCADOR_FALTA_DATO } from "@/lib/domain/constantes";
-import { CLAVES_CARACTERISTICAS, type DecisionLinea, type Reclamacion, type SalidaAgente } from "@/lib/domain/tipos";
-import { armarFilas } from "@/lib/engine/filas";
+import { CLAVES_CARACTERISTICAS, type LineaReclamacion, type Reclamacion, type SalidaAgente } from "@/lib/domain/tipos";
+import { armarFilas, type FilaCuadro } from "@/lib/engine/filas";
+import { editarDecision, estadoDe, type Cambio, type EstadoPartida } from "@/lib/engine/edicion";
 import { calcularTotales } from "@/lib/engine/totales";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
@@ -31,6 +32,8 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
   const [salida, setSalida] = useState<SalidaAgente | null>(ajuste?.salida ?? null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; textos: string[] } | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [borrador, setBorrador] = useState<Record<string, string>>({});
+  const [cerradas, setCerradas] = useState<string[]>([]);
   const recl = reclamacion ?? reclamacionVacia;
   const valorUF = Number(caso.valor_uf ?? 0);
   const dos = caso.modo === "reclamacion";
@@ -44,21 +47,46 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
     return { filas, rec, aj };
   }, [salida, recl, valorUF, caso.modo]);
 
-  function editarLinea(item: string, parche: Partial<DecisionLinea>) {
-    setSalida((s) => (s ? { ...s, lineas: s.lineas.map((l) => (l.item === item ? { ...l, ...parche } : l)) } : s));
+  const porItem = useMemo(() => new Map((salida?.lineas ?? []).map((l) => [l.item, l])), [salida]);
+  const reclamada = useMemo(() => new Map(recl.lineas.map((l) => [l.item, l])), [recl]);
+
+  /** Aplica una edición a una partida (incluidas las que nadie había tocado): pasa a verde. */
+  function aplicar(rl: LineaReclamacion, cambio: Cambio) {
+    setSalida((s) => {
+      if (!s) return s;
+      const actual = s.lineas.find((l) => l.item === rl.item);
+      const nueva = editarDecision(rl, actual, cambio);
+      return { ...s, lineas: actual ? s.lineas.map((l) => (l.item === rl.item ? nueva : l)) : [...s.lineas, nueva] };
+    });
   }
-  function alternarObs(item: string, letra: (typeof LETRAS_OBS)[number]) {
-    setSalida((s) =>
-      s
-        ? {
-            ...s,
-            lineas: s.lineas.map((l) =>
-              l.item !== item ? l : { ...l, obs: l.obs.includes(letra) ? l.obs.filter((x) => x !== letra) : [...l.obs, letra].sort() },
-            ),
-          }
-        : s,
-    );
+  /** Mientras se escribe se conserva el texto tal cual (un campo vacío vuelve al valor reclamado al salir). */
+  function escribir(rl: LineaReclamacion, campo: "cantidad" | "pu", crudo: string) {
+    setBorrador((d) => ({ ...d, [`${rl.item}|${campo}`]: crudo }));
+    const n = crudo === "" ? rl[campo] : Number(crudo);
+    if (Number.isFinite(n) && n >= 0 && (campo === "cantidad" || n > 0)) aplicar(rl, { [campo]: n });
   }
+  const soltar = (rl: LineaReclamacion, campo: "cantidad" | "pu") =>
+    setBorrador((d) => {
+      const { [`${rl.item}|${campo}`]: _quitado, ...resto } = d;
+      void _quitado;
+      return resto;
+    });
+  const alternar = (id: string) => setCerradas((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+
+  // Secciones con sus partidas, para poder plegarlas y resumir su estado.
+  const grupos = useMemo(() => {
+    const out: { sec: Extract<FilaCuadro, { tipo: "seccion" }>; filas: Extract<FilaCuadro, { tipo: "linea" }>[] }[] = [];
+    for (const f of calc?.filas ?? []) {
+      if (f.tipo === "seccion") out.push({ sec: f, filas: [] });
+      else out[out.length - 1]?.filas.push(f);
+    }
+    return out;
+  }, [calc]);
+  const conteo = useMemo(() => {
+    const c: Record<EstadoPartida, number> = { sin_tocar: 0, ia: 0, usuario: 0 };
+    for (const l of recl.lineas) c[estadoDe(porItem.get(l.item))]++;
+    return c;
+  }, [recl, porItem]);
 
   async function guardar() {
     if (!salida) return;
@@ -109,6 +137,16 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
           </div>
 
           <div className="panel overflow-x-auto p-3">
+            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[color:var(--texto)]">
+              <span className="font-semibold">Estado de cada partida:</span>
+              <span><span className="marca marca-ia !ml-0">IA</span> ajustada automáticamente ({conteo.ia})</span>
+              <span><span className="marca marca-sin !ml-0">Sin tocar</span> se acepta lo reclamado ({conteo.sin_tocar})</span>
+              <span><span className="marca marca-usr !ml-0">Tú</span> ajustada por ti ({conteo.usuario})</span>
+              <span className="ml-auto flex gap-2">
+                <button type="button" className="btn btn-sec !px-2 !py-1 text-xs" onClick={() => setCerradas([])}>Expandir todo</button>
+                <button type="button" className="btn btn-sec !px-2 !py-1 text-xs" onClick={() => setCerradas(grupos.map((g) => g.sec.item))}>Contraer todo</button>
+              </span>
+            </div>
             <table className="tabla">
               <thead>
                 <tr>
@@ -124,57 +162,77 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {calc.filas.map((f) => {
-                  if (f.tipo === "seccion")
-                    return (
-                      <tr key={`s${f.item}`} className="sec">
-                        <td>{f.item}</td>
-                        <td colSpan={dos ? 10 : 6}>{f.titulo}</td>
-                      </tr>
-                    );
-                  const dec = salida.lineas.find((l) => l.item === f.item);
-                  const editable = !!dec && dec.accion !== "desglosar";
-                  return (
-                    <tr key={f.item}>
-                      <td className="text-center">{f.item}</td>
-                      <td>
-                        {f.descripcion}
-                        {dec?.justificacion && <div className="texto-suave text-xs">{dec.justificacion}</div>}
-                      </td>
-                      {dos && (f.rec ? <Valores v={f.rec} /> : <td colSpan={4} />)}
-                      {f.aj ? (
-                        editable && dec ? (
-                          <>
-                            <td className="text-center">{f.aj.um}</td>
-                            <td><input aria-label={`Cantidad ${f.item}`} className="campo w-20 px-1 py-0.5 text-right" type="number" step="any" min="0" value={dec.cantidad ?? 0} onChange={(e) => editarLinea(f.item, { cantidad: Number(e.target.value) })} /></td>
-                            <td><input aria-label={`Precio unitario ${f.item}`} className="campo w-24 px-1 py-0.5 text-right" type="number" step="any" min="1" value={dec.pu ?? 0} onChange={(e) => editarLinea(f.item, { pu: Number(e.target.value), pu_origen: "mercado:manual" })} /></td>
-                            <td className="n">{n0(f.aj.cantidad * f.aj.pu)}</td>
-                          </>
-                        ) : (
-                          <Valores v={f.aj} />
-                        )
-                      ) : (
-                        <td colSpan={4} />
-                      )}
-                      <td className="text-center">
-                        {editable && dec ? (
-                          <div className="flex flex-wrap justify-center gap-1">
-                            {LETRAS_OBS.map((l) => (
-                              <label key={l} title={LEYENDA[l]} className="cursor-pointer text-xs">
-                                <input type="checkbox" className="mr-0.5" checked={dec.obs.includes(l)} onChange={() => alternarObs(f.item, l)} />
-                                {l}
-                              </label>
-                            ))}
-                          </div>
-                        ) : (
-                          f.obs.join(" ")
-                        )}
+              {grupos.map(({ sec, filas }) => {
+                const abierta = !cerradas.includes(sec.item);
+                const cuenta: Record<EstadoPartida, number> = { sin_tocar: 0, ia: 0, usuario: 0 };
+                for (const f of filas) if (reclamada.has(f.item)) cuenta[estadoDe(porItem.get(f.item))]++;
+                return (
+                  <tbody key={sec.item}>
+                    <tr className="sec">
+                      <td colSpan={dos ? 11 : 7}>
+                        <button type="button" aria-expanded={abierta} onClick={() => alternar(sec.item)} className="flex w-full items-center gap-2 text-left text-[color:var(--texto)]">
+                          <span aria-hidden="true">{abierta ? "▾" : "▸"}</span>
+                          <span>{sec.item}</span>
+                          <span>{sec.titulo}</span>
+                          <span className="ml-auto flex gap-1 text-xs font-normal">
+                            {cuenta.ia > 0 && <span className="marca marca-ia">{cuenta.ia} IA</span>}
+                            {cuenta.sin_tocar > 0 && <span className="marca marca-sin">{cuenta.sin_tocar} sin tocar</span>}
+                            {cuenta.usuario > 0 && <span className="marca marca-usr">{cuenta.usuario} tuyas</span>}
+                          </span>
+                        </button>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
+                    {abierta &&
+                      filas.map((f) => {
+                        const rl = reclamada.get(f.item);
+                        const dec = porItem.get(f.item);
+                        const editable = !!rl && dec?.accion !== "desglosar";
+                        const est: EstadoPartida = rl ? estadoDe(dec) : "ia";
+                        const clase = est === "usuario" ? "fila-usr" : est === "sin_tocar" ? "fila-sin" : "fila-ia";
+                        const marca = est === "usuario" ? ["marca-usr", "Tú"] : est === "sin_tocar" ? ["marca-sin", "Sin tocar"] : ["marca-ia", "IA"];
+                        return (
+                          <tr key={f.item} className={clase}>
+                            <td className="text-center">{f.item}</td>
+                            <td>
+                              {f.descripcion}
+                              <span className={`marca ${marca[0]}`}>{marca[1]}</span>
+                              {dec?.justificacion && est !== "sin_tocar" && <div className="texto-suave text-xs">{dec.justificacion}</div>}
+                            </td>
+                            {dos && (f.rec ? <Valores v={f.rec} /> : <td colSpan={4} />)}
+                            {f.aj ? (
+                              editable && rl ? (
+                                <>
+                                  <td className="text-center">{f.aj.um}</td>
+                                  <td><input aria-label={`Cantidad ${f.item}`} className="campo w-20 px-1 py-0.5 text-right" type="number" step="any" min="0" placeholder={String(rl.cantidad)} value={borrador[`${f.item}|cantidad`] ?? String(f.aj.cantidad)} onChange={(e) => escribir(rl, "cantidad", e.target.value)} onBlur={() => soltar(rl, "cantidad")} /></td>
+                                  <td><input aria-label={`Precio unitario ${f.item}`} className="campo w-24 px-1 py-0.5 text-right" type="number" step="any" min="1" placeholder={String(rl.pu)} value={borrador[`${f.item}|pu`] ?? String(f.aj.pu)} onChange={(e) => escribir(rl, "pu", e.target.value)} onBlur={() => soltar(rl, "pu")} /></td>
+                                  <td className="n">{n0(f.aj.cantidad * f.aj.pu)}</td>
+                                </>
+                              ) : (
+                                <Valores v={f.aj} />
+                              )
+                            ) : (
+                              <td colSpan={4} />
+                            )}
+                            <td className="text-center">
+                              {editable && rl ? (
+                                <div className="flex flex-wrap justify-center gap-1">
+                                  {LETRAS_OBS.map((l) => (
+                                    <label key={l} title={LEYENDA[l]} className="cursor-pointer text-xs text-[color:var(--texto)]">
+                                      <input type="checkbox" className="mr-0.5" checked={f.obs.includes(l)} onChange={() => aplicar(rl, { alternar: l })} />
+                                      {l}
+                                    </label>
+                                  ))}
+                                </div>
+                              ) : (
+                                f.obs.join(" ")
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                );
+              })}
             </table>
           </div>
 

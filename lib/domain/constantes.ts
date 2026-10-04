@@ -31,3 +31,13 @@ export const FRASES_PROHIBIDAS = [
 
 /** Cantidad 0 solo es válida con estas letras (daño ajeno al evento o actividad absorbida). */
 export const LETRAS_CANTIDAD_CERO: readonly LetraObs[] = ["A", "D", "E"];
+
+/** Fotografías del informe y del anexo: tamaño fijo de cada imagen y cuadrícula de 2 columnas × 3 filas por tabla. */
+export const FOTO_ANCHO_CM = 7.8;
+export const FOTO_ALTO_CM = 6.5;
+export const FOTOS_COLUMNAS = 2;
+export const FOTOS_FILAS = 3;
+export const FOTOS_POR_TABLA = FOTOS_COLUMNAS * FOTOS_FILAS;
+/** Máximo de fotos por recinto en el informe: las más relevantes del área afectada; el anexo lleva todas. */
+export const FOTOS_MAX_POR_RECINTO_INFORME = 4;
+export const LEYENDA_FOTO_MAX = 46; // caracteres: una sola línea bajo una imagen de 7,8 cm

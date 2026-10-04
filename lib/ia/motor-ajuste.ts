@@ -52,7 +52,7 @@ export function clasificacionPorDefecto(l: LineaReclamacion): Clasificacion {
 
 export type Decidida = { decision: DecisionLinea; aviso?: string };
 
-const respetar = (l: LineaReclamacion): DecisionLinea => ({
+export const decisionRespetar = (l: LineaReclamacion): DecisionLinea => ({
   item: l.item,
   accion: "respetar",
   um: l.um,
@@ -86,12 +86,12 @@ function desglosar(l: LineaReclamacion, c: Clasificacion, ctx: ContextoLinea): D
 /** Contrasta una partida con sus máximos y devuelve la decisión final. Nunca lanza: lo que no se puede calcular se respeta y se avisa. */
 export function decidirLinea(l: LineaReclamacion, c: Clasificacion, ctx: ContextoLinea): Decidida {
   const baremo = c.baremo_id != null ? porId(c.baremo_id) : undefined;
-  if (c.categoria === "respetar") return { decision: respetar(l) };
+  if (c.categoria === "respetar") return { decision: decisionRespetar(l) };
 
   if (c.categoria === "desglosar") {
     const d = desglosar(l, c, ctx);
     if (d) return { decision: d };
-    return { decision: respetar(l), aviso: `Partida ${l.item}: no se pudo desglosar (falta baremo); se respetó lo reclamado.` };
+    return { decision: decisionRespetar(l), aviso: `Partida ${l.item}: no se pudo desglosar (falta baremo); se respetó lo reclamado.` };
   }
 
   // Precio: solo se baja al máximo del baremo; si cambia la unidad (lista de supermercado → m²/ml instalados) manda el baremo.
@@ -130,8 +130,14 @@ export function decidirLinea(l: LineaReclamacion, c: Clasificacion, ctx: Context
   }
   const cantidadCambia = Math.abs(cantidad - l.cantidad) > 1e-9 || umFinal !== l.um;
   const precioFinalCambia = origen !== "reclamacion" && (precioCambia || !mismaUm);
-  if (!cantidadCambia && !precioFinalCambia) return { decision: respetar(l), aviso };
+  if (!cantidadCambia && !precioFinalCambia) return { decision: decisionRespetar(l), aviso };
   const obs: DecisionLinea["obs"] = [...(precioFinalCambia ? (["B"] as const) : []), ...(cantidadCambia ? (["C"] as const) : [])];
   const justificacion = [precioFinalCambia ? "Precio unitario llevado al máximo del baremo a todo costo." : "", cantidadCambia ? "Cantidad acotada a la medición del acta o al mínimo técnico." : ""].filter(Boolean).join(" ");
   return { decision: { item: l.item, accion: "ajustar", um: umFinal, cantidad: r2(cantidad), pu, pu_origen: origen, obs, justificacion, sublineas: [] }, aviso };
+}
+
+/** Toda partida del presupuesto debe tener decisión: las que nadie tocó se aceptan tal como se reclamaron (quedan «sin tocar»). */
+export function completarConRespeto(lineas: LineaReclamacion[], decisiones: DecisionLinea[]): DecisionLinea[] {
+  const ya = new Set(decisiones.map((d) => d.item));
+  return [...decisiones, ...lineas.filter((l) => !ya.has(l.item)).map(decisionRespetar)];
 }

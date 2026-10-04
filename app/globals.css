@@ -16,6 +16,8 @@
   --alerta-fondo: #fdf0d5;
   --error: #a11d1d;
   --error-fondo: #fde4e4;
+  --sin: #1e40af;
+  --sin-fondo: #e6edfc;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -33,6 +35,8 @@
     --alerta-fondo: #3a2a0c;
     --error: #ff9b9b;
     --error-fondo: #3b1414;
+    --sin: #8ab4ff;
+    --sin-fondo: #13213b;
   }
 }
 
@@ -70,5 +74,16 @@ body {
   .tabla th { background: var(--panel-2); text-align: center; font-weight: 600; position: sticky; top: 0; }
   .tabla td.n { text-align: right; font-variant-numeric: tabular-nums; }
   .tabla tr.sec td { background: var(--panel-2); font-weight: 700; }
+  /* Estado de cada partida del ajuste: ámbar = ajustada por la IA, azul = sin tocar, verde = ajustada por el usuario. */
+  .tabla tr.fila-ia td { background: var(--alerta-fondo); }
+  .tabla tr.fila-sin td { background: var(--sin-fondo); }
+  .tabla tr.fila-usr td { background: var(--ok-fondo); }
+  .tabla tr.fila-ia td:first-child { box-shadow: inset 4px 0 0 var(--alerta); }
+  .tabla tr.fila-sin td:first-child { box-shadow: inset 4px 0 0 var(--sin); }
+  .tabla tr.fila-usr td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+  .marca { display: inline-block; font-size: .7rem; font-weight: 700; padding: 0 .4rem; border-radius: 999px; border: 1px solid currentColor; margin-left: .4rem; vertical-align: middle; }
+  .marca-ia { color: var(--alerta); }
+  .marca-sin { color: var(--sin); }
+  .marca-usr { color: var(--ok); }
   .insignia { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 600; background: var(--panel-2); color: var(--texto); border: 1px solid var(--borde); }
 }

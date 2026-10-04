@@ -4,6 +4,7 @@ import { extractImages, getDocumentProxy } from "unpdf";
 import { cuadroPng, resumenCuadro } from "../docs/cuadro";
 import { generarExcel, type EntradaExcel } from "../docs/excel";
 import { generarAnexo } from "../docs/anexo";
+import { fotosDelAreaAfectada, leyendaDeFoto } from "../docs/fotos-seleccion";
 import { docxAPdf } from "../docs/pdf";
 import { generarInforme, type FotoInforme, type Meteo } from "../docs/word";
 import { GG_UTILIDADES_UNIFICADO, IVA } from "../domain/constantes";
@@ -32,7 +33,6 @@ import {
 } from "./repositorio";
 
 const MAX_FOTOS_MODELO = 30;
-const MAX_FOTOS_POR_RECINTO_INFORME = 8;
 
 const reclamacionVacia = (): Reclamacion => ({ secciones: [], lineas: [], totalDirectoDeclarado: null, ggPct: GG_UTILIDADES_UNIFICADO, utilidadPct: 0, ivaPct: IVA });
 
@@ -213,14 +213,9 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     archivosConContenido(casoId, "foto"),
   ]);
 
-  const todas: FotoInforme[] = fotosDb.map((f) => ({ recinto: f.recinto ?? "General", buffer: f.contenido }));
-  const paraInforme: FotoInforme[] = [];
-  const contador = new Map<string, number>();
-  for (const f of todas) {
-    const n = contador.get(f.recinto) ?? 0;
-    if (n < MAX_FOTOS_POR_RECINTO_INFORME) paraInforme.push(f);
-    contador.set(f.recinto, n + 1);
-  }
+  const todas: FotoInforme[] = fotosDb.map((f) => ({ recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: leyendaDeFoto(f.recinto ?? "General", acta) }));
+  // El informe lleva solo el área afectada; el anexo, todas las fotos del caso.
+  const paraInforme = fotosDelAreaAfectada(todas, acta);
 
   emitir("ok", "informe", `Excel, cuadro y fotos listos; meteorología: ${met ? `estación ${met.estacion}` : "no disponible"}; ${fotosDb.length} fotos del caso, ${fachada.length} de fachada`);
   emitir("info", "informe", "Armando el informe Word con la plantilla");

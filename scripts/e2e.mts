@@ -27,6 +27,21 @@ async function api(ruta: string, init: RequestInit & { json?: unknown } = {}) {
   return r;
 }
 
+/** Las operaciones largas responden en flujo (una línea JSON por evento): el resultado es la línea «fin» y los fallos llegan como «falla». */
+async function resultadoDeFlujo<T>(r: Response): Promise<T & { error?: string }> {
+  const texto = await r.text();
+  for (const l of texto.trim().split("\n").reverse()) {
+    try {
+      const m = JSON.parse(l) as { fin?: T; falla?: string; error?: string };
+      if (m.fin !== undefined) return m.fin as T & { error?: string };
+      if (m.falla || m.error) return { error: m.falla ?? m.error } as T & { error?: string };
+    } catch {
+      /* línea de traza parcial */
+    }
+  }
+  return { error: `Respuesta sin resultado (HTTP ${r.status})` } as T & { error?: string };
+}
+
 function archivos(d: string): string[] {
   return readdirSync(d).flatMap((n) => {
     const p = join(d, n);
@@ -55,7 +70,7 @@ for (let i = 0; i < todos.length; i += 15) {
 }
 console.log("archivos subidos:", todos.length);
 
-const proc = (await (await api(`/api/casos/${id}/procesar`, { method: "POST" })).json()) as { alertas: string[]; archivosLeidos: string[]; partidas: number; error?: string };
+const proc = await resultadoDeFlujo<{ alertas: string[]; archivosLeidos: string[]; partidas: number }>(await api(`/api/casos/${id}/procesar`, { method: "POST" }));
 console.log("procesar:", proc.error ?? { leidos: proc.archivosLeidos, partidas: proc.partidas, alertas: proc.alertas });
 
 await api(`/api/casos/${id}/datos`, { method: "PATCH", json: { denunciaTexto: "Producto del riesgo de la naturaleza la vivienda sufre daños en su infraestructura", fechas: { emision: "24/08/2026", informadoPartes: "22/08/2026" } } });
@@ -99,7 +114,7 @@ console.log("ajuste manual:", put.status, put.status === 200 ? "" : await put.te
 
 const t0 = Date.now();
 const gen = await api(`/api/casos/${id}/generar`, { method: "POST" });
-const g = (await gen.json()) as { error?: string; entregables?: { id: string; nombre: string }[]; totales?: unknown; faltantes?: string[]; motorPdf?: string };
+const g = await resultadoDeFlujo<{ entregables?: { id: string; nombre: string }[]; totales?: unknown; faltantes?: string[]; motorPdf?: string }>(gen);
 console.log("generar:", gen.status, `${Math.round((Date.now() - t0) / 1000)} s`, g.error ?? { totales: g.totales, faltantes: g.faltantes, motorPdf: g.motorPdf });
 mkdirSync("tmp/e2e", { recursive: true });
 for (const e of g.entregables ?? []) {

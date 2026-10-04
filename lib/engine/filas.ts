@@ -35,9 +35,13 @@ export function armarFilas(e: EntradaFilas): FilaCuadro[] {
     for (const l of propias) {
       const d = dec.get(l.item);
       const rec = { um: l.um, cantidad: l.cantidad, pu: l.pu };
-      if (!d || d.accion === "desglosar") {
+      if (!d) {
+        filas.push({ tipo: "linea", item: l.item, descripcion: l.descripcion, rec, aj: { ...rec }, obs: ["F"] });
+        continue;
+      }
+      if (d.accion === "desglosar") {
         filas.push({ tipo: "linea", item: l.item, descripcion: l.descripcion, rec, aj: null, obs: [] });
-        d?.sublineas.forEach((sl, k) =>
+        d.sublineas.forEach((sl, k) =>
           filas.push({
             tipo: "linea",
             item: `${l.item}.${k + 1}`,

@@ -47,7 +47,7 @@ export function validarSalida(s: SalidaAgente, ctx: ContextoValidacion): Resulta
       vistos.add(l.item);
       if (!reclamo.has(l.item)) errores.push(`La partida ${l.item} no existe en la reclamación.`);
     }
-    for (const k of reclamo.keys()) if (!vistos.has(k)) errores.push(`Falta decidir la partida ${k}.`);
+    // Una partida sin decisión no es un error: se acepta lo reclamado (la completa el sistema antes de guardar).
   } else if (s.lineas.length) errores.push("En pérdida determinada no hay partidas de reclamación que ajustar.");
 
   for (const l of s.lineas) {

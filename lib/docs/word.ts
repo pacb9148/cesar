@@ -1,3 +1,4 @@
+import { FOTO_PX, FOTO_EMU, tablasDeFotos, type FotoCelda } from "./fotos-xml";
 import PizZip from "pizzip";
 import sharp from "sharp";
 import { join } from "node:path";
@@ -20,7 +21,7 @@ import {
   type Reemplazo,
 } from "./docx-xml";
 
-export type FotoInforme = { recinto: string; buffer: Buffer };
+export type FotoInforme = { recinto: string; buffer: Buffer; leyenda?: string };
 
 export type Meteo = {
   estacion: string | null;
@@ -62,11 +63,13 @@ class Paquete {
   constructor(public zip: PizZip) {
     this.rels = zip.file("word/_rels/document.xml.rels")!.asText();
   }
-  async imagen(buf: Buffer, anchoIn: number, opts: { cover43?: boolean; maxPx?: number } = {}): Promise<Media> {
+  async imagen(buf: Buffer, anchoIn: number, opts: { cover43?: boolean; foto?: boolean; maxPx?: number } = {}): Promise<Media> {
     let img = sharp(buf).rotate();
-    if (opts.cover43) img = img.resize(900, 675, { fit: "cover" });
+    // Fotos del informe: recorte a 7,8 × 6,5 cm centrado en la zona más llamativa de la imagen (el área con el daño).
+    if (opts.foto) img = img.resize(FOTO_PX.ancho, FOTO_PX.alto, { fit: "cover", position: sharp.strategy.attention });
+    else if (opts.cover43) img = img.resize(900, 675, { fit: "cover" });
     else img = img.resize({ width: opts.maxPx ?? 1600, withoutEnlargement: true });
-    const esPng = !opts.cover43;
+    const esPng = !opts.cover43 && !opts.foto;
     const salida = esPng ? await img.png().toBuffer() : await img.jpeg({ quality: 82 }).toBuffer();
     const meta = await sharp(salida).metadata();
     const ext = esPng ? "png" : "jpg";
@@ -77,6 +80,7 @@ class Paquete {
       "</Relationships>",
       `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${nombre}"/></Relationships>`,
     );
+    if (opts.foto) return { rid, ...FOTO_EMU };
     const cx = Math.round(anchoIn * EMU_IN);
     const cy = Math.round((cx * (meta.height ?? 1)) / (meta.width ?? 1));
     return { rid, cx, cy };
@@ -91,28 +95,6 @@ class Paquete {
     this.zip.file("[Content_Types].xml", ct);
   }
 }
-
-const tablaFotos = (titulo: string, celdas: Media[]): string => {
-  const filas: string[] = [
-    `<w:tr><w:trPr><w:cantSplit/><w:jc w:val="center"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="10170" w:type="dxa"/><w:gridSpan w:val="2"/></w:tcPr><w:p><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="60"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:b/><w:i/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">${escXml(titulo)}</w:t></w:r></w:p></w:tc></w:tr>`,
-  ];
-  for (let i = 0; i < celdas.length; i += 2) {
-    const par = celdas.slice(i, i + 2);
-    const tcs = [0, 1].map((k) => {
-      const m = par[k];
-      const contenido = m
-        ? `<w:r>${xmlImagen(m.rid, m.cx, m.cy, `foto-${i + k + 1}`)}</w:r>`
-        : "";
-      return `<w:tc><w:tcPr><w:tcW w:w="5085" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr>${contenido}</w:p></w:tc>`;
-    });
-    filas.push(`<w:tr><w:trPr><w:cantSplit/><w:jc w:val="center"/></w:trPr>${tcs.join("")}</w:tr>`);
-  }
-  return (
-    `<w:tbl><w:tblPr><w:tblW w:w="10170" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/>` +
-    `<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
-    `<w:tblGrid><w:gridCol w:w="5085"/><w:gridCol w:w="5085"/></w:tblGrid>${filas.join("")}</w:tbl>`
-  );
-};
 
 const hijosCuerpo = (doc: Doc) => hijos(doc.getElementsByTagNameNS(NS_W, "body")[0]);
 const buscarP = (doc: Doc, re: RegExp) =>
@@ -280,14 +262,17 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
       else if (s.nodeType === 1) break;
       s = sig as ChildNode;
     }
+    // Una sola cuadrícula de 2 × 3 (varias si hay más fotos); la fachada, si existe, abre la primera como fila de cabecera.
+    const celdas: FotoCelda[] = [];
+    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.buffer, 0, { foto: true })).rid, leyenda: f.leyenda ?? f.recinto });
+    const fachada: FotoCelda | null = e.fachada[0] ? { rid: (await paq.imagen(e.fachada[0], 0, { foto: true })).rid, leyenda: "Fachada del inmueble" } : null;
     let ancla: Node = pImgs;
-    const recintos = [...new Set(e.fotos.map((f) => f.recinto))];
-    for (const rc of recintos) {
-      const medias: Media[] = [];
-      for (const f of e.fotos.filter((x) => x.recinto === rc)) medias.push(await paq.imagen(f.buffer, 3.45, { cover43: true }));
-      const tabla = crearEl(doc, tablaFotos(rc, medias));
+    for (const xml of tablasDeFotos(celdas, { fachada })) {
+      const tabla = crearEl(doc, xml);
       ancla.parentNode!.insertBefore(tabla, ancla.nextSibling);
-      ancla = tabla;
+      const sep = crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>`);
+      ancla.parentNode!.insertBefore(sep, tabla.nextSibling);
+      ancla = sep;
     }
   }
 

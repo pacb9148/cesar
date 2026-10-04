@@ -54,6 +54,8 @@ export const decisionLineaSchema = z.object({
   obs: z.array(z.enum(LETRAS_OBS)),
   justificacion: z.string(),
   sublineas: z.array(sublineaSchema),
+  // Quién tocó la partida por última vez: "usuario" la marca en verde en pantalla. Sin valor: la decidió el sistema.
+  fuente: z.enum(["usuario"]).optional(),
 });
 export type DecisionLinea = z.infer<typeof decisionLineaSchema>;
 
