@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { esDireccionPrivada, validarBaseUrl, ErrorHttp, type Fetcher } from "../lib/ia/red-segura";
-import { ClienteAnthropic, ClienteOpenAICompatible, baseUrlDe, extraerJson, listarModelos, probarCliente } from "../lib/ia/proveedores";
+import { esDireccionPrivada, validarBaseUrl, ErrorHttp, fetchSeguro, type Fetcher } from "../lib/ia/red-segura";
+import { ClienteAnthropic, ClienteOpenAICompatible, PRESETS, TIPOS, baseUrlDe, extraerJson, listarModelos, probarCliente } from "../lib/ia/proveedores";
 
 describe("guarda de red (SSRF)", () => {
   it("rechaza direcciones privadas, internas y de metadatos", () => {
@@ -18,6 +18,25 @@ describe("guarda de red (SSRF)", () => {
     expect(baseUrlDe({ tipo: "compatible", baseUrl: "https://api.groq.com/openai/v1/" })).toBe("https://api.groq.com/openai/v1");
     expect(() => baseUrlDe({ tipo: "compatible", baseUrl: "https://169.254.169.254/v1" })).toThrow();
     expect(() => baseUrlDe({ tipo: "compatible", baseUrl: null })).toThrow(/URL base/);
+  });
+});
+
+describe("catálogo de proveedores", () => {
+  it("cada preset trae su URL base https válida y fija", () => {
+    for (const t of TIPOS) {
+      const p = PRESETS[t];
+      if (p.familia === "gemini" || t === "compatible") continue;
+      expect(validarBaseUrl(p.baseUrl!).ok, t).toBe(true);
+      expect(baseUrlDe({ tipo: t, baseUrl: "https://otra.com/v1" }), t).toBe(p.baseUrl!.replace(/\/+$/, ""));
+    }
+    expect(baseUrlDe({ tipo: "groq", baseUrl: null })).toBe("https://api.groq.com/openai/v1");
+    expect(baseUrlDe({ tipo: "deepseek", baseUrl: null })).toBe("https://api.deepseek.com/v1");
+    expect(baseUrlDe({ tipo: "mistral", baseUrl: null })).toBe("https://api.mistral.ai/v1");
+    expect(baseUrlDe({ tipo: "together", baseUrl: null })).toBe("https://api.together.xyz/v1");
+  });
+  it("la salida de red rechaza sin conectar una IP privada escrita, el http y el DNS interno", async () => {
+    for (const u of ["https://10.10.0.1/", "https://127.0.0.1:443/", "http://api.openai.com/v1/models", "https://[::1]/"])
+      await expect(fetchSeguro(u, { metodo: "GET", timeoutMs: 2000 }), u).rejects.toMatchObject({ estado: 400 });
   });
 });
 

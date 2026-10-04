@@ -37,3 +37,9 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - **Gemini responde 400, no 401, a una clave inválida**: clasificar por el texto además del código, o la rotación la trataría como un error de petición y volvería a intentarla.
 - **Las rutas de Next solo pueden exportar manejadores**: los esquemas compartidos van a un módulo aparte.
 - **Probar contra la red real tras la prueba unitaria**: la API respondió distinto a lo supuesto (modelo retirado con 410, mensaje con la clave enmascarada).
+
+## Timeouts a todos los proveedores en producción (04/10/2026)
+- **Síntoma:** en el servidor, todo proveedor daba «Sin respuesta del proveedor: The operation was aborted due to timeout» aunque la clave funcionaba en el panel del proveedor; en local funcionaba. La base guardaba ese error y el log mostraba el aborto a los 120 s (el tiempo total), no un error de conexión.
+- **Causa más probable:** el paquete `undici` instalado exige Node ≥ 22.19 (`engines`) y el servidor construye con Nixpacks y Node 22 (`NIXPACKS_NODE_VERSION=22`), sin garantía de esa versión. Se sustituyó por `node:https` con `lookup` propio, que es estable en cualquier Node 20+. **Pendiente de confirmar en producción** tras el despliegue (`/api/salud?red=1`).
+- **Regla:** al mezclar una dependencia con `engines` de Node más reciente, comparar con la versión real del servidor (`process.version`); lo crítico (red, cifrado) con módulos nativos de Node. Y poner tiempos máximos cortos a lo que solo prueba una conexión.
+- La batería de seguridad separa ahora las vulnerabilidades de producción (bloquean) de las de herramientas de desarrollo sin parche publicado (`braces` dentro del linter; se informan como aviso).

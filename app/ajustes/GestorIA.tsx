@@ -9,6 +9,7 @@ type Prueba = { ok: boolean; ms: number; error?: string };
 type Modelo = { id: string; nombre: string };
 type Mensaje = { tipo: "ok" | "error"; texto: string };
 
+const OTRO = "__otro__";
 const hora = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" }) : "");
 
 function situacion(p: ProveedorVista): { texto: string; clase: string } {
@@ -36,6 +37,7 @@ export default function GestorIA({ inicial, tipos, max }: { inicial: ProveedorVi
   const [modelo, setModelo] = useState("");
   const [nombre, setNombre] = useState("");
   const [modelos, setModelos] = useState<Modelo[]>([]);
+  const [otro, setOtro] = useState(false);
   const t = tipos.find((x) => x.id === tipo)!;
 
   const aplicar = (d: { proveedores?: ProveedorVista[] }) => {
@@ -52,7 +54,9 @@ export default function GestorIA({ inicial, tipos, max }: { inicial: ProveedorVi
     setOcupado(null);
     if (!r.ok || !r.datos.modelos) return setMsg({ tipo: "error", texto: r.datos.error ?? "No se pudieron listar los modelos" });
     setModelos(r.datos.modelos);
-    setMsg({ tipo: "ok", texto: `Clave aceptada: el proveedor ofrece ${r.datos.modelos.length} modelos. Elige uno o escribe su nombre.` });
+    setOtro(false);
+    setModelo("");
+    setMsg({ tipo: "ok", texto: `Clave aceptada: el proveedor ofrece ${r.datos.modelos.length} modelos. Elige uno de la lista.` });
   }
 
   async function agregar(e: React.FormEvent) {
@@ -68,6 +72,7 @@ export default function GestorIA({ inicial, tipos, max }: { inicial: ProveedorVi
     if (r.datos.prueba?.ok) {
       setModelo("");
       setModelos([]);
+      setOtro(false);
       setNombre("");
     }
   }
@@ -129,7 +134,7 @@ export default function GestorIA({ inicial, tipos, max }: { inicial: ProveedorVi
           <>
             <div>
               <label className="etiqueta" htmlFor="tipo">Proveedor</label>
-              <select id="tipo" className="campo" value={tipo} onChange={(e) => { setTipo(e.target.value); setModelos([]); }}>
+              <select id="tipo" className="campo" value={tipo} onChange={(e) => { setTipo(e.target.value); setModelos([]); setOtro(false); setModelo(""); }}>
                 {tipos.map((x) => (<option key={x.id} value={x.id}>{x.etiqueta}</option>))}
               </select>
               <p className="texto-suave mt-1 text-xs">{t.ayuda}</p>
@@ -150,8 +155,18 @@ export default function GestorIA({ inicial, tipos, max }: { inicial: ProveedorVi
                 <label className="etiqueta !mb-0" htmlFor="modelo">Modelo</label>
                 <button type="button" className="btn btn-sec" onClick={cargarModelos} disabled={!!ocupado || clave.length < 8 || (t.pideUrl && !baseUrl)}>{ocupado === "modelos" ? "Consultando…" : "Cargar modelos disponibles"}</button>
               </div>
-              <input id="modelo" className="campo" list="lista-modelos" value={modelo} onChange={(e) => setModelo(e.target.value)} required spellCheck={false} placeholder="Elige de la lista o escribe el identificador exacto" />
-              <datalist id="lista-modelos">{modelos.map((m) => (<option key={m.id} value={m.id}>{m.nombre}</option>))}</datalist>
+              {modelos.length > 0 ? (
+                <>
+                  <select id="modelo" className="campo" value={otro ? OTRO : modelo} onChange={(e) => (e.target.value === OTRO ? (setOtro(true), setModelo("")) : (setOtro(false), setModelo(e.target.value)))} required>
+                    <option value="" disabled>Elige un modelo ({modelos.length} disponibles)…</option>
+                    {modelos.map((m) => (<option key={m.id} value={m.id}>{m.id}{m.nombre !== m.id ? ` — ${m.nombre}` : ""}</option>))}
+                    <option value={OTRO}>Otro (escribir el identificador)…</option>
+                  </select>
+                  {otro && <input aria-label="Identificador del modelo" className="campo mt-2" value={modelo} onChange={(e) => setModelo(e.target.value)} required spellCheck={false} placeholder="Identificador exacto del modelo" />}
+                </>
+              ) : (
+                <input id="modelo" className="campo" value={modelo} onChange={(e) => setModelo(e.target.value)} required spellCheck={false} placeholder="Escribe el identificador o pulsa «Cargar modelos disponibles»" />
+              )}
             </div>
             <div>
               <label className="etiqueta" htmlFor="nombre">Nombre para reconocerlo (opcional)</label>

@@ -133,7 +133,13 @@ $pkgJson = Join-Path $ProjectDir "package.json"
 if (Test-Path $pkgJson) {
     Write-Host "  Ejecutando auditoría de paquetes npm..." -ForegroundColor Gray
     try {
-        $auditResult = & npm audit --json 2>$null | ConvertFrom-Json
+        # Bloquea lo que llega a producción. Lo que solo vive en herramientas de desarrollo y no tiene parche
+        # (hoy: braces, dentro del linter) se informa aparte para que no se pierda de vista.
+        $auditDev = & npm audit --json 2>$null | ConvertFrom-Json
+        if ($auditDev -and $auditDev.metadata -and $auditDev.metadata.vulnerabilities.high -gt 0) {
+            Write-Host "  [AVISO] $($auditDev.metadata.vulnerabilities.high) vulnerabilidades altas SOLO en dependencias de desarrollo (sin parche publicado); no bloquean." -ForegroundColor DarkYellow
+        }
+        $auditResult = & npm audit --omit=dev --json 2>$null | ConvertFrom-Json
         if ($auditResult -and $auditResult.metadata -and $auditResult.metadata.vulnerabilities) {
             $vulns = $auditResult.metadata.vulnerabilities
             $crit = $vulns.critical

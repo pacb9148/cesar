@@ -2,7 +2,7 @@ import { ClienteGemini, type ClienteLlm, type Parte, type RespuestaLlm } from ".
 import { ErrorHttp, esClaveInvalida, fetchSeguro, validarBaseUrl, type Fetcher } from "./red-segura";
 
 /** Proveedores admitidos. Todo lo que hable el protocolo de OpenAI entra por «compatible» con su URL base. */
-export const TIPOS = ["gemini", "anthropic", "openai", "openrouter", "nvidia", "compatible"] as const;
+export const TIPOS = ["gemini", "anthropic", "openai", "openrouter", "nvidia", "groq", "deepseek", "mistral", "together", "compatible"] as const;
 export type TipoProveedor = (typeof TIPOS)[number];
 export type Familia = "gemini" | "anthropic" | "openai";
 
@@ -12,7 +12,11 @@ export const PRESETS: Record<TipoProveedor, { etiqueta: string; familia: Familia
   openai: { etiqueta: "OpenAI", familia: "openai", baseUrl: "https://api.openai.com/v1", ayuda: "Clave de platform.openai.com." },
   openrouter: { etiqueta: "OpenRouter (cientos de modelos)", familia: "openai", baseUrl: "https://openrouter.ai/api/v1", ayuda: "Clave de openrouter.ai; el modelo va como «proveedor/modelo»." },
   nvidia: { etiqueta: "NVIDIA NIM (build.nvidia.com)", familia: "openai", baseUrl: "https://integrate.api.nvidia.com/v1", ayuda: "Clave de build.nvidia.com (empieza con nvapi-)." },
-  compatible: { etiqueta: "Otro proveedor compatible con OpenAI", familia: "openai", baseUrl: null, ayuda: "Together, Groq, Mistral, DeepSeek, Fireworks, un gateway propio… Pon su URL base (https)." },
+  groq: { etiqueta: "Groq", familia: "openai", baseUrl: "https://api.groq.com/openai/v1", ayuda: "Clave de console.groq.com." },
+  deepseek: { etiqueta: "DeepSeek", familia: "openai", baseUrl: "https://api.deepseek.com/v1", ayuda: "Clave de platform.deepseek.com." },
+  mistral: { etiqueta: "Mistral AI", familia: "openai", baseUrl: "https://api.mistral.ai/v1", ayuda: "Clave de console.mistral.ai." },
+  together: { etiqueta: "Together AI", familia: "openai", baseUrl: "https://api.together.xyz/v1", ayuda: "Clave de api.together.ai." },
+  compatible: { etiqueta: "Personalizado (cualquier proveedor compatible con OpenAI)", familia: "openai", baseUrl: null, ayuda: "Fireworks, Cerebras, un gateway propio, Ollama o vLLM expuestos por https… Pon su URL base (https, pública)." },
 };
 
 export type ConfigProveedor = { tipo: TipoProveedor; baseUrl: string | null; modelo: string; clave: string };
@@ -169,17 +173,25 @@ export async function listarModelos(p: Pick<ConfigProveedor, "tipo" | "baseUrl" 
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
+/** La prueba no puede dejar la pantalla colgada: si el proveedor no contesta en el plazo, cuenta como fallo. */
+function conLimite<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new ErrorHttp(0, `Sin respuesta del proveedor en ${ms / 1000} s`)), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 export type ResultadoPrueba = { ok: boolean; ms: number; error?: string; estado?: number };
 
 /** Prueba real de extremo a extremo: una llamada mínima con salida JSON estructurada, como la que hará el agente. */
 export async function probarCliente(cliente: ClienteLlm): Promise<ResultadoPrueba> {
   const t0 = Date.now();
   try {
-    const r = await cliente.generarJson({
+    const r = await conLimite(cliente.generarJson({
       system: "Responde solo con el JSON pedido.",
       partes: [{ text: 'Devuelve exactamente este objeto JSON: {"ok": true}' }],
       schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
-    });
+    }), 60_000);
     const j = JSON.parse(extraerJson(r.texto)) as { ok?: unknown };
     if (j.ok !== true) return { ok: false, ms: Date.now() - t0, error: "El modelo respondió, pero no cumplió el formato JSON pedido." };
     return { ok: true, ms: Date.now() - t0 };

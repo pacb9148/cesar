@@ -1,5 +1,8 @@
 import { existsSync } from "node:fs";
+import { lookup } from "node:dns/promises";
+import { usuarioActual } from "@/lib/auth";
 import { consulta } from "@/lib/db";
+import { ErrorHttp, fetchSeguro } from "@/lib/ia/red-segura";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +26,31 @@ function clasificar(e: unknown): { codigo: string; ayuda: string } {
 }
 
 /** Diagnóstico sin secretos: qué variables hay, si la base responde y si las tablas existen. */
-export async function GET() {
+const DESTINOS_RED = ["api.openai.com", "api.anthropic.com", "generativelanguage.googleapis.com", "openrouter.ai", "integrate.api.nvidia.com"];
+
+/** Salida a Internet hacia los proveedores de IA: cualquier respuesta HTTP (incluso 401) prueba que hay ruta; el fallo de red no. */
+async function probarSalida() {
+  return Promise.all(
+    DESTINOS_RED.map(async (host) => {
+      const t0 = Date.now();
+      let familias: number[] = [];
+      try {
+        familias = [...new Set((await lookup(host, { all: true })).map((d) => d.family))];
+      } catch {
+        return { host, ok: false, error: "el DNS no resuelve", ms: Date.now() - t0 };
+      }
+      try {
+        await fetchSeguro(`https://${host}/`, { metodo: "GET", timeoutMs: 15_000 });
+        return { host, ok: true, estado: 200, familias, ms: Date.now() - t0 };
+      } catch (e) {
+        if (e instanceof ErrorHttp && e.estado > 0) return { host, ok: true, estado: e.estado, familias, ms: Date.now() - t0 };
+        return { host, ok: false, familias, error: e instanceof Error ? e.message : "fallo", ms: Date.now() - t0 };
+      }
+    }),
+  );
+}
+
+export async function GET(req: Request) {
   const env = {
     DATABASE_URL: !!process.env.DATABASE_URL,
     DB_SCHEMA: !!process.env.DB_SCHEMA,
@@ -53,5 +80,8 @@ export async function GET() {
     }
   }
   const ok = (db as { ok: boolean }).ok === true && env.APP_SECRET;
-  return Response.json({ ok, env, db, herramientas }, { status: ok ? 200 : 503 });
+  // La prueba de red hace conexiones de salida: solo para un administrador con sesión.
+  const admin = new URL(req.url).searchParams.get("red") === "1" && (await usuarioActual())?.rol === "admin";
+  const salida = admin ? await probarSalida() : undefined;
+  return Response.json({ ok, node: process.version, env, db, herramientas, ...(salida ? { salida } : {}) }, { status: ok ? 200 : 503 });
 }

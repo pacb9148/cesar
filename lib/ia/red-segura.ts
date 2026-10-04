@@ -1,7 +1,6 @@
 import { lookup as dnsLookup } from "node:dns";
+import { request } from "node:https";
 import { isIP } from "node:net";
-// Se usa el fetch de la propia librería undici junto con su Agent: mezclarlo con el fetch integrado de Node falla por versiones distintas.
-import { Agent, fetch as fetchUndici } from "undici";
 
 /**
  * Salida a Internet de las llamadas a proveedores de IA. El usuario puede escribir una URL base propia, y el servidor
@@ -52,8 +51,6 @@ const lookupSeguro: typeof dnsLookup = ((host: string, opciones: unknown, cb: un
   });
 }) as typeof dnsLookup;
 
-const agente = new Agent({ connect: { lookup: lookupSeguro, timeout: 30_000 }, headersTimeout: 180_000, bodyTimeout: 180_000 });
-
 export type ResultadoUrl = { ok: true; url: URL } | { ok: false; motivo: string };
 
 /** Comprueba la forma de la URL (https, sin credenciales, sin IP privada escrita). La resolución DNS se verifica al conectar. */
@@ -93,40 +90,84 @@ export type Fetcher = (url: string, o?: OpcionesFetch) => Promise<unknown>;
 
 const recortar = (s: string) => s.replace(/\s+/g, " ").slice(0, 300);
 
-/** fetch con la guarda de red, sin redirecciones y con tiempo máximo. Lanza ErrorHttp con el estado y el motivo del proveedor. */
-export const fetchSeguro: Fetcher = async (url, o = {}) => {
-  let r: Awaited<ReturnType<typeof fetchUndici>>;
-  try {
-    r = await fetchUndici(url, {
-      method: o.metodo ?? "POST",
-      headers: { "Content-Type": "application/json", ...o.cabeceras },
-      body: o.cuerpo === undefined ? undefined : JSON.stringify(o.cuerpo),
-      redirect: "manual",
-      signal: AbortSignal.timeout(o.timeoutMs ?? 120_000),
-      dispatcher: agente,
+const MAX_RESPUESTA = 20 * 1024 * 1024;
+const CONECTAR_MS = 20_000;
+
+/**
+ * HTTPS con la guarda de red, sin redirecciones y con tiempo máximo. Usa `node:https` (no `undici`): el paquete undici exige
+ * una versión de Node reciente y en un servidor con Node más antiguo las conexiones se quedaban colgadas sin error.
+ * Lanza ErrorHttp con el estado y el motivo que da el proveedor.
+ */
+export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
+  new Promise((resolve, reject) => {
+    const u = new URL(urlTexto);
+    const host = u.hostname.replace(/^\[|\]$/g, "");
+    if (u.protocol !== "https:" || (isIP(host) && esDireccionPrivada(host))) return reject(new ErrorHttp(400, "Destino no permitido (red privada o interna)."));
+    const cuerpo = o.cuerpo === undefined ? undefined : JSON.stringify(o.cuerpo);
+    const total = o.timeoutMs ?? 120_000;
+    let terminado = false;
+    const fin = (f: () => void) => {
+      if (terminado) return;
+      terminado = true;
+      clearTimeout(temporizador);
+      f();
+    };
+    const req = request(
+      {
+        protocol: "https:",
+        hostname: host,
+        port: u.port || 443,
+        path: `${u.pathname}${u.search}`,
+        method: o.metodo ?? "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", ...(cuerpo ? { "Content-Length": Buffer.byteLength(cuerpo) } : {}), ...o.cabeceras },
+        // La IP que valida la guarda es la misma a la que se conecta.
+        lookup: lookupSeguro,
+      },
+      (res) => {
+        const trozos: Buffer[] = [];
+        let bytes = 0;
+        res.on("data", (c: Buffer) => {
+          bytes += c.length;
+          if (bytes > MAX_RESPUESTA) return req.destroy(new Error("La respuesta del proveedor es demasiado grande"));
+          trozos.push(c);
+        });
+        res.on("error", (e) => fin(() => reject(new ErrorHttp(0, `Sin respuesta del proveedor: ${recortar(e.message)}`))));
+        res.on("end", () =>
+          fin(() => {
+            const texto = Buffer.concat(trozos).toString("utf8");
+            const estado = res.statusCode ?? 0;
+            if (estado >= 300 && estado < 400) return reject(new ErrorHttp(400, "El proveedor respondió con una redirección; no se siguen redirecciones."));
+            if (estado < 200 || estado >= 300) {
+              const ra = Number(res.headers["retry-after"]);
+              let detalle = texto;
+              try {
+                const j = JSON.parse(texto) as { error?: { message?: string } | string; message?: string; detail?: string };
+                detalle = (typeof j.error === "string" ? j.error : j.error?.message) ?? j.message ?? j.detail ?? texto;
+              } catch {
+                /* texto plano */
+              }
+              return reject(new ErrorHttp(estado, recortar(detalle) || `HTTP ${estado}`, Number.isFinite(ra) && ra > 0 ? ra : undefined));
+            }
+            try {
+              resolve(JSON.parse(texto));
+            } catch {
+              reject(new ErrorHttp(502, "El proveedor no devolvió JSON."));
+            }
+          }),
+        );
+      },
+    );
+    const temporizador = setTimeout(() => req.destroy(new Error(`Sin respuesta tras ${Math.round(total / 1000)} s`)), total);
+    req.on("socket", (socket) => {
+      // Si no hay conexión TCP+TLS en 20 s se corta ya: no hace falta esperar el tiempo total para saber que el destino no es alcanzable.
+      const t = setTimeout(() => req.destroy(new Error(`No se pudo conectar en ${CONECTAR_MS / 1000} s`)), CONECTAR_MS);
+      socket.once("secureConnect", () => clearTimeout(t));
+      socket.once("close", () => clearTimeout(t));
     });
-  } catch (e) {
-    const causa = (e as { cause?: { message?: string } }).cause?.message ?? (e as Error).message;
-    if (/no permitida/i.test(causa)) throw new ErrorHttp(400, "Destino no permitido (red privada o interna).");
-    // Sin respuesta (red, DNS, tiempo agotado): se trata como indisponibilidad momentánea.
-    throw new ErrorHttp(0, `Sin respuesta del proveedor: ${recortar(causa)}`);
-  }
-  const texto = await r.text();
-  if (r.status >= 300 && r.status < 400) throw new ErrorHttp(400, "El proveedor respondió con una redirección; no se siguen redirecciones.");
-  if (!r.ok) {
-    const ra = Number(r.headers.get("retry-after"));
-    let detalle = texto;
-    try {
-      const j = JSON.parse(texto) as { error?: { message?: string } | string; message?: string };
-      detalle = (typeof j.error === "string" ? j.error : j.error?.message) ?? j.message ?? texto;
-    } catch {
-      /* texto plano */
-    }
-    throw new ErrorHttp(r.status, recortar(detalle) || `HTTP ${r.status}`, Number.isFinite(ra) && ra > 0 ? ra : undefined);
-  }
-  try {
-    return JSON.parse(texto);
-  } catch {
-    throw new ErrorHttp(502, "El proveedor no devolvió JSON.");
-  }
-};
+    req.on("error", (e) => {
+      const msg = (e as { cause?: Error }).cause?.message ?? e.message;
+      fin(() => reject(/no permitida/i.test(msg) ? new ErrorHttp(400, "Destino no permitido (red privada o interna).") : new ErrorHttp(0, `Sin respuesta del proveedor: ${recortar(msg)}`)));
+    });
+    if (cuerpo) req.write(cuerpo);
+    req.end();
+  });
