@@ -8,7 +8,7 @@ export type RespuestaLlm = { texto: string; tokensEntrada?: number; tokensSalida
 
 /** Contrato mínimo con el proveedor de IA: permite probar el flujo con un cliente simulado. */
 export interface ClienteLlm {
-  generarJson(o: { system: string; partes: Parte[]; schema: object }): Promise<RespuestaLlm>;
+  generarJson(o: { system: string; partes: Parte[]; schema: object; maxSalida?: number }): Promise<RespuestaLlm>;
   /** Comprobación simple de conectividad, clave y modelo (opcional: sin ella se prueba con una llamada JSON). */
   ping?(): Promise<void>;
 }

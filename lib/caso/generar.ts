@@ -7,14 +7,13 @@ import { generarAnexo } from "../docs/anexo";
 import { docxAPdf } from "../docs/pdf";
 import { generarInforme, type FotoInforme, type Meteo } from "../docs/word";
 import { GG_UTILIDADES_UNIFICADO, IVA } from "../domain/constantes";
-import { datosCasoSchema, salidaAgenteSchema, type DatosCaso, type Reclamacion, type SalidaAgente } from "../domain/tipos";
+import { datosCasoSchema, type DatosCaso, type Reclamacion, type SalidaAgente } from "../domain/tipos";
 import type { ActaInspeccion } from "../extraccion/acta";
 import { esEscaneado, textoPdf } from "../extraccion/pdf";
-import { ajustarCaso, mensajeDeCaso, type EntradaAgente, type FotoModelo, type ResultadoAgente } from "../ia/agente";
-import { SYSTEM_PROMPT } from "../ia/prompt";
+import { ajustarCaso, tamanosDelAjuste, type EntradaAgente, type FotoModelo, type ResultadoAgente } from "../ia/agente";
 import { destinoDe, listarProveedores } from "../ia/repo-proveedores";
 import { emitir } from "../traza";
-import { esquemaParaGemini, type ClienteLlm } from "../ia/gemini";
+import type { ClienteLlm } from "../ia/gemini";
 import { RegistroDb } from "../ia/repo-proveedores";
 import { ClienteConRespaldo } from "../ia/rotacion";
 import { evidenciaMeteorologica } from "../meteo/inia";
@@ -76,15 +75,13 @@ async function prepararAjuste(casoId: string, usuarioId: string): Promise<Entrad
   return { modo, fechaSiniestro: datos.fechas.ocurrencia, valorUF, acta, reclamacion: recl ?? reclamacionVacia(), fotos, preciosMercado: [] };
 }
 
-/** Qué se le enviará a la IA, sin llamarla: tamaños, cantidad de fotos y proveedores que se usarán, para revisarlo antes de ejecutar. */
+/** Qué se le enviará a la IA, sin llamarla: lotes, tamaños, cantidad de fotos y proveedores que se usarán, para revisarlo antes de ejecutar. */
 export async function vistaPreviaAjuste(casoId: string, usuarioId: string) {
   const entrada = await prepararAjuste(casoId, usuarioId);
-  const mensaje = JSON.stringify(mensajeDeCaso(entrada));
-  const schema = JSON.stringify(esquemaParaGemini(salidaAgenteSchema));
-  const bytesFotos = entrada.fotos.reduce((t, f) => t + f.base64.length, 0);
+  const t = tamanosDelAjuste(entrada);
+  const bytesFotos = entrada.fotos.reduce((tt, f) => tt + f.base64.length, 0);
   const porRecinto: Record<string, number> = {};
   for (const f of entrada.fotos) porRecinto[f.recinto] = (porRecinto[f.recinto] ?? 0) + 1;
-  const cuerpoBytes = SYSTEM_PROMPT.length + schema.length + mensaje.length + bytesFotos;
   const proveedores = (await listarProveedores(usuarioId)).map((p) => ({
     nombre: p.nombre,
     modelo: p.modelo,
@@ -94,17 +91,19 @@ export async function vistaPreviaAjuste(casoId: string, usuarioId: string) {
     enPausa: !!p.enPausaHasta && new Date(p.enPausaHasta) > new Date(),
     prioridad: p.prioridad,
   }));
+  const tokens = (c: number) => Math.round(c / 3.5);
   return {
     modo: entrada.modo,
     valorUF: entrada.valorUF,
     partidasReclamacion: entrada.reclamacion.lineas.length,
     recintosActa: entrada.acta.danos.length,
     fotos: { cantidad: entrada.fotos.length, kb: Math.round(bytesFotos / 1024), porRecinto },
-    textos: { instrucciones: SYSTEM_PROMPT.length, datosDelCaso: mensaje.length, esquema: schema.length },
-    cuerpoKb: Math.round(cuerpoBytes / 1024),
-    tokensEstimados: Math.round((SYSTEM_PROMPT.length + schema.length + mensaje.length) / 3.5) + entrada.fotos.length * 400,
+    pasos: [
+      ...t.lotes.map((l, i) => ({ nombre: `Clasificar partidas ${l.desde}–${l.hasta} (lote ${i + 1})`, kb: Math.round((l.caracteres + t.instruccionesClasificar) / 1024), tokens: tokens(l.caracteres + t.instruccionesClasificar), fotos: 0 })),
+      { nombre: "Redactar descripción, evidencia y resumen (con las fotos)", kb: Math.round((t.datosRedactar + t.instruccionesRedactar + bytesFotos) / 1024), tokens: tokens(t.datosRedactar + t.instruccionesRedactar) + entrada.fotos.length * 400, fotos: entrada.fotos.length },
+    ],
     proveedores,
-    muestraDatos: mensaje.slice(0, 1800),
+    muestraDatos: t.muestraLote,
   };
 }
 

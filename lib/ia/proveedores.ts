@@ -62,7 +62,7 @@ export class ClienteAnthropic implements ClienteLlm {
     });
   }
 
-  async generarJson(o: { system: string; partes: Parte[]; schema: object }): Promise<RespuestaLlm> {
+  async generarJson(o: { system: string; partes: Parte[]; schema: object; maxSalida?: number }): Promise<RespuestaLlm> {
     const content = o.partes.map((p) =>
       "text" in p ? { type: "text", text: p.text } : { type: "image", source: { type: "base64", media_type: p.inlineData.mimeType, data: p.inlineData.data } },
     );
@@ -76,7 +76,7 @@ export class ClienteAnthropic implements ClienteLlm {
       tool_choice: { type: "tool", name: "entregar_resultado" },
     });
     let r: AnthropicRespuesta | null = null;
-    for (const max of [16000, 8192, 4096]) {
+    for (const max of escalaDesde(o.maxSalida)) {
       try {
         emitir("info", "ia", `Petición a ${this.modelo}: tope de salida ${max}, ${o.partes.filter((p) => "inlineData" in p).length} imágenes, salida estructurada por herramienta`);
         r = (await this.fetcher(`${this.base}/v1/messages`, { cabeceras: { "x-api-key": this.clave, "anthropic-version": "2023-06-01" }, cuerpo: cuerpo(max) })) as AnthropicRespuesta;
@@ -97,7 +97,13 @@ export class ClienteAnthropic implements ClienteLlm {
 
 type OpenAiRespuesta = { choices?: { message?: { content?: string | null }; finish_reason?: string }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
 
-const ESCALA_TOKENS = [16000, 8192, 4096];
+const ESCALA_BASE = [16000, 8192, 4096];
+
+/** Escalera de topes de salida que empieza en el pedido (sin pasar de 16000) y baja si el modelo rechaza el tope. */
+const escalaDesde = (inicio?: number): number[] => {
+  const i = Math.min(inicio ?? ESCALA_BASE[0], ESCALA_BASE[0]);
+  return [i, ...ESCALA_BASE.filter((x) => x < i)];
+};
 
 export type OpcionesOpenAI = { modoJson?: boolean; timeoutMs?: number };
 
@@ -137,7 +143,7 @@ export class ClienteOpenAICompatible implements ClienteLlm {
     }
   }
 
-  async generarJson(o: { system: string; partes: Parte[]; schema: object }): Promise<RespuestaLlm> {
+  async generarJson(o: { system: string; partes: Parte[]; schema: object; maxSalida?: number }): Promise<RespuestaLlm> {
     const avisos: string[] = [];
     const system = `${o.system}\n\nResponde ÚNICAMENTE con un objeto JSON válido (sin texto antes ni después, sin bloques de código) que cumpla este esquema JSON:\n${JSON.stringify(o.schema)}`;
     const contenido = (conImagenes: boolean) =>
@@ -148,17 +154,18 @@ export class ClienteOpenAICompatible implements ClienteLlm {
     let jsonMode = this.modoJson;
     let param: "max_tokens" | "max_completion_tokens" = "max_tokens";
     let nivel = 0;
+    const escala = escalaDesde(o.maxSalida);
     let r: OpenAiRespuesta | null = null;
     // Cada rechazo del proveedor ajusta un parámetro distinto; el tope evita bucles.
     for (let intento = 0; intento < 8 && !r; intento++) {
       try {
-        emitir("info", "ia", `Intento ${intento + 1} con ${this.modelo}: tope de salida ${ESCALA_TOKENS[nivel]} (${param}), modo JSON ${jsonMode ? "sí" : "no (el esquema va en el prompt)"}, ${conImagenes ? `${o.partes.filter((p) => "inlineData" in p).length} imágenes` : "sin imágenes"}`);
+        emitir("info", "ia", `Intento ${intento + 1} con ${this.modelo}: tope de salida ${escala[nivel]} (${param}), modo JSON ${jsonMode ? "sí" : "no (el esquema va en el prompt)"}, ${conImagenes ? `${o.partes.filter((p) => "inlineData" in p).length} imágenes` : "sin imágenes"}`);
         r = (await this.fetcher(`${this.base}/chat/completions`, {
           cabeceras: { Authorization: `Bearer ${this.clave}` },
           cuerpo: {
             model: this.modelo,
             messages: [{ role: "system", content: system }, { role: "user", content: contenido(conImagenes) }],
-            [param]: ESCALA_TOKENS[nivel],
+            [param]: escala[nivel],
             ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
           },
           timeoutMs: this.timeoutMs,
@@ -176,9 +183,9 @@ export class ClienteOpenAICompatible implements ClienteLlm {
           emitir("info", "ia", "El modelo exige max_completion_tokens: se reintenta con ese nombre", m);
           continue;
         }
-        if (rechazo && /max_tokens|max_completion_tokens|maximum.*(tokens|length)|too large|exceeds/i.test(m) && nivel < ESCALA_TOKENS.length - 1) {
+        if (rechazo && /max_tokens|max_completion_tokens|maximum.*(tokens|length)|too large|exceeds/i.test(m) && nivel < escala.length - 1) {
           nivel++; // el modelo tiene un tope de salida menor
-          emitir("info", "ia", `El proveedor rechazó el tope de salida: se baja a ${ESCALA_TOKENS[nivel]}`, m);
+          emitir("info", "ia", `El proveedor rechazó el tope de salida: se baja a ${escala[nivel]}`, m);
           continue;
         }
         if (rechazo && conImagenes && /image|vision|multimodal|multi-modal|modalit|content/i.test(m)) {

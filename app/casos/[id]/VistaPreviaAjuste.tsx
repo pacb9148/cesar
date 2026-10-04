@@ -8,9 +8,7 @@ type Vista = {
   partidasReclamacion: number;
   recintosActa: number;
   fotos: { cantidad: number; kb: number; porRecinto: Record<string, number> };
-  textos: { instrucciones: number; datosDelCaso: number; esquema: number };
-  cuerpoKb: number;
-  tokensEstimados: number;
+  pasos: { nombre: string; kb: number; tokens: number; fotos: number }[];
   proveedores: { nombre: string; modelo: string; destino: string; activo: boolean; estado: string; enPausa: boolean; prioridad: number }[];
   muestraDatos: string;
 };
@@ -52,16 +50,19 @@ export default function VistaPreviaAjuste({ casoId }: { casoId: string }) {
             <Fila k="Partidas del contratista" v={n(v.partidasReclamacion)} />
             <Fila k="Recintos dañados (acta)" v={n(v.recintosActa)} />
             <Fila k="UF de la fecha" v={String(v.valorUF)} />
-            <Fila k="Fotografías" v={`${v.fotos.cantidad} (${n(v.fotos.kb)} KB)`} />
-            <Fila k="Instrucciones" v={`${n(v.textos.instrucciones)} caracteres`} />
-            <Fila k="Datos del caso" v={`${n(v.textos.datosDelCaso)} caracteres`} />
-            <Fila k="Esquema de respuesta" v={`${n(v.textos.esquema)} caracteres`} />
-            <Fila k="Tamaño aproximado de la petición" v={`${n(v.cuerpoKb)} KB`} />
-            <Fila k="Tokens de entrada (estimado)" v={`≈ ${n(v.tokensEstimados)}`} />
+            <Fila k="Fotografías (solo en la redacción)" v={`${v.fotos.cantidad} (${n(v.fotos.kb)} KB)`} />
           </dl>
           {Object.keys(v.fotos.porRecinto).length > 0 && (
             <p className="text-xs text-[color:var(--suave)]">Fotos por recinto: {Object.entries(v.fotos.porRecinto).map(([r, c]) => `${r} (${c})`).join(" · ")}</p>
           )}
+          <div>
+            <p className="mb-1 font-semibold">Peticiones a la IA ({v.pasos.length}; las partidas se clasifican en lotes chicos y el sistema calcula las cifras):</p>
+            <ol className="list-decimal space-y-0.5 pl-5 text-xs">
+              {v.pasos.map((p, i) => (
+                <li key={i}>{p.nombre} — {n(p.kb)} KB, ≈ {n(p.tokens)} tokens{p.fotos ? `, ${p.fotos} fotos` : ""}</li>
+              ))}
+            </ol>
+          </div>
           <div>
             <p className="mb-1 font-semibold">Se intentará con, en este orden:</p>
             {activos.length === 0 ? (
@@ -78,7 +79,7 @@ export default function VistaPreviaAjuste({ casoId }: { casoId: string }) {
             )}
           </div>
           <details>
-            <summary className="cursor-pointer text-[color:var(--suave)]">Ver el comienzo de los datos que recibirá el modelo</summary>
+            <summary className="cursor-pointer text-[color:var(--suave)]">Ver el comienzo de la primera petición (lote de partidas)</summary>
             <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded bg-[color:var(--panel)] p-2 text-xs">{v.muestraDatos}…</pre>
           </details>
         </div>
