@@ -68,12 +68,16 @@ npx tsx scripts/e2e.mts 1981023
 4. Primer ingreso: la pantalla de login pide crear el administrador. Después el registro queda cerrado; solo un admin crea usuarios.
 5. Cada `git push` a la rama configurada **redespliega automáticamente** por el webhook: por eso no se ha hecho ningún push.
 
-## BYOK (clave de IA por usuario)
+## BYOK abierto (varios proveedores, modelos y claves por usuario)
 
-- Pantalla **Ajustes de IA** (enlace en la cabecera): el usuario pega su clave de Google AI Studio, pulsa «Probar clave» y elige el modelo de una lista que Google entrega para esa clave (no se inventan identificadores).
-- La clave se guarda **cifrada** (AES-256-GCM con `APP_SECRET`) en `credenciales_ia`; al navegador solo llega el modelo y los últimos 4 caracteres. La auditoría registra el hecho, nunca la clave.
-- El ajuste usa la clave y el modelo del usuario que lo ejecuta; `GEMINI_API_KEY` solo actúa de respaldo.
-- Verificado: guardar, cambiar solo el modelo, borrar, rechazo de claves con caracteres no válidos, y Google rechaza una clave falsa con mensaje claro. No probado con una clave real.
+**Proveedores admitidos:** Google Gemini, Anthropic (Claude: Opus, Sonnet, Haiku), OpenAI, OpenRouter, NVIDIA NIM y cualquier servicio compatible con la API de OpenAI (Together, Groq, Mistral, DeepSeek, un gateway propio…) con su URL base. Tres adaptadores cubren todo: Gemini, Anthropic (herramienta forzada para la salida JSON) y OpenAI-compatible (modo JSON con respaldo si el proveedor no lo admite; reintenta sin imágenes si el modelo no es multimodal y lo avisa).
+
+- **Pantalla «Ajustes de IA»:** lista de proveedores por orden de prioridad (subir/bajar), con su estado (en servicio, en pausa hasta…, fuera de servicio con el motivo, sin probar), probar, activar/desactivar y eliminar. Máximo 10 por usuario.
+- **Agregar = probar:** al guardar una clave se hace una llamada real mínima con salida JSON, igual a la que hará el agente. Solo si responde bien el proveedor entra en servicio; si no, queda guardado fuera de servicio con el motivo. Cambiar la clave o el modelo, o activarlo a mano, repite la prueba.
+- **Lista de modelos reales:** «Cargar modelos disponibles» le pregunta al propio proveedor qué admite esa clave (el catálogo cambia: una prueba real mostró un modelo de NVIDIA retirado, error 410).
+- **Rotación automática:** el ajuste usa los proveedores activos en orden de prioridad; si uno no responde (red, tiempo agotado, 408, 429, 5xx o 529) salta al siguiente **en la misma petición** y el que falló queda en pausa (30 s que se duplican con los fallos seguidos, hasta 1 h; 429 respeta `Retry-After`). 401/403 (y el 400 de «clave inválida» de Gemini) lo desactivan hasta que el usuario corrija la clave; 400/404/410/422 lo pausan 10 min. Si todos están en pausa se reintentan igual. Cada ajuste informa qué proveedor respondió y por qué se saltaron otros.
+- **Seguridad:** claves cifradas en reposo (AES-256-GCM con `APP_SECRET`); al navegador solo llegan el modelo y los últimos 4 caracteres; la auditoría no guarda claves. La URL base propia solo admite https, sin credenciales, puertos 443/8443 y **nunca direcciones privadas, de loopback o de metadatos**: se valida al escribirla y de nuevo en cada conexión por DNS (la IP resuelta se fija antes de conectar), sin seguir redirecciones. `GEMINI_API_KEY` del servidor solo actúa de respaldo cuando el usuario no tiene ningún proveedor.
+- **Verificado:** 41 pruebas (adaptadores con respuestas simuladas, rotación, estado en Postgres embebido, guarda de red). Llamadas reales a OpenAI, Anthropic, OpenRouter, NVIDIA y Gemini con claves falsas: cada una responde con su rechazo y la app lo traduce a un mensaje claro; un dominio que resuelve a 127.0.0.1 queda bloqueado al conectar. **No probado con claves reales**: el ajuste completo con cada proveedor falta, sobre todo la salida estructurada de modelos de terceros (la validación y los reintentos del agente la protegen).
 
 ## Pendientes recomendados
 

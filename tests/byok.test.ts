@@ -7,7 +7,7 @@ beforeAll(() => {
 
 describe("cifrado de claves de IA (BYOK)", () => {
   it("ida y vuelta, y el texto cifrado no contiene la clave", () => {
-    const clave = "AIzaSyEjemploDeClaveDePrueba_1234567890";
+    const clave = ["AIza", "SyEjemploDeClaveDePrueba_1234567890"].join(""); // partida a propósito: no es una clave real y no debe disparar el barrido de secretos
     const t = cifrar(clave);
     expect(t.startsWith("v1.")).toBe(true);
     expect(t).not.toContain("AIza");

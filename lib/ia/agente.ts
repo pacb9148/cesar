@@ -91,6 +91,7 @@ export type ResultadoAgente = {
   promptVersion: string;
   tokensEntrada: number;
   tokensSalida: number;
+  avisos: string[];
 };
 
 /** Pide el ajuste y reintenta con los errores del validador hasta `maxIntentos` veces. */
@@ -107,12 +108,14 @@ export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm, maxInte
   let correcciones = "";
   let tin = 0;
   let tout = 0;
+  const avisos: string[] = [];
   let ultimo: { salida: SalidaAgente; validacion: ResultadoValidacion; modelo: string } | null = null;
   for (let i = 1; i <= maxIntentos; i++) {
     const partes = correcciones ? [...base, { text: `CORRIGE estos errores de tu respuesta anterior y devuelve el JSON completo:\n${correcciones}` }] : base;
     const r = await cliente.generarJson({ system: SYSTEM_PROMPT, partes, schema });
     tin += r.tokensEntrada ?? 0;
     tout += r.tokensSalida ?? 0;
+    for (const a of r.avisos ?? []) if (!avisos.includes(a)) avisos.push(a);
     let json: unknown;
     try {
       json = JSON.parse(r.texto);
@@ -127,10 +130,10 @@ export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm, maxInte
     }
     const validacion = validarSalida(p.data, { reclamacion: e.reclamacion, fotosIds, fuentesMercado: fuentes, modo: e.modo });
     ultimo = { salida: p.data, validacion, modelo: r.modelo };
-    if (validacion.errores.length === 0) return { ...ultimo, intentos: i, promptVersion: PROMPT_VERSION, tokensEntrada: tin, tokensSalida: tout };
+    if (validacion.errores.length === 0) return { ...ultimo, intentos: i, promptVersion: PROMPT_VERSION, tokensEntrada: tin, tokensSalida: tout, avisos };
     correcciones = validacion.errores.slice(0, 25).join("\n");
   }
   if (!ultimo) throw new Error(`El agente no entregó una respuesta válida tras ${maxIntentos} intentos: ${correcciones}`);
   // Se devuelve el último intento con sus errores a la vista: el usuario decide en la pantalla de revisión.
-  return { ...ultimo, intentos: maxIntentos, promptVersion: PROMPT_VERSION, tokensEntrada: tin, tokensSalida: tout };
+  return { ...ultimo, intentos: maxIntentos, promptVersion: PROMPT_VERSION, tokensEntrada: tin, tokensSalida: tout, avisos };
 }

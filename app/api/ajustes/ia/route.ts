@@ -1,30 +1,36 @@
 import { z } from "zod";
 import { conUsuario, fallo, json } from "@/lib/api";
 import { auditar } from "@/lib/caso/repositorio";
-import { borrarCredencial, estadoCredencial, guardarCredencial } from "@/lib/ia/credenciales";
+import { campoClave, campoModelo } from "@/lib/ia/validacion";
+import { PRESETS, TIPOS, baseUrlDe } from "@/lib/ia/proveedores";
+import { crearProveedor, listarProveedores } from "@/lib/ia/repo-proveedores";
+import { probarYRegistrar } from "@/lib/ia/servicio-proveedores";
 
-const cuerpo = z.object({
-  modelo: z.string().trim().min(3).max(80).regex(/^[A-Za-z0-9._-]+$/, "Identificador de modelo inválido"),
-  clave: z.string().trim().min(20).max(300).regex(/^[A-Za-z0-9_-]+$/, "La clave tiene caracteres no válidos").optional(),
+export const maxDuration = 120;
+
+const nuevo = z.object({
+  tipo: z.enum(TIPOS),
+  baseUrl: z.string().trim().max(200).optional(),
+  modelo: campoModelo,
+  clave: campoClave,
+  nombre: z.string().trim().max(60).optional(),
 });
 
-export const GET = conUsuario(async (_req, u) => json(await estadoCredencial(u.id)));
+export const GET = conUsuario(async (_req, u) => json({ proveedores: await listarProveedores(u.id) }));
 
-export const PUT = conUsuario(async (req, u) => {
-  const p = cuerpo.safeParse(await req.json().catch(() => null));
+/** Agrega un proveedor y lo prueba al instante: si la prueba sale bien entra en servicio; si no, queda guardado fuera de servicio con el motivo. */
+export const POST = conUsuario(async (req, u) => {
+  const p = nuevo.safeParse(await req.json().catch(() => null));
   if (!p.success) return fallo(p.error.issues[0]?.message ?? "Datos inválidos");
+  let baseUrl: string | null;
   try {
-    await guardarCredencial(u.id, p.data.modelo, p.data.clave ?? null);
+    baseUrl = baseUrlDe({ tipo: p.data.tipo, baseUrl: p.data.baseUrl ?? null });
   } catch (e) {
-    return fallo(e instanceof Error ? e.message : "No se pudo guardar", 400);
+    return fallo(e instanceof Error ? e.message : "URL base inválida");
   }
-  // La auditoría registra el hecho, jamás la clave.
-  await auditar(u.id, null, "ia.guardar_credencial", { modelo: p.data.modelo, cambioClave: !!p.data.clave });
-  return json(await estadoCredencial(u.id));
-});
-
-export const DELETE = conUsuario(async (_req, u) => {
-  await borrarCredencial(u.id);
-  await auditar(u.id, null, "ia.borrar_credencial");
-  return json(await estadoCredencial(u.id));
+  const id = await crearProveedor(u.id, { nombre: p.data.nombre || PRESETS[p.data.tipo].etiqueta.split(" (")[0], tipo: p.data.tipo, baseUrl: PRESETS[p.data.tipo].baseUrl ? null : baseUrl, modelo: p.data.modelo, clave: p.data.clave });
+  const prueba = await probarYRegistrar(u.id, id);
+  // La auditoría registra el hecho y el destino, jamás la clave.
+  await auditar(u.id, null, "ia.agregar_proveedor", { tipo: p.data.tipo, modelo: p.data.modelo, probado: prueba.ok });
+  return json({ id, prueba, proveedores: await listarProveedores(u.id) }, 201);
 });

@@ -30,3 +30,10 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - Variables de entorno de producción (solo ejecución): `DATABASE_URL`, `DB_SCHEMA`, `GEMINI_API_KEY`, `GEMINI_MODEL`.
 - **Bucle de login sin error en producción (04/10/2026):** la cookie de sesión iba con `Secure` por `NODE_ENV=production`, pero la app se sirve por `http://…sslip.io`; el navegador descarta en silencio una cookie `Secure` recibida por http. La base mostraba sesiones creadas (4 para 1 usuario) y el usuario seguía en el formulario. Regla: `Secure` según `x-forwarded-proto`, no según `NODE_ENV`. Diagnóstico: contar filas de `sesiones` con `db sql` (si crecen, el servidor acepta el login y falla el navegador).
 - **Conexión a RunSup:** desde la red de los contenedores el host es interno (`10.10.0.1:5432`, `sslmode=disable`); `runwebx.com:5432` no es alcanzable. `node .runwebx/runwebx.mjs conexion probar` lo comprueba y `logs`, `despliegues log`, `db sql` dan el diagnóstico sin pedir capturas.
+
+## BYOK abierto y rotación (04/10/2026)
+- **Mezclar el `fetch` integrado de Node con el `Agent` del paquete `undici` instalado falla** (`invalid onRequestStart method`): son versiones distintas. Usar `fetch` y `Agent` del mismo paquete. Lo cazó una llamada real a un proveedor; los tests con respuestas simuladas no lo veían.
+- **Una URL base que escribe el usuario es un SSRF** en un servidor que comparte red con la base de datos: validar la forma, bloquear rangos privados/metadatos y fijar la IP resuelta al conectar (un `lookup` propio), sin redirecciones.
+- **Gemini responde 400, no 401, a una clave inválida**: clasificar por el texto además del código, o la rotación la trataría como un error de petición y volvería a intentarla.
+- **Las rutas de Next solo pueden exportar manejadores**: los esquemas compartidos van a un módulo aparte.
+- **Probar contra la red real tras la prueba unitaria**: la API respondió distinto a lo supuesto (modelo retirado con 410, mensaje con la clave enmascarada).
