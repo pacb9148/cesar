@@ -25,11 +25,12 @@ export type ConfigProveedor = { tipo: TipoProveedor; baseUrl: string | null; mod
 export function baseUrlDe(p: Pick<ConfigProveedor, "tipo" | "baseUrl">): string | null {
   const preset = PRESETS[p.tipo];
   if (preset.familia === "gemini") return null;
-  const candidata = preset.baseUrl ?? p.baseUrl;
+  // Una URL escrita por el usuario manda sobre la automática; admite pegar la URL de invocación completa que muestran los proveedores.
+  const candidata = p.baseUrl?.trim() || preset.baseUrl;
   if (!candidata) throw new Error("Este proveedor necesita una URL base.");
   const v = validarBaseUrl(candidata);
   if (!v.ok) throw new Error(v.motivo);
-  return v.url.toString().replace(/\/+$/, "");
+  return v.url.toString().replace(/\/+$/, "").replace(/\/(chat\/completions|messages)$/, "");
 }
 
 const cabeceraCompleta = (s: string) => s.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();

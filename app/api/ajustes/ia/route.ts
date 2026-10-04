@@ -30,7 +30,7 @@ export const POST = conUsuario(async (req, u) => {
   } catch (e) {
     return fallo(e instanceof Error ? e.message : "URL base inválida");
   }
-  const id = await crearProveedor(u.id, { nombre: p.data.nombre || PRESETS[p.data.tipo].etiqueta.split(" (")[0], tipo: p.data.tipo, baseUrl: PRESETS[p.data.tipo].baseUrl ? null : baseUrl, modelo: p.data.modelo, clave: p.data.clave });
+  const id = await crearProveedor(u.id, { nombre: p.data.nombre || PRESETS[p.data.tipo].etiqueta.split(" (")[0], tipo: p.data.tipo, baseUrl: p.data.baseUrl?.trim() ? baseUrl : null, modelo: p.data.modelo, clave: p.data.clave });
   const prueba = await probarYRegistrar(u.id, id);
   // La auditoría registra el hecho y el destino, jamás la clave.
   await auditar(u.id, null, "ia.agregar_proveedor", { tipo: p.data.tipo, modelo: p.data.modelo, probado: prueba.ok });

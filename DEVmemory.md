@@ -57,3 +57,8 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 ## 404 al probar modelos de NVIDIA bajo «Google Gemini» (04/10/2026)
 - Causa: el proveedor elegido era Google Gemini con una clave `nvapi-…` y el modelo `google/gemma-4-31b-it` (id del catálogo de NVIDIA). Gemini no conoce ese modelo → 404. Los modelos de Google/otras marcas servidos por NVIDIA se agregan con proveedor **NVIDIA**.
 - `incoherencia()` (proveedores.ts) detecta clave con prefijo de otro proveedor (`nvapi-`, `sk-ant-`, `sk-or-`, `AIza`) y modelos «marca/nombre» bajo Gemini/Anthropic; se aplica al agregar (se rechaza sin guardar) y al probar uno ya guardado, con el motivo en claro.
+
+## NVIDIA: URL del endpoint visible y editable (04/10/2026)
+- La URL de NVIDIA (`https://integrate.api.nvidia.com/v1`) ya era automática, pero el formulario no la mostraba y parecía que faltaba. Ahora todo proveedor (salvo Gemini) tiene el campo «URL del endpoint (opcional)» con la automática como ayuda; si se escribe una, manda sobre la del preset, y se admite pegar la URL de invocación completa (`…/chat/completions` o `…/messages` se recortan). Sigue pasando por `validarBaseUrl` (https, sin IP privada) y la guarda de DNS.
+- `fetchSeguro` envía `User-Agent` (algunos WAF cuelgan peticiones de Node sin él: hipótesis, no confirmada) y los errores de tiempo agotado incluyen las IP a las que resolvió el destino, para distinguir red/IPv6 de modelo lento en el próximo informe.
+- Sigue sin confirmarse en producción la respuesta de NVIDIA: desde el servidor solo se probó con claves falsas en local.

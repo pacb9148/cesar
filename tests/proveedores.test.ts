@@ -13,8 +13,10 @@ describe("guarda de red (SSRF)", () => {
     for (const mala of ["http://api.openai.com/v1", "https://user:pw@api.x.com/v1", "https://localhost/v1", "https://10.0.0.5/v1", "https://[::1]/v1", "https://x.internal/v1", "https://api.x.com:8080/v1", "https://api.x.com/v1?k=1", "no es url"])
       expect(validarBaseUrl(mala).ok, mala).toBe(false);
   });
-  it("las URL base de los presets son fijas y la personalizada se valida", () => {
-    expect(baseUrlDe({ tipo: "nvidia", baseUrl: "https://evil.example" })).toBe("https://integrate.api.nvidia.com/v1");
+  it("el preset aporta la URL automática, la del usuario la sustituye y toda URL se valida", () => {
+    expect(baseUrlDe({ tipo: "nvidia", baseUrl: null })).toBe("https://integrate.api.nvidia.com/v1");
+    expect(baseUrlDe({ tipo: "nvidia", baseUrl: "https://integrate.api.nvidia.com/v1/chat/completions" })).toBe("https://integrate.api.nvidia.com/v1");
+    expect(() => baseUrlDe({ tipo: "nvidia", baseUrl: "http://169.254.169.254/v1" })).toThrow();
     expect(baseUrlDe({ tipo: "compatible", baseUrl: "https://api.groq.com/openai/v1/" })).toBe("https://api.groq.com/openai/v1");
     expect(() => baseUrlDe({ tipo: "compatible", baseUrl: "https://169.254.169.254/v1" })).toThrow();
     expect(() => baseUrlDe({ tipo: "compatible", baseUrl: null })).toThrow(/URL base/);
@@ -27,7 +29,7 @@ describe("catálogo de proveedores", () => {
       const p = PRESETS[t];
       if (p.familia === "gemini" || t === "compatible") continue;
       expect(validarBaseUrl(p.baseUrl!).ok, t).toBe(true);
-      expect(baseUrlDe({ tipo: t, baseUrl: "https://otra.com/v1" }), t).toBe(p.baseUrl!.replace(/\/+$/, ""));
+      expect(baseUrlDe({ tipo: t, baseUrl: null }), t).toBe(p.baseUrl!.replace(/\/+$/, ""));
     }
     expect(baseUrlDe({ tipo: "groq", baseUrl: null })).toBe("https://api.groq.com/openai/v1");
     expect(baseUrlDe({ tipo: "deepseek", baseUrl: null })).toBe("https://api.deepseek.com/v1");

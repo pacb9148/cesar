@@ -1,7 +1,7 @@
 import { consulta, transaccion, uno } from "../db";
 import { cifrar, descifrar } from "./cifrado";
 import { ClienteGemini } from "./gemini";
-import { PRESETS, crearCliente, type ConfigProveedor, type ResultadoPrueba, type TipoProveedor } from "./proveedores";
+import { crearCliente, type ConfigProveedor, type ResultadoPrueba, type TipoProveedor } from "./proveedores";
 import type { Candidato, InfoFallo, RegistroSalud } from "./rotacion";
 
 export const MAX_PROVEEDORES = 10;
@@ -45,7 +45,7 @@ export async function crearProveedor(usuarioId: string, p: { nombre: string; tip
   const r = await uno<{ id: string }>(
     `insert into proveedores_ia(usuario_id, nombre, tipo, base_url, modelo, clave_cifrada, ultimos4, prioridad)
      values ($1,$2,$3,$4,$5,$6,$7,(select coalesce(max(prioridad),0)+1 from proveedores_ia where usuario_id = $1)) returning id`,
-    [usuarioId, p.nombre, p.tipo, PRESETS[p.tipo].baseUrl ? null : p.baseUrl, p.modelo, cifrar(p.clave), p.clave.slice(-4)],
+    [usuarioId, p.nombre, p.tipo, p.baseUrl, p.modelo, cifrar(p.clave), p.clave.slice(-4)],
   );
   return r!.id;
 }

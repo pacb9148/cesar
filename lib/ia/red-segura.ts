@@ -37,12 +37,13 @@ export function esDireccionPrivada(ip: string): boolean {
   return true; // lo que no es una IP válida no se acepta
 }
 
-const lookupSeguro: typeof dnsLookup = ((host: string, opciones: unknown, cb: unknown) => {
+const crearLookupSeguro = (alResolver?: (ips: string[]) => void): typeof dnsLookup => ((host: string, opciones: unknown, cb: unknown) => {
   const callback = (typeof opciones === "function" ? opciones : cb) as (e: Error | null, a?: unknown, f?: number) => void;
   const o = (typeof opciones === "object" && opciones ? opciones : {}) as { all?: boolean };
   dnsLookup(host, { all: true }, (err, direcciones) => {
     if (err) return callback(err);
     const lista = direcciones as { address: string; family: number }[];
+    alResolver?.(lista.map((d) => d.address));
     const mala = lista.find((d) => esDireccionPrivada(d.address));
     if (mala || lista.length === 0) return callback(new Error("Dirección de destino no permitida (red privada o interna)"));
     // Se conecta a la IP ya validada: así un DNS que cambia entre la validación y la conexión no sirve de atajo.
@@ -107,6 +108,8 @@ export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
     const total = o.timeoutMs ?? 120_000;
     let terminado = false;
     let conectado = false;
+    let ips: string[] = [];
+    const donde = () => (ips.length ? ` [destino ${host} → ${ips.join(", ")}]` : "");
     const fin = (f: () => void) => {
       if (terminado) return;
       terminado = true;
@@ -120,9 +123,9 @@ export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
         port: u.port || 443,
         path: `${u.pathname}${u.search}`,
         method: o.metodo ?? "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", ...(cuerpo ? { "Content-Length": Buffer.byteLength(cuerpo) } : {}), ...o.cabeceras },
+        headers: { "User-Agent": "ajustador-siniestros/1.0", "Content-Type": "application/json", Accept: "application/json", ...(cuerpo ? { "Content-Length": Buffer.byteLength(cuerpo) } : {}), ...o.cabeceras },
         // La IP que valida la guarda es la misma a la que se conecta.
-        lookup: lookupSeguro,
+        lookup: crearLookupSeguro((l) => (ips = l)),
       },
       (res) => {
         const trozos: Buffer[] = [];
@@ -160,12 +163,12 @@ export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
     );
     // El mensaje distingue «no llegó a conectar» de «conectó y esperó en vano»: son problemas distintos (red vs. modelo lento).
     const temporizador = setTimeout(
-      () => req.destroy(new Error(conectado ? `Conectó con el proveedor, envió la petición y no recibió respuesta en ${Math.round(total / 1000)} s (modelo lento o saturado)` : `No llegó a conectar en ${Math.round(total / 1000)} s`)),
+      () => req.destroy(new Error(conectado ? `Conectó con el proveedor, envió la petición y no recibió respuesta en ${Math.round(total / 1000)} s (modelo lento o saturado)${donde()}` : `No llegó a conectar en ${Math.round(total / 1000)} s${donde()}`)),
       total,
     );
     req.on("socket", (socket) => {
       // Si no hay conexión TCP+TLS en 20 s se corta ya: no hace falta esperar el tiempo total para saber que el destino no es alcanzable.
-      const t = setTimeout(() => req.destroy(new Error(`No se pudo conectar en ${CONECTAR_MS / 1000} s`)), CONECTAR_MS);
+      const t = setTimeout(() => req.destroy(new Error(`No se pudo conectar en ${CONECTAR_MS / 1000} s${donde()}`)), CONECTAR_MS);
       socket.once("secureConnect", () => {
         conectado = true;
         clearTimeout(t);

@@ -10,7 +10,7 @@ export const revalidate = 0;
 export default async function Ajustes() {
   const u = await exigirUsuario();
   const proveedores = await listarProveedores(u.id);
-  const tipos = TIPOS.map((t) => ({ id: t, etiqueta: PRESETS[t].etiqueta, ayuda: PRESETS[t].ayuda, pideUrl: PRESETS[t].baseUrl === null && PRESETS[t].familia !== "gemini" }));
+  const tipos = TIPOS.map((t) => ({ id: t, etiqueta: PRESETS[t].etiqueta, ayuda: PRESETS[t].ayuda, pideUrl: PRESETS[t].baseUrl === null && PRESETS[t].familia !== "gemini", urlAuto: PRESETS[t].baseUrl, sinUrl: PRESETS[t].familia === "gemini" }));
   return (
     <>
       <Cabecera nombre={u.nombre} />

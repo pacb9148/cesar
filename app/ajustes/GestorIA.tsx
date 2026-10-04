@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ProveedorVista } from "@/lib/ia/repo-proveedores";
 
-type Tipo = { id: string; etiqueta: string; ayuda: string; pideUrl: boolean };
+type Tipo = { id: string; etiqueta: string; ayuda: string; pideUrl: boolean; urlAuto: string | null; sinUrl: boolean };
 type Prueba = { ok: boolean; ms: number; error?: string };
 type Modelo = { id: string; nombre: string };
 type Mensaje = { tipo: "ok" | "error"; texto: string };
@@ -134,15 +134,16 @@ export default function GestorIA({ inicial, tipos, max }: { inicial: ProveedorVi
           <>
             <div>
               <label className="etiqueta" htmlFor="tipo">Proveedor</label>
-              <select id="tipo" className="campo" value={tipo} onChange={(e) => { setTipo(e.target.value); setModelos([]); setOtro(false); setModelo(""); }}>
+              <select id="tipo" className="campo" value={tipo} onChange={(e) => { setTipo(e.target.value); setBaseUrl(""); setModelos([]); setOtro(false); setModelo(""); }}>
                 {tipos.map((x) => (<option key={x.id} value={x.id}>{x.etiqueta}</option>))}
               </select>
               <p className="texto-suave mt-1 text-xs">{t.ayuda}</p>
             </div>
-            {t.pideUrl && (
+            {!t.sinUrl && (
               <div>
-                <label className="etiqueta" htmlFor="base">URL base de la API (https, termina en /v1 normalmente)</label>
-                <input id="base" className="campo" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.proveedor.com/v1" required spellCheck={false} />
+                <label className="etiqueta" htmlFor="base">{t.pideUrl ? "URL base de la API (https, termina en /v1 normalmente)" : "URL del endpoint (opcional)"}</label>
+                <input id="base" className="campo" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={t.urlAuto ?? "https://api.proveedor.com/v1"} required={t.pideUrl} spellCheck={false} />
+                {t.urlAuto && <p className="texto-suave mt-1 text-xs">Si lo dejas vacío se usa <code>{t.urlAuto}</code>. Puedes pegar la URL de invocación completa que te muestra el proveedor (con /chat/completions): se ajusta sola.</p>}
               </div>
             )}
             <div>
