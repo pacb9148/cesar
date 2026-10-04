@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ArchivoMeta, Caso } from "@/lib/caso/repositorio";
 import { ETIQUETA_TIPO } from "@/lib/caso/clasificar";
-import { useAccion } from "@/components/useAccion";
+import { useFlujo } from "@/components/useFlujo";
+import PanelTraza from "@/components/PanelTraza";
 
 type Procesado = { alertas: string[]; archivosLeidos: string[]; partidas: number };
 const LOTE = 15;
@@ -15,7 +16,7 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
   const sueltos = useRef<HTMLInputElement>(null);
   const [subiendo, setSubiendo] = useState<string | null>(null);
   const [errorSubida, setErrorSubida] = useState<string | null>(null);
-  const proc = useAccion<Procesado>(`/api/casos/${caso.id}/procesar`);
+  const proc = useFlujo<Procesado>(`/api/casos/${caso.id}/procesar`);
 
   async function subir(lista: FileList | null) {
     if (!lista || lista.length === 0) return;
@@ -99,6 +100,7 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
           {proc.cargando ? "Leyendo…" : "Leer documentos"}
         </button>
         {proc.error && <p role="alert" className="aviso aviso-error">{proc.error}</p>}
+        <PanelTraza eventos={proc.eventos} cargando={proc.cargando} titulo="Qué está leyendo" />
         {proc.resultado && (
           <p role="status" className="aviso aviso-ok">
             Leídos: {proc.resultado.archivosLeidos.join(", ") || "ninguno"}

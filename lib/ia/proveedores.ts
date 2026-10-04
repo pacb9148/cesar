@@ -1,4 +1,5 @@
 import { ClienteGemini, type ClienteLlm, type Parte, type RespuestaLlm } from "./gemini";
+import { emitir } from "../traza";
 import { ErrorHttp, esClaveInvalida, fetchSeguro, validarBaseUrl, type Fetcher } from "./red-segura";
 
 /** Proveedores admitidos. Todo lo que hable el protocolo de OpenAI entra por «compatible» con su URL base. */
@@ -77,6 +78,7 @@ export class ClienteAnthropic implements ClienteLlm {
     let r: AnthropicRespuesta | null = null;
     for (const max of [16000, 8192, 4096]) {
       try {
+        emitir("info", "ia", `Petición a ${this.modelo}: tope de salida ${max}, ${o.partes.filter((p) => "inlineData" in p).length} imágenes, salida estructurada por herramienta`);
         r = (await this.fetcher(`${this.base}/v1/messages`, { cabeceras: { "x-api-key": this.clave, "anthropic-version": "2023-06-01" }, cuerpo: cuerpo(max) })) as AnthropicRespuesta;
         break;
       } catch (e) {
@@ -150,6 +152,7 @@ export class ClienteOpenAICompatible implements ClienteLlm {
     // Cada rechazo del proveedor ajusta un parámetro distinto; el tope evita bucles.
     for (let intento = 0; intento < 8 && !r; intento++) {
       try {
+        emitir("info", "ia", `Intento ${intento + 1} con ${this.modelo}: tope de salida ${ESCALA_TOKENS[nivel]} (${param}), modo JSON ${jsonMode ? "sí" : "no (el esquema va en el prompt)"}, ${conImagenes ? `${o.partes.filter((p) => "inlineData" in p).length} imágenes` : "sin imágenes"}`);
         r = (await this.fetcher(`${this.base}/chat/completions`, {
           cabeceras: { Authorization: `Bearer ${this.clave}` },
           cuerpo: {
@@ -165,19 +168,23 @@ export class ClienteOpenAICompatible implements ClienteLlm {
         const m = e instanceof ErrorHttp ? e.message : "";
         if (rechazo && jsonMode && /response_format|json_object|json mode|json_schema/i.test(m)) {
           jsonMode = false; // el proveedor no admite el modo JSON: el esquema ya va en el prompt
+          emitir("info", "ia", "El proveedor rechazó el modo JSON: se reintenta sin él", m);
           continue;
         }
         if (rechazo && param === "max_tokens" && /max_completion_tokens/i.test(m)) {
           param = "max_completion_tokens"; // los modelos nuevos de OpenAI renombraron el parámetro
+          emitir("info", "ia", "El modelo exige max_completion_tokens: se reintenta con ese nombre", m);
           continue;
         }
         if (rechazo && /max_tokens|max_completion_tokens|maximum.*(tokens|length)|too large|exceeds/i.test(m) && nivel < ESCALA_TOKENS.length - 1) {
           nivel++; // el modelo tiene un tope de salida menor
+          emitir("info", "ia", `El proveedor rechazó el tope de salida: se baja a ${ESCALA_TOKENS[nivel]}`, m);
           continue;
         }
         if (rechazo && conImagenes && /image|vision|multimodal|multi-modal|modalit|content/i.test(m)) {
           conImagenes = false;
           avisos.push("El modelo no acepta imágenes: el ajuste se hizo sin analizar las fotografías.");
+          emitir("info", "ia", "El modelo no acepta imágenes: se reintenta sin las fotografías", m);
           continue;
         }
         throw e;

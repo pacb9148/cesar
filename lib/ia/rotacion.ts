@@ -1,7 +1,8 @@
 import { ErrorHttp, esClaveInvalida } from "./red-segura";
 import type { ClienteLlm, RespuestaLlm } from "./gemini";
+import { emitir } from "../traza";
 
-export type Candidato = { id: string | null; nombre: string; cliente: ClienteLlm; fallosSeguidos: number; pausado: boolean };
+export type Candidato = { id: string | null; nombre: string; cliente: ClienteLlm; fallosSeguidos: number; pausado: boolean; detalle?: string };
 
 export type InfoFallo = { error: string; pausaS: number; desactivar: boolean };
 
@@ -52,10 +53,13 @@ export class ClienteConRespaldo implements ClienteLlm {
     const lista = await this.registro.candidatos();
     if (lista.length === 0) throw new SinProveedores();
     const incidencias: string[] = [];
-    for (const c of lista) {
+    emitir("info", "ia", `${lista.length} proveedor(es) disponible(s), por orden de prioridad: ${lista.map((c) => c.nombre).join(" → ")}`);
+    for (const [i, c] of lista.entries()) {
+      emitir("info", "ia", `Proveedor ${i + 1}/${lista.length}: ${c.nombre}${c.detalle ? ` (${c.detalle})` : ""}${c.pausado ? " — estaba en pausa por un fallo previo; se reintenta igualmente" : ""}`);
       try {
         const r = await c.cliente.generarJson(o);
         await this.registro.ok(c.id);
+        emitir("ok", "ia", `${c.nombre} respondió${r.tokensEntrada ? ` (${r.tokensEntrada} tokens de entrada, ${r.tokensSalida ?? "?"} de salida)` : ""}`);
         return {
           ...r,
           modelo: `${c.nombre} · ${r.modelo}`,
@@ -64,6 +68,7 @@ export class ClienteConRespaldo implements ClienteLlm {
       } catch (e) {
         const info = clasificarFallo(e, c.fallosSeguidos);
         await this.registro.fallo(c.id, info);
+        emitir("error", "ia", `${c.nombre} falló: ${info.error}`, `${info.desactivar ? "Se desactiva hasta corregir la clave." : `Queda en pausa ${info.pausaS} s.`}${i < lista.length - 1 ? " Se pasa al siguiente proveedor." : " No quedan más proveedores."}`);
         incidencias.push(`${c.nombre} no respondió (${info.error})`);
       }
     }

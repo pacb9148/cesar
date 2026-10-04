@@ -1,6 +1,7 @@
 import { lookup as dnsLookup } from "node:dns";
-import { request } from "node:https";
+import { Agent, request } from "node:https";
 import { isIP } from "node:net";
+import { emitir, vistaPrevia } from "../traza";
 
 /**
  * Salida a Internet de las llamadas a proveedores de IA. El usuario puede escribir una URL base propia, y el servidor
@@ -93,10 +94,17 @@ const recortar = (s: string) => s.replace(/\s+/g, " ").slice(0, 300);
 
 const MAX_RESPUESTA = 20 * 1024 * 1024;
 const CONECTAR_MS = 20_000;
+const LATIDO_MS = 10_000;
+
+// Sin reutilizar conexiones: un socket que el proveedor ya cerró por inactividad deja la petición colgada sin error alguno.
+const agenteSinReuso = new Agent({ keepAlive: false });
+
+const kb = (n: number) => `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
 
 /**
  * HTTPS con la guarda de red, sin redirecciones y con tiempo máximo. Usa `node:https` (no `undici`): el paquete undici exige
  * una versión de Node reciente y en un servidor con Node más antiguo las conexiones se quedaban colgadas sin error.
+ * Cada fase (DNS, TCP, TLS, envío, primera respuesta, fin) se informa a la traza de la operación en curso, si la hay.
  * Lanza ErrorHttp con el estado y el motivo que da el proveedor.
  */
 export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
@@ -105,29 +113,40 @@ export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
     const host = u.hostname.replace(/^\[|\]$/g, "");
     if (u.protocol !== "https:" || (isIP(host) && esDireccionPrivada(host))) return reject(new ErrorHttp(400, "Destino no permitido (red privada o interna)."));
     const cuerpo = o.cuerpo === undefined ? undefined : JSON.stringify(o.cuerpo);
+    const metodo = o.metodo ?? "POST";
     const total = o.timeoutMs ?? 120_000;
+    const ini = Date.now();
+    const ms = () => Date.now() - ini;
     let terminado = false;
     let conectado = false;
+    let enviado = false;
     let ips: string[] = [];
     const donde = () => (ips.length ? ` [destino ${host} → ${ips.join(", ")}]` : "");
     const fin = (f: () => void) => {
       if (terminado) return;
       terminado = true;
       clearTimeout(temporizador);
+      clearInterval(latido);
       f();
     };
+    emitir("info", "red", `${metodo} ${u.origin}${u.pathname}`, cuerpo ? JSON.stringify(vistaPrevia(o.cuerpo), null, 2) : undefined);
     const req = request(
       {
         protocol: "https:",
         hostname: host,
         port: u.port || 443,
         path: `${u.pathname}${u.search}`,
-        method: o.metodo ?? "POST",
+        method: metodo,
+        agent: agenteSinReuso,
         headers: { "User-Agent": "ajustador-siniestros/1.0", "Content-Type": "application/json", Accept: "application/json", ...(cuerpo ? { "Content-Length": Buffer.byteLength(cuerpo) } : {}), ...o.cabeceras },
         // La IP que valida la guarda es la misma a la que se conecta.
-        lookup: crearLookupSeguro((l) => (ips = l)),
+        lookup: crearLookupSeguro((l) => {
+          ips = l;
+          emitir("ok", "red", `DNS resuelto (${ms()} ms): ${l.join(", ")}`);
+        }),
       },
       (res) => {
+        emitir("ok", "red", `Respuesta del proveedor: HTTP ${res.statusCode ?? "?"} a los ${(ms() / 1000).toFixed(1)} s (llegaron las cabeceras)`);
         const trozos: Buffer[] = [];
         let bytes = 0;
         res.on("data", (c: Buffer) => {
@@ -140,6 +159,7 @@ export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
           fin(() => {
             const texto = Buffer.concat(trozos).toString("utf8");
             const estado = res.statusCode ?? 0;
+            emitir(estado >= 200 && estado < 300 ? "ok" : "error", "red", `Cuerpo recibido: ${kb(bytes)} en ${(ms() / 1000).toFixed(1)} s`, texto.length < 1500 ? texto : `${texto.slice(0, 1500)}…`);
             if (estado >= 300 && estado < 400) return reject(new ErrorHttp(400, "El proveedor respondió con una redirección; no se siguen redirecciones."));
             if (estado < 200 || estado >= 300) {
               const ra = Number(res.headers["retry-after"]);
@@ -166,17 +186,29 @@ export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
       () => req.destroy(new Error(conectado ? `Conectó con el proveedor, envió la petición y no recibió respuesta en ${Math.round(total / 1000)} s (modelo lento o saturado)${donde()}` : `No llegó a conectar en ${Math.round(total / 1000)} s${donde()}`)),
       total,
     );
+    // Mientras se espera la respuesta se avisa cada pocos segundos: así se ve en vivo dónde se queda parado.
+    const latido = setInterval(() => {
+      if (enviado) emitir("espera", "red", `Esperando la respuesta del modelo… ${Math.round(ms() / 1000)} s`);
+      else emitir("espera", "red", `${conectado ? "Enviando la petición" : "Intentando conectar"}… ${Math.round(ms() / 1000)} s`);
+    }, LATIDO_MS);
     req.on("socket", (socket) => {
       // Si no hay conexión TCP+TLS en 20 s se corta ya: no hace falta esperar el tiempo total para saber que el destino no es alcanzable.
       const t = setTimeout(() => req.destroy(new Error(`No se pudo conectar en ${CONECTAR_MS / 1000} s${donde()}`)), CONECTAR_MS);
+      socket.once("connect", () => emitir("ok", "red", `Conexión TCP establecida (${ms()} ms)`));
       socket.once("secureConnect", () => {
         conectado = true;
         clearTimeout(t);
+        emitir("ok", "red", `Cifrado TLS listo (${ms()} ms, ${(socket as unknown as { getProtocol?: () => string }).getProtocol?.() ?? "TLS"})`);
       });
       socket.once("close", () => clearTimeout(t));
     });
+    req.on("finish", () => {
+      enviado = true;
+      emitir("ok", "red", `Petición enviada (${cuerpo ? kb(Buffer.byteLength(cuerpo)) : "sin cuerpo"}, ${ms()} ms); ahora se espera la respuesta`);
+    });
     req.on("error", (e) => {
       const msg = (e as { cause?: Error }).cause?.message ?? e.message;
+      emitir("error", "red", `Fallo de red tras ${(ms() / 1000).toFixed(1)} s: ${recortar(msg)}`);
       fin(() => reject(/no permitida/i.test(msg) ? new ErrorHttp(400, "Destino no permitido (red privada o interna).") : new ErrorHttp(0, `Sin respuesta del proveedor: ${recortar(msg)}`)));
     });
     if (cuerpo) req.write(cuerpo);

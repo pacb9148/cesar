@@ -7,11 +7,14 @@ import { generarAnexo } from "../docs/anexo";
 import { docxAPdf } from "../docs/pdf";
 import { generarInforme, type FotoInforme, type Meteo } from "../docs/word";
 import { GG_UTILIDADES_UNIFICADO, IVA } from "../domain/constantes";
-import { datosCasoSchema, type DatosCaso, type Reclamacion, type SalidaAgente } from "../domain/tipos";
+import { datosCasoSchema, salidaAgenteSchema, type DatosCaso, type Reclamacion, type SalidaAgente } from "../domain/tipos";
 import type { ActaInspeccion } from "../extraccion/acta";
 import { esEscaneado, textoPdf } from "../extraccion/pdf";
-import { ajustarCaso, type FotoModelo, type ResultadoAgente } from "../ia/agente";
-import type { ClienteLlm } from "../ia/gemini";
+import { ajustarCaso, mensajeDeCaso, type EntradaAgente, type FotoModelo, type ResultadoAgente } from "../ia/agente";
+import { SYSTEM_PROMPT } from "../ia/prompt";
+import { destinoDe, listarProveedores } from "../ia/repo-proveedores";
+import { emitir } from "../traza";
+import { esquemaParaGemini, type ClienteLlm } from "../ia/gemini";
 import { RegistroDb } from "../ia/repo-proveedores";
 import { ClienteConRespaldo } from "../ia/rotacion";
 import { evidenciaMeteorologica } from "../meteo/inia";
@@ -62,21 +65,60 @@ async function fotosParaModelo(casoId: string): Promise<FotoModelo[]> {
   return out;
 }
 
-export async function ejecutarAjuste(casoId: string, usuarioId: string, cliente?: ClienteLlm): Promise<ResultadoAgente & { version: number }> {
+async function prepararAjuste(casoId: string, usuarioId: string): Promise<EntradaAgente> {
   const { acta, datos, valorUF, recl } = await cargar(casoId, usuarioId);
   const modo = datos.modo;
   if (modo === "reclamacion" && !recl) throw new Error("No hay reclamación leída: sube el presupuesto del contratista.");
+  emitir("info", "datos", `Caso leído: modo «${modo}», ${recl?.lineas.length ?? 0} partidas del contratista, ${acta.danos.length} recintos dañados en el acta, UF ${valorUF}`);
+  const fotos = await fotosParaModelo(casoId);
+  const kbFotos = Math.round(fotos.reduce((t, f) => t + f.base64.length, 0) / 1024);
+  emitir("ok", "fotos", `${fotos.length} fotografías preparadas para el modelo (reducidas a 768 px, ${kbFotos} KB en total)`);
+  return { modo, fechaSiniestro: datos.fechas.ocurrencia, valorUF, acta, reclamacion: recl ?? reclamacionVacia(), fotos, preciosMercado: [] };
+}
+
+/** Qué se le enviará a la IA, sin llamarla: tamaños, cantidad de fotos y proveedores que se usarán, para revisarlo antes de ejecutar. */
+export async function vistaPreviaAjuste(casoId: string, usuarioId: string) {
+  const entrada = await prepararAjuste(casoId, usuarioId);
+  const mensaje = JSON.stringify(mensajeDeCaso(entrada));
+  const schema = JSON.stringify(esquemaParaGemini(salidaAgenteSchema));
+  const bytesFotos = entrada.fotos.reduce((t, f) => t + f.base64.length, 0);
+  const porRecinto: Record<string, number> = {};
+  for (const f of entrada.fotos) porRecinto[f.recinto] = (porRecinto[f.recinto] ?? 0) + 1;
+  const cuerpoBytes = SYSTEM_PROMPT.length + schema.length + mensaje.length + bytesFotos;
+  const proveedores = (await listarProveedores(usuarioId)).map((p) => ({
+    nombre: p.nombre,
+    modelo: p.modelo,
+    destino: destinoDe(p.tipo, p.baseUrl),
+    activo: p.activo,
+    estado: p.estado,
+    enPausa: !!p.enPausaHasta && new Date(p.enPausaHasta) > new Date(),
+    prioridad: p.prioridad,
+  }));
+  return {
+    modo: entrada.modo,
+    valorUF: entrada.valorUF,
+    partidasReclamacion: entrada.reclamacion.lineas.length,
+    recintosActa: entrada.acta.danos.length,
+    fotos: { cantidad: entrada.fotos.length, kb: Math.round(bytesFotos / 1024), porRecinto },
+    textos: { instrucciones: SYSTEM_PROMPT.length, datosDelCaso: mensaje.length, esquema: schema.length },
+    cuerpoKb: Math.round(cuerpoBytes / 1024),
+    tokensEstimados: Math.round((SYSTEM_PROMPT.length + schema.length + mensaje.length) / 3.5) + entrada.fotos.length * 400,
+    proveedores,
+    muestraDatos: mensaje.slice(0, 1800),
+  };
+}
+
+export async function ejecutarAjuste(casoId: string, usuarioId: string, cliente?: ClienteLlm): Promise<ResultadoAgente & { version: number }> {
+  emitir("info", "datos", "Leyendo el caso y preparando lo que se enviará a la IA");
+  const entrada = await prepararAjuste(casoId, usuarioId);
   // BYOK abierto: proveedores del propio usuario en orden de prioridad, con salto automático al siguiente si uno no responde.
   const cli = cliente ?? new ClienteConRespaldo(new RegistroDb(usuarioId));
-  const fotos = await fotosParaModelo(casoId);
   try {
-    const r = await ajustarCaso(
-      { modo, fechaSiniestro: datos.fechas.ocurrencia, valorUF, acta, reclamacion: recl ?? reclamacionVacia(), fotos, preciosMercado: [] },
-      cli,
-    );
+    const r = await ajustarCaso(entrada, cli);
     const version = await guardarAjuste(casoId, r.salida, "agente", r.modelo, r.promptVersion);
     await registrarLlm({ casoId, tarea: "ajuste", modelo: r.modelo, promptVersion: r.promptVersion, tin: r.tokensEntrada, tout: r.tokensSalida, ok: r.validacion.errores.length === 0 });
     await actualizarCaso(casoId, { estado: "ajustado" });
+    emitir("ok", "guardado", `Ajuste guardado como versión ${version} (${r.intentos} intento(s), ${r.validacion.errores.length} error(es) pendientes)`);
     return { ...r, version };
   } catch (e) {
     await registrarLlm({ casoId, tarea: "ajuste", modelo: "sin proveedor activo", promptVersion: "v0.1", ok: false, error: String(e).slice(0, 500) });
@@ -161,6 +203,8 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
   const salida = aj.salida;
   const entrada = entradaExcelDe(datos, acta, recl, salida, valorUF);
   const res = resumenCuadro(entrada);
+  emitir("info", "informe", `Ajuste v${aj.version ?? "?"} cargado: UF reclamada ${res.recUF.toFixed(2)}, ajustada ${res.ajUF.toFixed(2)}, a indemnizar ${res.indemnizacionUF.toFixed(2)}`);
+  emitir("info", "informe", "Generando Excel, cuadro comparativo, captura meteorológica, fachada y fotos en paralelo (la captura de agrometeorologia.cl puede tardar)");
 
   const [xlsx, cuadro, met, fachada, fotosDb] = await Promise.all([
     generarExcel(entrada),
@@ -179,6 +223,8 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     contador.set(f.recinto, n + 1);
   }
 
+  emitir("ok", "informe", `Excel, cuadro y fotos listos; meteorología: ${met ? `estación ${met.estacion}` : "no disponible"}; ${fotosDb.length} fotos del caso, ${fachada.length} de fachada`);
+  emitir("info", "informe", "Armando el informe Word con la plantilla");
   const docx = await generarInforme({
     caso: datos,
     valorUF,
@@ -192,12 +238,14 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     fachada,
     siniestrosAnteriores: false,
   });
+  emitir("ok", "informe", `Informe Word generado (${Math.round(docx.length / 1024)} KB). Convirtiendo a PDF y armando el anexo de fotografías`);
   const pie = `Liquidación ${datos.liquidacion}/${datos.fechas.ocurrencia.slice(0, 4)}`;
   const [{ pdf, motor }, anexo] = await Promise.all([
     docxAPdf(docx, pie),
     generarAnexo({ siniestro: datos.siniestro, asegurado: datos.asegurado.nombre, liquidacion: datos.liquidacion, anio: datos.fechas.ocurrencia.slice(0, 4), fotos: todas }),
   ]);
 
+  emitir("ok", "informe", `PDF generado con ${motor}`);
   const resumen = [`RESUMEN DEL AJUSTE TÉCNICO APLICADO — Siniestro ${datos.siniestro}`, "", ...salida.resumen_ajuste.map((x) => `• ${x}`), "", ...(salida.faltantes.length ? ["PENDIENTES:", ...salida.faltantes.map((f) => `• ${f.campo}: ${f.motivo}`)] : [])].join("\n");
 
   const s = datos.siniestro;

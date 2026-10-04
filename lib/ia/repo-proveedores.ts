@@ -1,7 +1,7 @@
 import { consulta, transaccion, uno } from "../db";
 import { cifrar, descifrar } from "./cifrado";
 import { ClienteGemini } from "./gemini";
-import { crearCliente, type ConfigProveedor, type ResultadoPrueba, type TipoProveedor } from "./proveedores";
+import { baseUrlDe, crearCliente, type ConfigProveedor, type ResultadoPrueba, type TipoProveedor } from "./proveedores";
 import type { Candidato, InfoFallo, RegistroSalud } from "./rotacion";
 
 export const MAX_PROVEEDORES = 10;
@@ -116,6 +116,15 @@ export async function registrarPrueba(usuarioId: string, id: string, r: Resultad
 }
 
 /** Estado de salud en la base de datos para el cliente con respaldo. */
+/** Host al que se conectará un proveedor (para mostrarlo; nunca incluye la clave). */
+export function destinoDe(tipo: TipoProveedor, baseUrl: string | null): string {
+  try {
+    return baseUrlDe({ tipo, baseUrl }) ?? "API de Google";
+  } catch {
+    return "URL inválida";
+  }
+}
+
 export class RegistroDb implements RegistroSalud {
   constructor(private usuarioId: string) {}
 
@@ -129,7 +138,7 @@ export class RegistroDb implements RegistroSalud {
     for (const f of filas) {
       try {
         const cliente = crearCliente({ tipo: f.tipo, baseUrl: f.base_url, modelo: f.modelo, clave: descifrar(f.clave_cifrada) });
-        lista.push({ id: String(f.id), nombre: String(f.nombre), cliente, fallosSeguidos: Number(f.fallos_seguidos), pausado: !!f.pausado });
+        lista.push({ id: String(f.id), nombre: String(f.nombre), cliente, fallosSeguidos: Number(f.fallos_seguidos), pausado: !!f.pausado, detalle: `${f.modelo} · ${destinoDe(f.tipo, f.base_url)}` });
       } catch (e) {
         // Una configuración ilegible (clave que no se puede descifrar, URL inválida) no tumba a los demás.
         await this.fallo(String(f.id), { error: e instanceof Error ? e.message : "Configuración inválida", pausaS: 3600, desactivar: true });

@@ -1,14 +1,15 @@
 "use client";
 
 import type { ArchivoMeta, Caso } from "@/lib/caso/repositorio";
-import { useAccion } from "@/components/useAccion";
+import { useFlujo } from "@/components/useFlujo";
+import PanelTraza from "@/components/PanelTraza";
 
 type Gen = { entregables: { id: string; nombre: string }[]; motorPdf: string; faltantes: string[]; totales: { reclamacionUF: number; ajusteUF: number; indemnizacionUF: number } };
 
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
 
 export default function Informe({ caso, archivos, tieneAjuste }: { caso: Caso; archivos: ArchivoMeta[]; tieneAjuste: boolean }) {
-  const gen = useAccion<Gen>(`/api/casos/${caso.id}/generar`);
+  const gen = useFlujo<Gen>(`/api/casos/${caso.id}/generar`);
   const salidas = archivos.filter((a) => a.tipo === "salida");
   const faltantes = gen.resultado?.faltantes ?? [];
   return (
@@ -24,6 +25,7 @@ export default function Informe({ caso, archivos, tieneAjuste }: { caso: Caso; a
         </button>
         {!tieneAjuste && <p className="aviso aviso-alerta">Primero ejecuta el ajuste (paso 3).</p>}
         {gen.error && <p role="alert" className="aviso aviso-error">{gen.error}</p>}
+        <PanelTraza eventos={gen.eventos} cargando={gen.cargando} titulo="Qué está generando" />
         {gen.resultado && gen.resultado.motorPdf === "html" && (
           <p className="aviso aviso-alerta">El PDF se hizo con el conversor de respaldo (sin LibreOffice en este servidor): conserva el contenido pero no el formato exacto. El Word sí es el modelo exacto.</p>
         )}

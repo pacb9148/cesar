@@ -8,7 +8,9 @@ import { LETRAS_OBS, LEYENDA, MARCADOR_FALTA_DATO } from "@/lib/domain/constante
 import { CLAVES_CARACTERISTICAS, type DecisionLinea, type Reclamacion, type SalidaAgente } from "@/lib/domain/tipos";
 import { armarFilas } from "@/lib/engine/filas";
 import { calcularTotales } from "@/lib/engine/totales";
-import { useAccion } from "@/components/useAccion";
+import { useFlujo } from "@/components/useFlujo";
+import PanelTraza from "@/components/PanelTraza";
+import VistaPreviaAjuste from "./VistaPreviaAjuste";
 import type { AjusteGuardado } from "./PanelCaso";
 
 const ETIQUETAS: Record<(typeof CLAVES_CARACTERISTICAS)[number], string> = {
@@ -25,7 +27,7 @@ type Resp = { version: number; intentos: number; errores: string[]; advertencias
 
 export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { caso: Caso; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; iaConfigurada: boolean }) {
   const router = useRouter();
-  const ia = useAccion<Resp>(`/api/casos/${caso.id}/ajustar`);
+  const ia = useFlujo<Resp>(`/api/casos/${caso.id}/ajustar`);
   const [salida, setSalida] = useState<SalidaAgente | null>(ajuste?.salida ?? null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; textos: string[] } | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -84,10 +86,12 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
         {!puedeAjustar && <p className="aviso aviso-alerta">Lee primero los documentos (paso 1).</p>}
         {!iaConfigurada && (
           <p className="aviso aviso-alerta">
-            Aún no has configurado tu clave de Gemini. <Link href="/ajustes" className="underline">Ir a Ajustes de IA</Link>.
+            Aún no tienes ningún proveedor de IA en servicio. <Link href="/ajustes" className="underline">Ir a Ajustes de IA</Link>.
           </p>
         )}
         {ia.error && <p role="alert" className="aviso aviso-error">{ia.error}</p>}
+        <PanelTraza eventos={ia.eventos} cargando={ia.cargando} titulo="Qué está haciendo el ajuste" />
+        {!ia.cargando && <VistaPreviaAjuste casoId={caso.id} />}
         {ia.resultado && ia.resultado.errores.length > 0 && (
           <div role="alert" className="aviso aviso-error">
             <strong>El agente dejó {ia.resultado.errores.length} observación(es) sin corregir tras {ia.resultado.intentos} intentos:</strong>

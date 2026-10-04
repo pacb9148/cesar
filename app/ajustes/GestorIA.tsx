@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ProveedorVista } from "@/lib/ia/repo-proveedores";
+import PanelTraza from "@/components/PanelTraza";
+import { useFlujo } from "@/components/useFlujo";
 
 type Tipo = { id: string; etiqueta: string; ayuda: string; pideUrl: boolean; urlAuto: string | null; sinUrl: boolean };
 type Prueba = { ok: boolean; ms: number; error?: string };
@@ -24,6 +26,31 @@ function situacion(p: ProveedorVista): { texto: string; clase: string } {
 async function llamar<T>(url: string, metodo: string, cuerpo?: unknown): Promise<{ ok: boolean; datos: T & { error?: string } }> {
   const r = await fetch(url, { method: metodo, headers: cuerpo ? { "Content-Type": "application/json" } : undefined, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
   return { ok: r.ok, datos: (await r.json().catch(() => ({}))) as T & { error?: string } };
+}
+
+type ResultadoDiag = { proveedores?: ProveedorVista[]; prueba: Prueba; estructurada: Prueba | null };
+
+/** Prueba un proveedor paso a paso y en vivo (red, clave, modelo y la ruta real del agente) para ver dónde se detiene. */
+function Diagnostico({ id, bloqueado, alTerminar }: { id: string; bloqueado: boolean; alTerminar: (p: ProveedorVista[]) => void }) {
+  const f = useFlujo<ResultadoDiag>(`/api/ajustes/ia/${id}/diagnostico`);
+  return (
+    <div className="space-y-2">
+      <button type="button" className="btn btn-sec" disabled={bloqueado || f.cargando} onClick={() => f.ejecutar().then((r) => r?.proveedores && alTerminar(r.proveedores))}>
+        {f.cargando ? "Diagnosticando…" : "Diagnóstico paso a paso"}
+      </button>
+      <PanelTraza eventos={f.eventos} cargando={f.cargando} titulo="Diagnóstico de conexión" />
+      {f.error && <p role="alert" className="aviso aviso-error">{f.error}</p>}
+      {f.resultado && !f.cargando && (
+        <p role="status" className={`aviso ${f.resultado.prueba.ok && f.resultado.estructurada?.ok ? "aviso-ok" : "aviso-alerta"}`}>
+          {f.resultado.prueba.ok
+            ? f.resultado.estructurada?.ok
+              ? "Las dos pruebas pasaron: el proveedor responde también a la petición del agente."
+              : "La prueba simple pasa pero la del agente falla: el problema está en cómo el modelo responde a esa petición (ver el registro)."
+            : "La prueba simple falló: ver en el registro si el fallo es de conexión, de clave o de modelo."}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function GestorIA({ inicial, tipos, max }: { inicial: ProveedorVista[]; tipos: Tipo[]; max: number }) {
@@ -121,6 +148,7 @@ export default function GestorIA({ inicial, tipos, max }: { inicial: ProveedorVi
                 <button className="btn btn-sec" disabled={dis || i === lista.length - 1} aria-label={`Bajar prioridad de ${p.nombre}`} onClick={() => accion(p.id, "baj", () => llamar(`/api/ajustes/ia/${p.id}`, "PATCH", { mover: "bajar" }), "Prioridad actualizada")}>↓</button>
                 <button className="btn btn-sec" disabled={dis} onClick={() => { if (confirm(`¿Eliminar «${p.nombre}» y su clave guardada?`)) void accion(p.id, "del", () => llamar(`/api/ajustes/ia/${p.id}`, "DELETE"), "Proveedor eliminado"); }}>Eliminar</button>
               </div>
+              <Diagnostico id={p.id} bloqueado={!!ocupado} alTerminar={(ps) => { setLista(ps); router.refresh(); }} />
             </article>
           );
         })}

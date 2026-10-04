@@ -5,6 +5,7 @@ import { candidatos } from "../engine/baremo";
 import { cubicar, type Cubicacion } from "../engine/cubicacion";
 import { esquemaParaGemini, type ClienteLlm, type Parte } from "./gemini";
 import { PROMPT_VERSION, SYSTEM_PROMPT } from "./prompt";
+import { emitir } from "../traza";
 import { validarSalida, type ResultadoValidacion } from "./validadores";
 
 export type FotoModelo = { id: string; recinto: string; mime: string; base64: string };
@@ -112,7 +113,9 @@ export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm, maxInte
   let ultimo: { salida: SalidaAgente; validacion: ResultadoValidacion; modelo: string } | null = null;
   for (let i = 1; i <= maxIntentos; i++) {
     const partes = correcciones ? [...base, { text: `CORRIGE estos errores de tu respuesta anterior y devuelve el JSON completo:\n${correcciones}` }] : base;
+    emitir("info", "agente", `Intento ${i}/${maxIntentos}: se pide el ajuste al modelo${correcciones ? " con las correcciones del intento anterior" : ""}`, correcciones || undefined);
     const r = await cliente.generarJson({ system: SYSTEM_PROMPT, partes, schema });
+    emitir("ok", "agente", `Respuesta recibida (${r.texto.length} caracteres). Se valida el formato y las reglas de oro.`);
     tin += r.tokensEntrada ?? 0;
     tout += r.tokensSalida ?? 0;
     for (const a of r.avisos ?? []) if (!avisos.includes(a)) avisos.push(a);
@@ -121,15 +124,18 @@ export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm, maxInte
       json = JSON.parse(r.texto);
     } catch {
       correcciones = "La respuesta no era JSON válido.";
+      emitir("error", "agente", "La respuesta no era JSON válido", r.texto.slice(0, 600));
       continue;
     }
     const p = salidaAgenteSchema.safeParse(json);
     if (!p.success) {
       correcciones = p.error.issues.slice(0, 12).map((x) => `${x.path.join(".")}: ${x.message}`).join("\n");
+      emitir("error", "agente", `El JSON no cumple el esquema (${p.error.issues.length} problemas)`, correcciones);
       continue;
     }
     const validacion = validarSalida(p.data, { reclamacion: e.reclamacion, fotosIds, fuentesMercado: fuentes, modo: e.modo });
     ultimo = { salida: p.data, validacion, modelo: r.modelo };
+    emitir(validacion.errores.length === 0 ? "ok" : "error", "agente", validacion.errores.length === 0 ? `Validación superada (${p.data.lineas.length} partidas decididas, ${p.data.lineas_adicionales.length} adicionales)` : `La validación encontró ${validacion.errores.length} error(es) de reglas`, validacion.errores.slice(0, 10).join("\n") || undefined);
     if (validacion.errores.length === 0) return { ...ultimo, intentos: i, promptVersion: PROMPT_VERSION, tokensEntrada: tin, tokensSalida: tout, avisos };
     correcciones = validacion.errores.slice(0, 25).join("\n");
   }

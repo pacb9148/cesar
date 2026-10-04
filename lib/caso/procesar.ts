@@ -1,3 +1,4 @@
+import { emitir } from "../traza";
 import { datosCasoSchema, type DatosCaso } from "../domain/tipos";
 import { hashReclamacion } from "../engine/hash";
 import { parsearActa, type ActaInspeccion } from "../extraccion/acta";
@@ -101,15 +102,18 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
   if (!caso) throw new Error("Caso no encontrado");
   const alertas: string[] = [];
   const leidos: string[] = [];
+  emitir("info", "documentos", "Buscando los documentos cargados en el caso");
 
   let acta: ActaInspeccion | null = null;
   const actas = await archivosConContenido(casoId, "acta");
   if (actas[0]) {
     const pag = await textoPdf(actas[0].contenido);
+    emitir("info", "acta", `Acta «${actas[0].nombre}»: ${pag.length} páginas con ${pag.reduce((t, x) => t + x.length, 0)} caracteres de texto`);
     if (esEscaneado(pag)) alertas.push("El acta está escaneada (sin texto): no se pudo leer. Sube la versión original en PDF.");
     else {
       acta = parsearActa(pag);
       leidos.push(actas[0].nombre);
+      emitir("ok", "acta", `Acta leída: siniestro ${acta.siniestro ?? "?"}, ${acta.danos.length} recinto(s) dañado(s), ${acta.hechos?.length ?? 0} caracteres de hechos`);
       if (acta.danos.length === 0) alertas.push("No se encontraron recintos dañados en el acta.");
     }
   } else alertas.push("Falta el Acta de inspección.");
@@ -118,6 +122,7 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
   const provs = await archivosConContenido(casoId, "provision");
   if (provs[0]) {
     prov = parsearProvision(await textoPdf(provs[0].contenido));
+    emitir("ok", "provision", `Provisión leída: liquidación ${prov.liquidacion ?? "?"}, siniestro ${prov.siniestro ?? "?"}`);
     leidos.push(provs[0].nombre);
   } else alertas.push("Falta la Provisión de pérdida (datos de póliza, vigencia y suma asegurada).");
 
@@ -126,12 +131,14 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
   const pd = await archivosConContenido(casoId, "presupuesto_pdf");
   if (xl[0]) {
     presupuesto = await parsearPresupuestoXlsx(xl[0].contenido);
+    emitir("ok", "presupuesto", `Presupuesto Excel leído: ${presupuesto.reclamacion.lineas.length} partidas`);
     leidos.push(xl[0].nombre);
   } else if (pd[0]) {
     const pag = await textoPdf(pd[0].contenido);
     if (esEscaneado(pag)) alertas.push("El presupuesto en PDF está escaneado: se requiere el original con texto.");
     else {
       presupuesto = parsearPresupuestoPdf(pag);
+      emitir("ok", "presupuesto", `Presupuesto PDF leído: ${presupuesto.reclamacion.lineas.length} partidas`);
       leidos.push(pd[0].nombre);
     }
   }
@@ -146,9 +153,12 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
   if (acta) await guardarExtraccion(casoId, "acta", acta);
   if (prov) await guardarExtraccion(casoId, "provision", prov);
 
+  emitir("info", "uf", `Consultando el valor de la UF del ${datos.fechas.ocurrencia || "(fecha sin definir)"} en mindicador.cl`);
   const uf = datos.fechas.ocurrencia ? await valorUF(datos.fechas.ocurrencia) : null;
   if (uf == null) alertas.push("No se pudo obtener la UF de la fecha del siniestro: ingrésala a mano en «Datos».");
 
+  emitir(uf == null ? "error" : "ok", "uf", uf == null ? "No se obtuvo la UF" : `UF de la fecha: ${uf}`);
+  emitir("ok", "documentos", `Lectura terminada: ${leidos.length} documento(s) leído(s), ${alertas.length} aviso(s)`);
   await actualizarCaso(casoId, {
     siniestro: datos.siniestro || caso.siniestro,
     modo: datos.modo,
