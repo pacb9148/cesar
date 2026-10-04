@@ -38,7 +38,9 @@ export type EntradaInforme = {
   ajusteTexto: string;
   totales: { reclamacionPesos: number; reclamacionUF: number; ajusteUF: number; indemnizacionUF: number };
   meteo: Meteo | null;
-  cuadroPng: Buffer;
+  /** Imagen del cuadro de pérdida; si no se pudo dibujar (sin navegador) va como tabla de Word en `cuadroTabla`. */
+  cuadroPng: Buffer | null;
+  cuadroTabla?: string[];
   fotos: FotoInforme[];
   fachada: Buffer[];
   siniestrosAnteriores: boolean;
@@ -352,8 +354,17 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
   }
   if (pTabla) {
     for (const r of porTag(pTabla, "r")) r.parentNode!.removeChild(r);
-    const m = await paq.imagen(e.cuadroPng, 6.9, { maxPx: 2000 });
-    pTabla.appendChild(crearEl(doc, `<w:r>${xmlImagen(m.rid, m.cx, m.cy, "cuadro-de-perdida")}</w:r>`));
+    if (e.cuadroPng) {
+      const m = await paq.imagen(e.cuadroPng, 6.9, { maxPx: 2000 });
+      pTabla.appendChild(crearEl(doc, `<w:r>${xmlImagen(m.rid, m.cx, m.cy, "cuadro-de-perdida")}</w:r>`));
+    } else {
+      let ancla: Node = pTabla;
+      for (const xml of e.cuadroTabla ?? []) {
+        const el = crearEl(doc, xml);
+        ancla.parentNode!.insertBefore(el, ancla.nextSibling);
+        ancla = el;
+      }
+    }
   }
 
   // ---------- 11. Conclusión ----------

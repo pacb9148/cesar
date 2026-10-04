@@ -37,3 +37,26 @@ describe("generarExcel", () => {
     expect(rt.decisiones.length).toBe(orig.decisiones.length);
   });
 });
+
+describe("cuadro de pérdida como tabla de Word (sin navegador)", () => {
+  it("es XML bien formado con las filas, los totales y la leyenda", async () => {
+    const { cuadroTablaXml } = await import("../lib/docs/cuadro");
+    const { DOMParser } = await import("@xmldom/xmldom");
+    const orig = await leerPlanilla(globSync("fuente/1981023*/1981023 Ajuste v1.xlsx")[0]);
+    const caso = datosCasoSchema.parse({
+      siniestro: "1981023", liquidacion: "170448", aseguradora: "HDI", asegurado: { nombre: "X", rut: "1", direccion: "d" }, beneficiario: { nombre: "B", rut: "2", direccion: "d" },
+      poliza: { tipo: "Incendio", numero: "1", item: "4", vigenciaDesde: "01/10/2024", vigenciaHasta: "30/09/2026", materia: "m", sumaAseguradaUF: 1294, deducibleUF: 0 },
+      ubicacion: "u", comuna: "c", region: "r",
+      fechas: { inspeccion: "07/08/2026", asignacion: "29/07/2026", denuncia: "29/07/2026", ocurrencia: "2026-07-16", emision: null, informadoPartes: null }, denunciaTexto: null, modo: "reclamacion",
+    });
+    const partes = cuadroTablaXml({ caso, reclamacion: orig.reclamacion, decisiones: orig.decisiones, adicionales: orig.adicionales, valorUF: orig.valorUF!, recintos: [], siniestrosAnteriores: [] });
+    const xml = `<w:body xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${partes.join("")}</w:body>`;
+    const errores: string[] = [];
+    new DOMParser({ onError: (_n: string, m: string) => errores.push(m) } as never).parseFromString(xml, "text/xml");
+    expect(errores).toEqual([]);
+    expect(partes[0]).toContain("Valor a indemnizar (UF)");
+    expect(partes[0]).toContain("46,73");
+    expect((partes[0].match(/<w:tr>/g) ?? []).length).toBeGreaterThan(orig.reclamacion.lineas.length);
+    expect(partes.join("")).toContain("Daños por mantenimiento");
+  });
+});

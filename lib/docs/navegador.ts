@@ -11,12 +11,13 @@ const RUTAS_LOCALES = [
 
 /** Chromium para capturas y PDF: @sparticuz/chromium en Vercel, Chrome/Edge instalado en local. */
 export async function lanzarNavegador(): Promise<Browser> {
+  if (process.env.SIN_NAVEGADOR === "1") throw new Error("Navegador desactivado (SIN_NAVEGADOR=1)");
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
     const ch = (await import("@sparticuz/chromium")).default;
     return chromium.launch({ args: ch.args, executablePath: await ch.executablePath(), headless: true });
   }
   const ruta = [process.env.CHROME_PATH, ...RUTAS_LOCALES].find((r) => r && existsSync(r));
-  if (!ruta) throw new Error("No se encontró Chrome/Edge: define CHROME_PATH en .env.local");
+  if (!ruta) throw new Error("Este servidor no tiene Chrome ni Chromium (en local, define CHROME_PATH en .env.local; en producción, usa el Build Pack Dockerfile)");
   return chromium.launch({ executablePath: ruta, headless: true });
 }
 

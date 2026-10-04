@@ -1,7 +1,7 @@
 import PizZip from "pizzip";
 import sharp from "sharp";
 import { extractImages, getDocumentProxy } from "unpdf";
-import { cuadroPng, resumenCuadro } from "../docs/cuadro";
+import { cuadroPng, cuadroTablaXml, resumenCuadro } from "../docs/cuadro";
 import { generarExcel, type EntradaExcel } from "../docs/excel";
 import { generarAnexo } from "../docs/anexo";
 import { fotosDelAreaAfectada, leyendaDeFoto } from "../docs/fotos-seleccion";
@@ -170,6 +170,7 @@ async function meteo(casoId: string, datos: DatosCaso): Promise<Meteo | null> {
     return { estacion, precipitacionMm: r.dia.precipitacionMm, rafagaKmh: r.dia.rafagaKmh, imagenPng: r.imagenPng };
   } catch (e) {
     console.error("[meteo]", e);
+    emitir("error", "meteo", `No se pudo capturar agrometeorologia.cl: ${e instanceof Error ? e.message : "error"}`);
     return null;
   }
 }
@@ -207,7 +208,11 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
 
   const [xlsx, cuadro, met, fachada, fotosDb] = await Promise.all([
     generarExcel(entrada),
-    cuadroPng(entrada),
+    cuadroPng(entrada).catch((err: unknown) => {
+      // Sin navegador en el servidor: el cuadro va como tabla de Word en vez de imagen; el informe no se detiene.
+      emitir("error", "informe", `No se pudo dibujar el cuadro como imagen (${err instanceof Error ? err.message : "error"}): irá como tabla de Word`);
+      return null;
+    }),
     meteo(casoId, datos),
     fachadaDelActa(casoId),
     archivosConContenido(casoId, "foto"),
@@ -228,25 +233,31 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     totales: { reclamacionPesos: res.recTotalPesos, reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF },
     meteo: met,
     cuadroPng: cuadro,
+    cuadroTabla: cuadro ? undefined : cuadroTablaXml(entrada),
     fotos: paraInforme,
     fachada,
     siniestrosAnteriores: false,
   });
   emitir("ok", "informe", `Informe Word generado (${Math.round(docx.length / 1024)} KB). Convirtiendo a PDF y armando el anexo de fotografías`);
   const pie = `Liquidación ${datos.liquidacion}/${datos.fechas.ocurrencia.slice(0, 4)}`;
-  const [{ pdf, motor }, anexo] = await Promise.all([
-    docxAPdf(docx, pie),
+  const [pdfMotor, anexo] = await Promise.all([
+    docxAPdf(docx, pie).catch((err: unknown) => {
+      emitir("error", "informe", `No se pudo generar el PDF (${err instanceof Error ? err.message : "error"}): se entrega el Word`);
+      return null;
+    }),
     generarAnexo({ siniestro: datos.siniestro, asegurado: datos.asegurado.nombre, liquidacion: datos.liquidacion, anio: datos.fechas.ocurrencia.slice(0, 4), fotos: todas }),
   ]);
 
-  emitir("ok", "informe", `PDF generado con ${motor}`);
+  const pdf = pdfMotor?.pdf ?? null;
+  const motor = pdfMotor?.motor ?? "ninguno";
+  if (pdf) emitir("ok", "informe", `PDF generado con ${motor}`);
   const resumen = [`RESUMEN DEL AJUSTE TÉCNICO APLICADO — Siniestro ${datos.siniestro}`, "", ...salida.resumen_ajuste.map((x) => `• ${x}`), "", ...(salida.faltantes.length ? ["PENDIENTES:", ...salida.faltantes.map((f) => `• ${f.campo}: ${f.motivo}`)] : [])].join("\n");
 
   const s = datos.siniestro;
   const piezas: [string, string, Buffer][] = [
     [`${s} Ajuste.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx],
     [`${s} INFORME.docx`, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", docx],
-    [`${s} INFORME.pdf`, "application/pdf", pdf],
+    ...(pdf ? ([[`${s} INFORME.pdf`, "application/pdf", pdf]] as [string, string, Buffer][]) : []),
     [`Anexo Fotografías ${s}.docx`, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", anexo],
     [`${s} Resumen del ajuste.txt`, "text/plain; charset=utf-8", Buffer.from(resumen, "utf8")],
   ];
@@ -264,6 +275,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
 
   const faltantes: string[] = [...salida.faltantes.map((f) => f.campo)];
   if (!met) faltantes.push("captura de agrometeorologia.cl");
+  if (!pdf) faltantes.push("PDF del informe (el servidor no tiene LibreOffice ni Chromium)");
   if (!datos.denunciaTexto) faltantes.push("texto de la denuncia");
   if (!datos.fechas.emision) faltantes.push("fecha de emisión del informe");
   if (!datos.fechas.informadoPartes) faltantes.push("fecha en que se informó a las partes");

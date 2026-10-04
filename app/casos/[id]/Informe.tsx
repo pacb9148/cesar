@@ -29,6 +29,9 @@ export default function Informe({ caso, archivos, tieneAjuste }: { caso: Caso; a
         {gen.resultado && gen.resultado.motorPdf === "html" && (
           <p className="aviso aviso-alerta">El PDF se hizo con el conversor de respaldo (sin LibreOffice en este servidor): conserva el contenido pero no el formato exacto. El Word sí es el modelo exacto.</p>
         )}
+        {gen.resultado && gen.resultado.motorPdf === "ninguno" && (
+          <p className="aviso aviso-alerta">Este servidor no tiene LibreOffice ni Chromium: no se generó el PDF (el Word y el Excel sí). Para tener PDF y la captura meteorológica, el administrador debe cambiar el Build Pack del proyecto a Dockerfile.</p>
+        )}
         {faltantes.length > 0 && (
           <div className="aviso aviso-alerta">
             <strong>Quedan campos por completar a mano (aparecen en negrita como [FALTA DATO] en el Word):</strong>
