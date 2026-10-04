@@ -50,6 +50,27 @@ async function probarSalida() {
   );
 }
 
+/** POST con la forma de una llamada de chat y una clave falsa: debe volver un 401 enseguida. Si no, falla el POST, no el modelo. */
+async function probarPost() {
+  const destinos: [string, string, Record<string, string>, unknown][] = [
+    ["api.openai.com", "https://api.openai.com/v1/chat/completions", { Authorization: "Bearer sk-prueba-de-red" }, { model: "gpt-4o-mini", messages: [{ role: "user", content: "hola" }], max_tokens: 5 }],
+    ["integrate.api.nvidia.com", "https://integrate.api.nvidia.com/v1/chat/completions", { Authorization: "Bearer nvapi-prueba-de-red" }, { model: "openai/gpt-oss-20b", messages: [{ role: "user", content: "hola" }], max_tokens: 5 }],
+    ["api.anthropic.com", "https://api.anthropic.com/v1/messages", { "x-api-key": "sk-ant-prueba-de-red", "anthropic-version": "2023-06-01" }, { model: "claude-haiku-4-5-20251001", max_tokens: 5, messages: [{ role: "user", content: "hola" }] }],
+  ];
+  return Promise.all(
+    destinos.map(async ([host, url, cabeceras, cuerpo]) => {
+      const t0 = Date.now();
+      try {
+        await fetchSeguro(url, { cabeceras, cuerpo, timeoutMs: 20_000 });
+        return { host, ok: true, estado: 200, ms: Date.now() - t0 };
+      } catch (e) {
+        if (e instanceof ErrorHttp && e.estado > 0) return { host, ok: true, estado: e.estado, ms: Date.now() - t0 };
+        return { host, ok: false, error: e instanceof Error ? e.message : "fallo", ms: Date.now() - t0 };
+      }
+    }),
+  );
+}
+
 export async function GET(req: Request) {
   const env = {
     DATABASE_URL: !!process.env.DATABASE_URL,
@@ -83,5 +104,6 @@ export async function GET(req: Request) {
   // La prueba de red hace conexiones de salida: solo para un administrador con sesión.
   const admin = new URL(req.url).searchParams.get("red") === "1" && (await usuarioActual())?.rol === "admin";
   const salida = admin ? await probarSalida() : undefined;
-  return Response.json({ ok, node: process.version, env, db, herramientas, ...(salida ? { salida } : {}) }, { status: ok ? 200 : 503 });
+  const salidaPost = admin ? await probarPost() : undefined;
+  return Response.json({ ok, node: process.version, env, db, herramientas, ...(salida ? { salida, salidaPost } : {}) }, { status: ok ? 200 : 503 });
 }

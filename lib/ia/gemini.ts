@@ -9,6 +9,8 @@ export type RespuestaLlm = { texto: string; tokensEntrada?: number; tokensSalida
 /** Contrato mínimo con el proveedor de IA: permite probar el flujo con un cliente simulado. */
 export interface ClienteLlm {
   generarJson(o: { system: string; partes: Parte[]; schema: object }): Promise<RespuestaLlm>;
+  /** Comprobación simple de conectividad, clave y modelo (opcional: sin ella se prueba con una llamada JSON). */
+  ping?(): Promise<void>;
 }
 
 /** Gemini acepta un subconjunto de JSON Schema: se quitan las palabras clave que no soporta. */
@@ -38,6 +40,22 @@ export class ClienteGemini implements ClienteLlm {
     if (!apiKey) throw new Error("Falta GEMINI_API_KEY en .env.local");
     this.ai = new GoogleGenAI({ apiKey });
   }
+  async ping(): Promise<void> {
+    try {
+      await this.ai.models.generateContent({ model: this.modelo, contents: "Responde solo con la palabra OK." });
+    } catch (e) {
+      const err = e as { status?: number; message?: string };
+      let detalle = (err.message ?? "Fallo al llamar a Gemini").replace(/\s+/g, " ");
+      try {
+        const j = JSON.parse(detalle) as { error?: { message?: string } };
+        if (j.error?.message) detalle = j.error.message;
+      } catch {
+        /* ya es texto */
+      }
+      throw new ErrorHttp(typeof err.status === "number" ? err.status : 0, detalle.slice(0, 300));
+    }
+  }
+
   async generarJson(o: { system: string; partes: Parte[]; schema: object }): Promise<RespuestaLlm> {
     let r;
     try {

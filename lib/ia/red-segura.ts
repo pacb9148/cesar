@@ -106,6 +106,7 @@ export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
     const cuerpo = o.cuerpo === undefined ? undefined : JSON.stringify(o.cuerpo);
     const total = o.timeoutMs ?? 120_000;
     let terminado = false;
+    let conectado = false;
     const fin = (f: () => void) => {
       if (terminado) return;
       terminado = true;
@@ -157,11 +158,18 @@ export const fetchSeguro: Fetcher = (urlTexto, o = {}) =>
         );
       },
     );
-    const temporizador = setTimeout(() => req.destroy(new Error(`Sin respuesta tras ${Math.round(total / 1000)} s`)), total);
+    // El mensaje distingue «no llegó a conectar» de «conectó y esperó en vano»: son problemas distintos (red vs. modelo lento).
+    const temporizador = setTimeout(
+      () => req.destroy(new Error(conectado ? `Conectó con el proveedor, envió la petición y no recibió respuesta en ${Math.round(total / 1000)} s (modelo lento o saturado)` : `No llegó a conectar en ${Math.round(total / 1000)} s`)),
+      total,
+    );
     req.on("socket", (socket) => {
       // Si no hay conexión TCP+TLS en 20 s se corta ya: no hace falta esperar el tiempo total para saber que el destino no es alcanzable.
       const t = setTimeout(() => req.destroy(new Error(`No se pudo conectar en ${CONECTAR_MS / 1000} s`)), CONECTAR_MS);
-      socket.once("secureConnect", () => clearTimeout(t));
+      socket.once("secureConnect", () => {
+        conectado = true;
+        clearTimeout(t);
+      });
       socket.once("close", () => clearTimeout(t));
     });
     req.on("error", (e) => {

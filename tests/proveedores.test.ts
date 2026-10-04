@@ -87,7 +87,7 @@ describe("adaptador compatible con OpenAI (OpenAI, OpenRouter, NVIDIA…)", () =
       cab = o?.cabeceras;
       return ok('Claro:\n```json\n{"ok": true}\n```');
     };
-    const r = await new ClienteOpenAICompatible("nvapi-x", "meta/llama", "https://integrate.api.nvidia.com/v1", f).generarJson(entrada);
+    const r = await new ClienteOpenAICompatible("nvapi-x", "meta/llama", "https://integrate.api.nvidia.com/v1", f, { modoJson: true }).generarJson(entrada);
     expect(JSON.parse(r.texto)).toEqual({ ok: true });
     expect(cab).toMatchObject({ Authorization: "Bearer nvapi-x" });
     expect(cuerpo.response_format).toEqual({ type: "json_object" });
@@ -105,9 +105,47 @@ describe("adaptador compatible con OpenAI (OpenAI, OpenRouter, NVIDIA…)", () =
       if (conImg) throw new ErrorHttp(400, "This model does not support image input");
       return ok('{"ok": true}');
     };
-    const r = await new ClienteOpenAICompatible("k", "m", "https://openrouter.ai/api/v1", f).generarJson(entrada);
+    const r = await new ClienteOpenAICompatible("k", "m", "https://openrouter.ai/api/v1", f, { modoJson: true }).generarJson(entrada);
     expect(vistos).toEqual(["json/img", "libre/img", "libre/texto"]);
     expect(r.avisos?.[0]).toMatch(/imágenes/);
+  });
+  it("sin modo JSON (NVIDIA, OpenRouter, personalizados) manda max_tokens y no response_format", async () => {
+    let cuerpo: Record<string, unknown> = {};
+    const f: Fetcher = async (_u, o) => {
+      cuerpo = o?.cuerpo as Record<string, unknown>;
+      return ok('{"ok": true}');
+    };
+    await new ClienteOpenAICompatible("k", "openai/gpt-oss-20b", "https://integrate.api.nvidia.com/v1", f).generarJson(entrada);
+    expect(cuerpo.response_format).toBeUndefined();
+    expect(cuerpo.max_tokens).toBe(16000);
+  });
+  it("se adapta al proveedor: renombra max_tokens y baja el tope de salida", async () => {
+    const vistos: string[] = [];
+    const f: Fetcher = async (_u, o) => {
+      const c = o?.cuerpo as Record<string, number>;
+      const clave = "max_tokens" in c ? `max_tokens=${c.max_tokens}` : `max_completion_tokens=${c.max_completion_tokens}`;
+      vistos.push(clave);
+      if ("max_tokens" in c) throw new ErrorHttp(400, "Unsupported parameter: 'max_tokens'. Use 'max_completion_tokens' instead.");
+      if (c.max_completion_tokens > 8192) throw new ErrorHttp(400, "max_completion_tokens is too large: 16000. This model supports at most 8192");
+      return ok('{"ok": true}');
+    };
+    await new ClienteOpenAICompatible("k", "o3", "https://api.openai.com/v1", f).generarJson(entrada);
+    expect(vistos).toEqual(["max_tokens=16000", "max_completion_tokens=16000", "max_completion_tokens=8192"]);
+  });
+  it("avisa cuando un modelo razonador agota su salida sin responder", async () => {
+    const f: Fetcher = async () => ({ choices: [{ message: { content: null }, finish_reason: "length" }] });
+    await expect(new ClienteOpenAICompatible("k", "razonador", "https://integrate.api.nvidia.com/v1", f).generarJson(entrada)).rejects.toThrow(/razonador/);
+  });
+  it("ping: petición simple de chat (como cualquier cliente), sin JSON ni esquema", async () => {
+    let cuerpo: Record<string, unknown> = {};
+    const f: Fetcher = async (_u, o) => {
+      cuerpo = o?.cuerpo as Record<string, unknown>;
+      return { choices: [{ message: { content: "" }, finish_reason: "length" }] }; // un razonador puede quedarse pensando: 200 basta
+    };
+    await expect(new ClienteOpenAICompatible("k", "razonador", "https://integrate.api.nvidia.com/v1", f).ping()).resolves.toBeUndefined();
+    expect(cuerpo).toMatchObject({ model: "razonador", max_tokens: 1000 });
+    expect(cuerpo.response_format).toBeUndefined();
+    expect(JSON.stringify(cuerpo)).not.toContain("esquema");
   });
   it("propaga los errores de autenticación sin reintentar", async () => {
     let n = 0;
@@ -124,6 +162,14 @@ describe("adaptador compatible con OpenAI (OpenAI, OpenRouter, NVIDIA…)", () =
 });
 
 describe("prueba de conexión y lista de modelos", () => {
+  it("si el cliente tiene ping, la prueba usa solo el ping", async () => {
+    let jsonLlamado = false;
+    const c = { ping: async () => {}, generarJson: async () => { jsonLlamado = true; return { texto: "", modelo: "m" }; } };
+    expect((await probarCliente(c)).ok).toBe(true);
+    expect(jsonLlamado).toBe(false);
+    const rota = { ping: async () => { throw new ErrorHttp(404, "model not found"); }, generarJson: async () => ({ texto: "", modelo: "m" }) };
+    expect((await probarCliente(rota)).error).toMatch(/404/);
+  });
   it("la prueba exige JSON válido con ok=true", async () => {
     const bien = { generarJson: async () => ({ texto: '{"ok":true}', modelo: "m" }) };
     const mal = { generarJson: async () => ({ texto: "hola", modelo: "m" }) };

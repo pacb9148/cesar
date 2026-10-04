@@ -6,16 +6,16 @@ export const TIPOS = ["gemini", "anthropic", "openai", "openrouter", "nvidia", "
 export type TipoProveedor = (typeof TIPOS)[number];
 export type Familia = "gemini" | "anthropic" | "openai";
 
-export const PRESETS: Record<TipoProveedor, { etiqueta: string; familia: Familia; baseUrl: string | null; ayuda: string }> = {
+export const PRESETS: Record<TipoProveedor, { etiqueta: string; familia: Familia; baseUrl: string | null; modoJson?: boolean; ayuda: string }> = {
   gemini: { etiqueta: "Google Gemini", familia: "gemini", baseUrl: null, ayuda: "Clave de Google AI Studio." },
   anthropic: { etiqueta: "Anthropic (Claude: Opus, Sonnet, Haiku)", familia: "anthropic", baseUrl: "https://api.anthropic.com", ayuda: "Clave de console.anthropic.com." },
-  openai: { etiqueta: "OpenAI", familia: "openai", baseUrl: "https://api.openai.com/v1", ayuda: "Clave de platform.openai.com." },
-  openrouter: { etiqueta: "OpenRouter (cientos de modelos)", familia: "openai", baseUrl: "https://openrouter.ai/api/v1", ayuda: "Clave de openrouter.ai; el modelo va como «proveedor/modelo»." },
-  nvidia: { etiqueta: "NVIDIA NIM (build.nvidia.com)", familia: "openai", baseUrl: "https://integrate.api.nvidia.com/v1", ayuda: "Clave de build.nvidia.com (empieza con nvapi-)." },
-  groq: { etiqueta: "Groq", familia: "openai", baseUrl: "https://api.groq.com/openai/v1", ayuda: "Clave de console.groq.com." },
-  deepseek: { etiqueta: "DeepSeek", familia: "openai", baseUrl: "https://api.deepseek.com/v1", ayuda: "Clave de platform.deepseek.com." },
-  mistral: { etiqueta: "Mistral AI", familia: "openai", baseUrl: "https://api.mistral.ai/v1", ayuda: "Clave de console.mistral.ai." },
-  together: { etiqueta: "Together AI", familia: "openai", baseUrl: "https://api.together.xyz/v1", ayuda: "Clave de api.together.ai." },
+  openai: { etiqueta: "OpenAI", familia: "openai", baseUrl: "https://api.openai.com/v1", modoJson: true, ayuda: "Clave de platform.openai.com." },
+  openrouter: { etiqueta: "OpenRouter (cientos de modelos)", familia: "openai", baseUrl: "https://openrouter.ai/api/v1", modoJson: false, ayuda: "Clave de openrouter.ai; el modelo va como «proveedor/modelo»." },
+  nvidia: { etiqueta: "NVIDIA NIM (build.nvidia.com)", familia: "openai", baseUrl: "https://integrate.api.nvidia.com/v1", modoJson: false, ayuda: "Clave de build.nvidia.com (empieza con nvapi-)." },
+  groq: { etiqueta: "Groq", familia: "openai", baseUrl: "https://api.groq.com/openai/v1", modoJson: true, ayuda: "Clave de console.groq.com." },
+  deepseek: { etiqueta: "DeepSeek", familia: "openai", baseUrl: "https://api.deepseek.com/v1", modoJson: true, ayuda: "Clave de platform.deepseek.com." },
+  mistral: { etiqueta: "Mistral AI", familia: "openai", baseUrl: "https://api.mistral.ai/v1", modoJson: true, ayuda: "Clave de console.mistral.ai." },
+  together: { etiqueta: "Together AI", familia: "openai", baseUrl: "https://api.together.xyz/v1", modoJson: true, ayuda: "Clave de api.together.ai." },
   compatible: { etiqueta: "Personalizado (cualquier proveedor compatible con OpenAI)", familia: "openai", baseUrl: null, ayuda: "Fireworks, Cerebras, un gateway propio, Ollama o vLLM expuestos por https… Pon su URL base (https, pública)." },
 };
 
@@ -52,6 +52,14 @@ export class ClienteAnthropic implements ClienteLlm {
     private fetcher: Fetcher = fetchSeguro,
   ) {}
 
+  async ping(): Promise<void> {
+    await this.fetcher(`${this.base}/v1/messages`, {
+      cabeceras: { "x-api-key": this.clave, "anthropic-version": "2023-06-01" },
+      cuerpo: { model: this.modelo, max_tokens: 20, messages: [{ role: "user", content: "Responde solo con la palabra OK." }] },
+      timeoutMs: 60_000,
+    });
+  }
+
   async generarJson(o: { system: string; partes: Parte[]; schema: object }): Promise<RespuestaLlm> {
     const content = o.partes.map((p) =>
       "text" in p ? { type: "text", text: p.text } : { type: "image", source: { type: "base64", media_type: p.inlineData.mimeType, data: p.inlineData.data } },
@@ -85,13 +93,45 @@ export class ClienteAnthropic implements ClienteLlm {
 
 type OpenAiRespuesta = { choices?: { message?: { content?: string | null }; finish_reason?: string }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
 
+const ESCALA_TOKENS = [16000, 8192, 4096];
+
+export type OpcionesOpenAI = { modoJson?: boolean; timeoutMs?: number };
+
 export class ClienteOpenAICompatible implements ClienteLlm {
+  private modoJson: boolean;
+  private timeoutMs: number;
   constructor(
     private clave: string,
     private modelo: string,
     private base: string,
     private fetcher: Fetcher = fetchSeguro,
-  ) {}
+    opciones: OpcionesOpenAI = {},
+  ) {
+    this.modoJson = opciones.modoJson ?? false;
+    this.timeoutMs = opciones.timeoutMs ?? 280_000;
+  }
+
+  /** Comprobación de conectividad, clave y modelo: la misma petición simple que hace cualquier cliente de chat. */
+  async ping(): Promise<void> {
+    let param: "max_tokens" | "max_completion_tokens" = "max_tokens";
+    for (let i = 0; i < 2; i++) {
+      try {
+        const r = (await this.fetcher(`${this.base}/chat/completions`, {
+          cabeceras: { Authorization: `Bearer ${this.clave}` },
+          cuerpo: { model: this.modelo, messages: [{ role: "user", content: "Responde solo con la palabra OK." }], [param]: 1000 },
+          timeoutMs: 90_000,
+        })) as OpenAiRespuesta;
+        if (!Array.isArray(r.choices) || r.choices.length === 0) throw new ErrorHttp(502, "El proveedor respondió sin ninguna elección.");
+        return;
+      } catch (e) {
+        if (e instanceof ErrorHttp && e.estado === 400 && param === "max_tokens" && /max_completion_tokens/i.test(e.message)) {
+          param = "max_completion_tokens";
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
 
   async generarJson(o: { system: string; partes: Parte[]; schema: object }): Promise<RespuestaLlm> {
     const avisos: string[] = [];
@@ -100,30 +140,40 @@ export class ClienteOpenAICompatible implements ClienteLlm {
       o.partes
         .filter((p) => conImagenes || "text" in p)
         .map((p) => ("text" in p ? { type: "text", text: p.text } : { type: "image_url", image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` } }));
-    const hayImagenes = o.partes.some((p) => "inlineData" in p);
-    const llamar = (conImagenes: boolean, jsonMode: boolean) =>
-      this.fetcher(`${this.base}/chat/completions`, {
-        cabeceras: { Authorization: `Bearer ${this.clave}` },
-        cuerpo: {
-          model: this.modelo,
-          messages: [{ role: "system", content: system }, { role: "user", content: contenido(conImagenes) }],
-          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-        },
-      }) as Promise<OpenAiRespuesta>;
-
-    let conImagenes = hayImagenes;
-    let jsonMode = true;
+    let conImagenes = o.partes.some((p) => "inlineData" in p);
+    let jsonMode = this.modoJson;
+    let param: "max_tokens" | "max_completion_tokens" = "max_tokens";
+    let nivel = 0;
     let r: OpenAiRespuesta | null = null;
-    for (let intento = 0; intento < 3 && !r; intento++) {
+    // Cada rechazo del proveedor ajusta un parámetro distinto; el tope evita bucles.
+    for (let intento = 0; intento < 8 && !r; intento++) {
       try {
-        r = await llamar(conImagenes, jsonMode);
+        r = (await this.fetcher(`${this.base}/chat/completions`, {
+          cabeceras: { Authorization: `Bearer ${this.clave}` },
+          cuerpo: {
+            model: this.modelo,
+            messages: [{ role: "system", content: system }, { role: "user", content: contenido(conImagenes) }],
+            [param]: ESCALA_TOKENS[nivel],
+            ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+          },
+          timeoutMs: this.timeoutMs,
+        })) as OpenAiRespuesta;
       } catch (e) {
         const rechazo = e instanceof ErrorHttp && (e.estado === 400 || e.estado === 422);
-        if (rechazo && jsonMode && /response_format|json_object|json mode|json_schema/i.test((e as ErrorHttp).message)) {
+        const m = e instanceof ErrorHttp ? e.message : "";
+        if (rechazo && jsonMode && /response_format|json_object|json mode|json_schema/i.test(m)) {
           jsonMode = false; // el proveedor no admite el modo JSON: el esquema ya va en el prompt
           continue;
         }
-        if (rechazo && conImagenes && /image|vision|multimodal|multi-modal|modalit|content/i.test((e as ErrorHttp).message)) {
+        if (rechazo && param === "max_tokens" && /max_completion_tokens/i.test(m)) {
+          param = "max_completion_tokens"; // los modelos nuevos de OpenAI renombraron el parámetro
+          continue;
+        }
+        if (rechazo && /max_tokens|max_completion_tokens|maximum.*(tokens|length)|too large|exceeds/i.test(m) && nivel < ESCALA_TOKENS.length - 1) {
+          nivel++; // el modelo tiene un tope de salida menor
+          continue;
+        }
+        if (rechazo && conImagenes && /image|vision|multimodal|multi-modal|modalit|content/i.test(m)) {
           conImagenes = false;
           avisos.push("El modelo no acepta imágenes: el ajuste se hizo sin analizar las fotografías.");
           continue;
@@ -133,17 +183,19 @@ export class ClienteOpenAICompatible implements ClienteLlm {
     }
     const ch = r?.choices?.[0];
     const texto = ch?.message?.content;
-    if (!r || !texto) throw new ErrorHttp(502, ch?.finish_reason === "length" ? "La respuesta del modelo se truncó por el límite de salida." : "El modelo devolvió una respuesta vacía.");
+    if (!r || !texto) throw new ErrorHttp(502, ch?.finish_reason === "length" ? "El modelo agotó su límite de salida pensando y no llegó a responder (modelo razonador): elige otro modelo." : "El modelo devolvió una respuesta vacía.");
     return { texto: extraerJson(texto), tokensEntrada: r.usage?.prompt_tokens, tokensSalida: r.usage?.completion_tokens, modelo: this.modelo, avisos };
   }
 }
 
 /** Construye el cliente adecuado para una configuración guardada. */
 export function crearCliente(p: ConfigProveedor, fetcher: Fetcher = fetchSeguro): ClienteLlm {
-  const f = PRESETS[p.tipo].familia;
-  if (f === "gemini") return new ClienteGemini(p.clave, p.modelo);
+  const preset = PRESETS[p.tipo];
+  if (preset.familia === "gemini") return new ClienteGemini(p.clave, p.modelo);
   const base = baseUrlDe(p)!;
-  return f === "anthropic" ? new ClienteAnthropic(p.clave, p.modelo, base, fetcher) : new ClienteOpenAICompatible(p.clave, p.modelo, base, fetcher);
+  return preset.familia === "anthropic"
+    ? new ClienteAnthropic(p.clave, p.modelo, base, fetcher)
+    : new ClienteOpenAICompatible(p.clave, p.modelo, base, fetcher, { modoJson: preset.modoJson });
 }
 
 export type ModeloDisponible = { id: string; nombre: string };
@@ -187,11 +239,19 @@ export type ResultadoPrueba = { ok: boolean; ms: number; error?: string; estado?
 export async function probarCliente(cliente: ClienteLlm): Promise<ResultadoPrueba> {
   const t0 = Date.now();
   try {
-    const r = await conLimite(cliente.generarJson({
-      system: "Responde solo con el JSON pedido.",
-      partes: [{ text: 'Devuelve exactamente este objeto JSON: {"ok": true}' }],
-      schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
-    }), 60_000);
+    if (cliente.ping) {
+      // Petición simple de chat: comprueba red, clave y modelo. El formato JSON del agente lo validan sus reintentos al ajustar.
+      await conLimite(cliente.ping(), 100_000);
+      return { ok: true, ms: Date.now() - t0 };
+    }
+    const r = await conLimite(
+      cliente.generarJson({
+        system: "Responde solo con el JSON pedido.",
+        partes: [{ text: 'Devuelve exactamente este objeto JSON: {"ok": true}' }],
+        schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
+      }),
+      100_000,
+    );
     const j = JSON.parse(extraerJson(r.texto)) as { ok?: unknown };
     if (j.ok !== true) return { ok: false, ms: Date.now() - t0, error: "El modelo respondió, pero no cumplió el formato JSON pedido." };
     return { ok: true, ms: Date.now() - t0 };
