@@ -14,6 +14,9 @@ export interface RegistroSalud {
 
 const MAX_PAUSA_S = 60 * 60;
 
+/** Anthropic responde 400 «credit balance is too low»; otros, 402 o «insufficient_quota»: es un problema de facturación, no de la petición. */
+export const esFaltaDeSaldo = (e: ErrorHttp): boolean => e.estado === 402 || /credit balance|insufficient[_ ](quota|funds|credits?)|billing|exceeded your current quota/i.test(e.message);
+
 /**
  * Qué hacer con un proveedor que falló:
  *  - sin respuesta, 408, 5xx (incluye 529 «sobrecargado»): indisponibilidad momentánea → pausa corta que crece con los fallos seguidos;
@@ -25,6 +28,7 @@ export function clasificarFallo(e: unknown, fallosSeguidos: number): InfoFallo {
   if (!(e instanceof ErrorHttp)) return { error: e instanceof Error ? e.message.slice(0, 250) : "Error desconocido", pausaS: 60, desactivar: false };
   const e2 = Math.min(MAX_PAUSA_S, 30 * 2 ** Math.min(fallosSeguidos, 7));
   if (esClaveInvalida(e)) return { error: e.message, pausaS: MAX_PAUSA_S, desactivar: true };
+  if (esFaltaDeSaldo(e)) return { error: `Sin saldo o crédito en la cuenta del proveedor: recárgalo en su panel de facturación (${e.message})`, pausaS: 300, desactivar: false };
   if (e.estado === 429) return { error: e.message, pausaS: Math.min(MAX_PAUSA_S, e.reintentarDespuesS ?? 300), desactivar: false };
   if (e.estado === 400 || e.estado === 404 || e.estado === 410 || e.estado === 422) return { error: e.message, pausaS: 600, desactivar: false };
   return { error: e.message, pausaS: Math.min(MAX_PAUSA_S, e.reintentarDespuesS ?? e2), desactivar: false };

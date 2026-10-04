@@ -46,6 +46,12 @@ describe("rotación automática de proveedores", () => {
     expect(i.desactivar).toBe(true);
     expect(clasificarFallo(new ErrorHttp(410, "model reached end of life"), 0).desactivar).toBe(false);
   });
+  it("la falta de saldo se explica como facturación, no como fallo de la petición", () => {
+    const i = clasificarFallo(new ErrorHttp(400, "Your credit balance is too low to access the Anthropic API."), 0);
+    expect(i.error).toMatch(/Sin saldo/);
+    expect(i.desactivar).toBe(false);
+    expect(clasificarFallo(new ErrorHttp(402, "Payment required"), 0).error).toMatch(/Sin saldo/);
+  });
   it("la pausa crece con los fallos seguidos y tiene tope", () => {
     const a = clasificarFallo(new ErrorHttp(503, "x"), 0).pausaS;
     const b = clasificarFallo(new ErrorHttp(503, "x"), 3).pausaS;

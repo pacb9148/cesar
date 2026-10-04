@@ -80,7 +80,8 @@ export class ClienteAnthropic implements ClienteLlm {
         break;
       } catch (e) {
         // Los modelos más pequeños tienen un tope de salida menor: se baja el límite y se reintenta.
-        if (e instanceof ErrorHttp && e.estado === 400 && /max_tokens/i.test(e.message) && max > 4096) continue;
+        // Con saldo justo, Anthropic puede rechazar un tope alto aunque la prueba corta (20 tokens) pase: también se baja.
+        if (e instanceof ErrorHttp && e.estado === 400 && /max_tokens|credit balance/i.test(e.message) && max > 4096) continue;
         throw e;
       }
     }
