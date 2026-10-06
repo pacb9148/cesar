@@ -7,7 +7,8 @@ import { crearEl, hijos, NS_W, parse, porTag, serializar, textoDe, type Doc } fr
  * imágenes y el resto del documento no se tocan.
  */
 export type RunVista = { t: string; b?: boolean; i?: boolean; u?: boolean; sz?: number; color?: string; sc?: boolean; salto?: boolean };
-export type ImagenVista = { src: string; w: number; h: number };
+/** `fotoId` identifica la fotografía del caso (nombre de imagen `foto:<id>`): permite abrir su editor con doble clic. */
+export type ImagenVista = { src: string; w: number; h: number; fotoId?: string };
 export type ParrafoVista = { tipo: "p"; i: number; jc?: "left" | "center" | "right" | "justify"; runs: RunVista[]; imagenes: ImagenVista[]; editable: boolean; texto: string; sangria?: number };
 export type TablaVista = { tipo: "tabla"; anchos: number[]; filas: { celdas: { span: number; bloques: BloqueVista[] }[] }[] };
 export type BloqueVista = ParrafoVista | TablaVista;
@@ -45,7 +46,8 @@ function imagenesDe(p: Element, zip: PizZip, rels: Map<string, string>): ImagenV
     const e = (destino.split(".").pop() ?? "").toLowerCase();
     const archivo = zip.file(`word/${destino.replace(/^\//, "").replace(/^word\//, "")}`);
     if (!archivo || !MIME[e]) continue; // las imágenes EMF/VML no se pueden mostrar en el navegador
-    out.push({ src: `data:${MIME[e]};base64,${Buffer.from(archivo.asUint8Array()).toString("base64")}`, w: Math.round(Number(ext?.getAttribute("cx") ?? 0) / 9525), h: Math.round(Number(ext?.getAttribute("cy") ?? 0) / 9525) });
+    const nombre = d.getElementsByTagNameNS(NS_WP, "docPr")[0]?.getAttribute("name") ?? "";
+    out.push({ src: `data:${MIME[e]};base64,${Buffer.from(archivo.asUint8Array()).toString("base64")}`, w: Math.round(Number(ext?.getAttribute("cx") ?? 0) / 9525), h: Math.round(Number(ext?.getAttribute("cy") ?? 0) / 9525), fotoId: /^foto:[0-9a-f-]{36}$/i.test(nombre) ? nombre.slice(5) : undefined });
   }
   return out;
 }
@@ -127,37 +129,97 @@ export function docxAVista(buf: Buffer): { bloques: BloqueVista[]; parrafos: num
   return { bloques: bloquesDe(body), parrafos: indice.size };
 }
 
+export type RunEdicion = { t: string; b?: boolean; i?: boolean; u?: boolean };
+export type EdicionesWord = {
+  /** Contenido nuevo de párrafos existentes, por índice, con su formato (negrita, cursiva, subrayado). */
+  parrafos?: Record<string, RunEdicion[]>;
+  /** Párrafos nuevos después del párrafo indicado (copian su estilo de párrafo). */
+  insertar?: { despuesDe: number; runs: RunEdicion[] }[];
+  /** Párrafos a quitar (los únicos de una celda o con imágenes se vacían/respetan). */
+  eliminar?: number[];
+};
+
+
+function construirRuns(doc: Doc, base: Element | undefined, runs: RunEdicion[]): Element[] {
+  return runs
+    .filter((r) => r.t !== "")
+    .map((r) => {
+      const run = crearEl(doc, `<w:r></w:r>`);
+      const rpr = base ? (base.cloneNode(true) as Element) : doc.createElementNS(NS_W, "w:rPr");
+      for (const c of hijos(rpr)) if (["b", "i", "u"].includes(c.localName ?? "")) rpr.removeChild(c);
+      // El orden de los hijos de rPr importa para Word: b, i, ..., u van antes de color/sz/etc.
+      if (r.u) rpr.insertBefore(doc.createElementNS(NS_W, "w:u"), rpr.firstChild);
+      if (r.i) rpr.insertBefore(doc.createElementNS(NS_W, "w:i"), rpr.firstChild);
+      if (r.b) rpr.insertBefore(doc.createElementNS(NS_W, "w:b"), rpr.firstChild);
+      const u = hijos(rpr).find((c) => c.localName === "u");
+      if (u) u.setAttributeNS(NS_W, "w:val", "single");
+      if (hijos(rpr).length) run.appendChild(rpr);
+      r.t.replace(/\r/g, "").split("\n").forEach((linea, n) => {
+        if (n > 0) run.appendChild(crearEl(doc, `<w:br/>`));
+        const t = crearEl(doc, `<w:t xml:space="preserve"></w:t>`);
+        t.textContent = linea;
+        run.appendChild(t);
+      });
+      return run;
+    });
+}
+
+const tieneImagen = (p: Element) => p.getElementsByTagNameNS(NS_W, "drawing").length > 0 || p.getElementsByTagNameNS(NS_W, "pict").length > 0;
+const baseRpr = (p: Element): Element | undefined => {
+  const runs = hijos(p).filter((c) => c.localName === "r");
+  const r = runs.find((x) => hijos(x).some((c) => c.localName === "t")) ?? runs[0];
+  return r ? hijos(r).find((c) => c.localName === "rPr") : undefined;
+};
+
 /**
- * Cambia el texto de los párrafos indicados (por su índice). El párrafo conserva el formato de su primer tramo de texto y sus
- * imágenes; los párrafos con imágenes no se editan. Devuelve el .docx nuevo.
+ * Aplica las ediciones del usuario al Word: contenido con formato de párrafos existentes, párrafos nuevos y párrafos quitados.
+ * Todo se resuelve contra los índices originales (antes de insertar o quitar nada). Las imágenes y el resto no se tocan.
  */
-export function aplicarTextos(buf: Buffer, cambios: Record<string, string>): { buffer: Buffer; aplicados: number } {
+export function aplicarEdiciones(buf: Buffer, e: EdicionesWord): { buffer: Buffer; aplicados: number } {
   const zip = new PizZip(buf);
   const doc: Doc = parse(zip.file("word/document.xml")!.asText());
   const body = doc.getElementsByTagNameNS(NS_W, "body")[0] as unknown as Element;
   const ps = porTag(body, "p");
+  const de = (k: number | string) => {
+    const p = ps[Number(k)];
+    if (!Number.isInteger(Number(k)) || !p) throw new Error(`El párrafo ${k} no existe.`);
+    return p;
+  };
+  const valida = (runs: RunEdicion[], k: number | string) => {
+    if (runs.reduce((n, r) => n + r.t.length, 0) > MAX_TEXTO) throw new Error(`El párrafo ${k} supera ${MAX_TEXTO} caracteres.`);
+  };
   let aplicados = 0;
-  for (const [k, nuevo] of Object.entries(cambios)) {
-    const i = Number(k);
-    const p = ps[i];
-    if (!Number.isInteger(i) || !p) throw new Error(`El párrafo ${k} no existe.`);
-    if (nuevo.length > MAX_TEXTO) throw new Error(`El párrafo ${k} supera ${MAX_TEXTO} caracteres.`);
-    if (p.getElementsByTagNameNS(NS_W, "drawing").length || p.getElementsByTagNameNS(NS_W, "pict").length) continue;
-    const texto = nuevo.replace(/\r/g, "");
-    if (texto === textoDe(p)) continue;
-    const runs = hijos(p).filter((c) => c.localName === "r");
-    const primero = runs.find((r) => hijo(r, "t")) ?? runs[0];
-    const rpr = primero ? hijo(primero, "rPr") : undefined;
-    for (const r of runs) p.removeChild(r);
-    const run = crearEl(doc, `<w:r></w:r>`);
-    if (rpr) run.appendChild(rpr.cloneNode(true));
-    texto.split("\n").forEach((linea, n) => {
-      if (n > 0) run.appendChild(crearEl(doc, `<w:br/>`));
-      const t = crearEl(doc, `<w:t xml:space="preserve"></w:t>`);
-      t.textContent = linea;
-      run.appendChild(t);
-    });
-    p.appendChild(run);
+
+  for (const [k, runs] of Object.entries(e.parrafos ?? {})) {
+    const p = de(k);
+    valida(runs, k);
+    if (tieneImagen(p)) continue;
+    const rpr = baseRpr(p);
+    for (const r of hijos(p).filter((c) => c.localName === "r")) p.removeChild(r);
+    for (const r of construirRuns(doc, rpr, runs)) p.appendChild(r);
+    aplicados++;
+  }
+  for (const ins of e.insertar ?? []) {
+    const ref = de(ins.despuesDe);
+    valida(ins.runs, ins.despuesDe);
+    const nuevo = doc.createElementNS(NS_W, "w:p");
+    const ppr = hijos(ref).find((c) => c.localName === "pPr");
+    if (ppr) {
+      const copia = ppr.cloneNode(true) as Element;
+      for (const c of hijos(copia)) if (["sectPr", "pageBreakBefore", "keepNext"].includes(c.localName ?? "")) copia.removeChild(c);
+      nuevo.appendChild(copia);
+    }
+    for (const r of construirRuns(doc, baseRpr(ref), ins.runs)) nuevo.appendChild(r);
+    ref.parentNode!.insertBefore(nuevo, ref.nextSibling);
+    aplicados++;
+  }
+  for (const k of e.eliminar ?? []) {
+    const p = de(k);
+    if (tieneImagen(p)) continue;
+    const padre = p.parentNode as Element;
+    const soloEnCelda = padre.localName === "tc" && hijos(padre).filter((c) => c.localName === "p").length <= 1;
+    if (soloEnCelda) for (const r of hijos(p).filter((c) => c.localName === "r")) p.removeChild(r);
+    else padre.removeChild(p);
     aplicados++;
   }
   zip.file("word/document.xml", serializar(doc));

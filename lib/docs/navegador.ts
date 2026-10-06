@@ -20,27 +20,3 @@ export async function lanzarNavegador(): Promise<Browser> {
   if (!ruta) throw new Error("Este servidor no tiene Chrome ni Chromium (en local, define CHROME_PATH en .env.local; en producción, usa el Build Pack Dockerfile)");
   return chromium.launch({ executablePath: ruta, headless: true });
 }
-
-export async function htmlAPng(html: string, ancho: number, escala = 2): Promise<Buffer> {
-  const b = await lanzarNavegador();
-  try {
-    const page = await b.newPage({ viewport: { width: ancho, height: 800 }, deviceScaleFactor: escala });
-    await page.setContent(html, { waitUntil: "load" });
-    const png = await page.locator("body").screenshot({ type: "png" });
-    return Buffer.from(png);
-  } finally {
-    await b.close();
-  }
-}
-
-export async function htmlAPdf(html: string): Promise<Buffer> {
-  const b = await lanzarNavegador();
-  try {
-    const page = await b.newPage();
-    await page.setContent(html, { waitUntil: "load" });
-    const pdf = await page.pdf({ format: "Letter", printBackground: true, margin: { top: "18mm", bottom: "18mm", left: "16mm", right: "16mm" } });
-    return Buffer.from(pdf);
-  } finally {
-    await b.close();
-  }
-}

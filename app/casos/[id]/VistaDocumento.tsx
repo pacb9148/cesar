@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BotonIcono } from "@/components/Iconos";
 import type { VistaDocumento as Vista } from "@/lib/caso/edicion-documentos";
-import type { BloqueVista, ParrafoVista, RunVista } from "@/lib/docs/vista-docx";
+import type { BloqueVista, ParrafoVista, RunEdicion, RunVista } from "@/lib/docs/vista-docx";
+import type { ArchivoMeta } from "@/lib/caso/repositorio";
+import EditorFoto from "./EditorFoto";
 import type { HojaVista } from "@/lib/docs/vista-xlsx";
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -14,46 +16,68 @@ function runHtml(r: RunVista): string {
   return st ? `<span style="${st}">${esc(r.t)}</span>` : esc(r.t);
 }
 
-type Cambio = (i: number, texto: string, original: string) => void;
+/** Lo que el Word necesita saber de cada párrafo tocado: su elemento (de él se leen el texto y el formato al guardar). */
+type Contexto = {
+  alCambiar: (i: number, el: HTMLElement | null) => void;
+  alFoco: (i: number) => void;
+  alDobleClicFoto: (fotoId: string) => void;
+  eliminados: Set<number>;
+};
 
 /** Párrafo editable. Su contenido se pinta una sola vez (innerHTML fijo): lo que el usuario escribe no lo pisa React. */
-function Parrafo({ p, alCambiar }: { p: ParrafoVista; alCambiar: Cambio }) {
-  const html = useMemo(() => p.runs.map(runHtml).join("") + p.imagenes.map((m) => `<img src="${m.src}" width="${m.w}" height="${m.h}" style="max-width:100%;height:auto;vertical-align:middle" alt="" contenteditable="false">`).join(""), [p]);
+function Parrafo({ p, c }: { p: ParrafoVista; c: Contexto }) {
+  const html = useMemo(
+    () =>
+      p.runs.map(runHtml).join("") +
+      p.imagenes
+        .map((m) => `<img src="${m.src}" width="${m.w}" height="${m.h}" style="max-width:100%;height:auto;vertical-align:middle;${m.fotoId ? "cursor:pointer;outline:1px dashed #2563eb;outline-offset:1px" : ""}" alt="" contenteditable="false"${m.fotoId ? ` data-foto="${m.fotoId}" title="Doble clic para editar esta foto"` : ""}>`)
+        .join(""),
+    [p],
+  );
+  const borrado = c.eliminados.has(p.i);
   return (
     <p
       data-i={p.i}
-      contentEditable={p.editable}
+      contentEditable={p.editable && !borrado}
       suppressContentEditableWarning
       spellCheck
+      onFocus={() => c.alFoco(p.i)}
       onInput={(e) => {
         const el = e.currentTarget;
-        const t = el.innerText.replace(/ /g, " ").replace(/\n$/, "");
-        const cambiado = t !== p.texto.replace(/ /g, " ");
-        if (cambiado) el.setAttribute("data-sucio", "1");
+        const sucio = el.innerHTML !== html;
+        if (sucio) el.setAttribute("data-sucio", "1");
         else el.removeAttribute("data-sucio");
-        alCambiar(p.i, t, p.texto);
+        c.alCambiar(p.i, sucio ? el : null);
       }}
-      style={{ margin: "0 0 6px", minHeight: "1.2em", textAlign: p.jc, paddingLeft: p.sangria, whiteSpace: "pre-wrap" }}
+      onKeyDown={(e) => {
+        // Enter no parte el párrafo (el navegador lo ensuciaría): para uno nuevo está el botón «Insertar párrafo debajo».
+        if (e.key === "Enter" && !e.shiftKey) e.preventDefault();
+      }}
+      onDoubleClick={(e) => {
+        const t = e.target as HTMLElement;
+        if (t instanceof HTMLImageElement && t.dataset.foto) c.alDobleClicFoto(t.dataset.foto);
+      }}
+      style={{ margin: "0 0 6px", minHeight: "1.2em", textAlign: p.jc, paddingLeft: p.sangria, whiteSpace: "pre-wrap", opacity: borrado ? 0.45 : 1, textDecoration: borrado ? "line-through" : undefined }}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
 }
 
-function Bloques({ bloques, alCambiar }: { bloques: BloqueVista[]; alCambiar: Cambio }) {
+function Bloques({ bloques, c }: { bloques: BloqueVista[]; c: Contexto }) {
   return (
     <>
       {bloques.map((b, k) =>
         b.tipo === "p" ? (
-          <Parrafo key={`${b.i}-${k}`} p={b} alCambiar={alCambiar} />
+          <Parrafo key={`${b.i}-${k}`} p={b} c={c} />
         ) : (
           <table key={k} style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed", margin: "4px 0", border: "1px dotted #c7ccd4" }}>
             <colgroup>{b.anchos.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
             <tbody>
               {b.filas.map((f, i) => (
                 <tr key={i}>
-                  {f.celdas.map((c, j) => (
-                    <td key={j} colSpan={c.span} style={{ verticalAlign: "top", padding: "1px 4px", border: "1px dotted #c7ccd4" }}>
-                      <Bloques bloques={c.bloques} alCambiar={alCambiar} />
+                  {f.celdas.map((ce, j) => (
+                    <td key={j} colSpan={ce.span} style={{ verticalAlign: "top", padding: "1px 4px", border: "1px dotted #c7ccd4" }}>
+                      <Bloques bloques={ce.bloques} c={c} />
                     </td>
                   ))}
                 </tr>
@@ -64,6 +88,34 @@ function Bloques({ bloques, alCambiar }: { bloques: BloqueVista[]; alCambiar: Ca
       )}
     </>
   );
+}
+
+/** Lee el contenido con formato de un párrafo editado: tramos con negrita, cursiva y subrayado. */
+function leerRuns(el: HTMLElement): RunEdicion[] {
+  const out: RunEdicion[] = [];
+  const recorrer = (n: Node, f: { b: boolean; i: boolean; u: boolean }) => {
+    if (n.nodeType === Node.TEXT_NODE) {
+      const t = (n.textContent ?? "").replace(/\u00a0/g, " ");
+      if (t) out.push({ t, ...(f.b ? { b: true } : {}), ...(f.i ? { i: true } : {}), ...(f.u ? { u: true } : {}) });
+      return;
+    }
+    if (!(n instanceof HTMLElement)) return;
+    if (n.tagName === "IMG") return;
+    if (n.tagName === "BR") {
+      out.push({ t: "\n", ...(f.b ? { b: true } : {}) });
+      return;
+    }
+    const st = n.style;
+    const peso = st.fontWeight;
+    const nf = {
+      b: f.b || n.tagName === "B" || n.tagName === "STRONG" || peso === "bold" || Number(peso) >= 600,
+      i: f.i || n.tagName === "I" || n.tagName === "EM" || st.fontStyle === "italic",
+      u: f.u || n.tagName === "U" || st.textDecorationLine.includes("underline") || st.textDecoration.includes("underline"),
+    };
+    n.childNodes.forEach((h) => recorrer(h, nf));
+  };
+  el.childNodes.forEach((h) => recorrer(h, { b: false, i: false, u: false }));
+  return out;
 }
 
 const colLetra = (n: number) => {
@@ -148,101 +200,224 @@ function Hoja({ h, ediciones, alEditar }: { h: HojaVista; ediciones: Map<string,
   );
 }
 
-/** Vista previa y edición de un entregable (Word o Excel) antes de descargarlo. Guardar rehace el PDF y el ZIP que dependen de él. */
+type Pestana = "editar" | "pdf";
+
+/** Vista previa y edición de un entregable (Word o Excel) antes de descargarlo. Guardar rehace lo que depende de él (cuadro y totales del Word, PDF, ZIP). */
 export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, onGuardado }: { casoId: string; archivoId: string; nombre: string; onCerrar: () => void; onGuardado: () => void }) {
   const [vista, setVista] = useState<Vista | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avisos, setAvisos] = useState<string[]>([]);
+  const [info, setInfo] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [hoja, setHoja] = useState(0);
-  const [version, setVersion] = useState(0); // fuerza a repintar el Word tras guardar o descartar
-  const textos = useRef(new Map<number, string>());
+  const [version, setVersion] = useState(0); // fuerza a repintar el Word tras guardar o recargar
+  const [pestana, setPestana] = useState<Pestana>("editar");
+  const sucios = useRef(new Map<number, HTMLElement>());
   const [nTextos, setNTextos] = useState(0);
+  const [eliminados, setEliminados] = useState<Set<number>>(new Set());
+  const [nuevos, setNuevos] = useState<{ despuesDe: number; texto: string }[]>([]);
+  const foco = useRef<number | null>(null);
   const [celdas, setCeldas] = useState(new Map<string, string>()); // "hoja|r,c" → valor
+  const [foto, setFoto] = useState<ArchivoMeta | null>(null);
+  const [pdf, setPdf] = useState<{ url?: string; error?: string; cargando: boolean }>({ cargando: false });
   const dialogo = useRef<HTMLDivElement>(null);
+
+  const aplicarVista = (j: Vista) => {
+    setVista(j);
+    sucios.current.clear();
+    setNTextos(0);
+    setEliminados(new Set());
+    setNuevos([]);
+    setCeldas(new Map());
+    setVersion((v) => v + 1);
+  };
+  const traer = async () => {
+    const r = await fetch(`/api/casos/${casoId}/archivos/${archivoId}/vista`, { cache: "no-store" });
+    const j = (await r.json().catch(() => ({}))) as Vista & { error?: string };
+    return { ok: r.ok, j, estado: r.status };
+  };
+  const cargar = async () => {
+    const { ok, j, estado } = await traer();
+    if (!ok) return setError((j as { error?: string }).error ?? `Error ${estado}`);
+    aplicarVista(j);
+  };
 
   useEffect(() => {
     let vivo = true;
-    fetch(`/api/casos/${casoId}/archivos/${archivoId}/vista`, { cache: "no-store" })
-      .then(async (r) => {
-        const j = (await r.json().catch(() => ({}))) as Vista & { error?: string };
+    traer()
+      .then(({ ok, j, estado }) => {
         if (!vivo) return;
-        if (!r.ok) setError(j.error ?? `Error ${r.status}`);
-        else setVista(j);
+        if (!ok) setError((j as { error?: string }).error ?? `Error ${estado}`);
+        else aplicarVista(j);
       })
       .catch(() => vivo && setError("No se pudo cargar la vista previa."));
     return () => {
       vivo = false;
     };
-  }, [casoId, archivoId]);
+  }, [casoId, archivoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     dialogo.current?.focus();
-    const t = (e: KeyboardEvent) => e.key === "Escape" && onCerrar();
+    const t = (e: KeyboardEvent) => e.key === "Escape" && !foto && onCerrar();
     window.addEventListener("keydown", t);
     return () => window.removeEventListener("keydown", t);
-  }, [onCerrar]);
+  }, [onCerrar, foto]);
 
-  const cambios = vista?.tipo === "xlsx" ? celdas.size : nTextos;
+  const cambios = vista?.tipo === "xlsx" ? celdas.size : nTextos + eliminados.size + nuevos.length;
 
-  async function guardar() {
-    if (!vista || cambios === 0) return;
+  async function guardar(): Promise<boolean> {
+    if (!vista || cambios === 0) return true;
     setGuardando(true);
     setError(null);
+    setInfo(null);
     const cuerpo =
       vista.tipo === "docx"
-        ? { textos: Object.fromEntries(textos.current) }
+        ? {
+            word: {
+              parrafos: Object.fromEntries([...sucios.current].filter(([i]) => !eliminados.has(i)).map(([i, el]) => [String(i), leerRuns(el)])),
+              insertar: nuevos.filter((n) => n.texto.trim() !== "").map((n) => ({ despuesDe: n.despuesDe, runs: [{ t: n.texto }] })),
+              eliminar: [...eliminados],
+            },
+          }
         : { celdas: [...celdas].map(([k, valor]) => { const [h, rc] = k.split("|"); const [r, c] = rc.split(",").map(Number); return { hoja: h, r, c, valor }; }) };
     const r = await fetch(`/api/casos/${casoId}/archivos/${archivoId}/vista`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
     const j = (await r.json().catch(() => ({}))) as { error?: string; avisos?: string[]; vista?: Vista };
     setGuardando(false);
-    if (!r.ok || !j.vista) return setError(j.error ?? `Error ${r.status}`);
+    if (!r.ok || !j.vista) {
+      setError(j.error ?? `Error ${r.status}`);
+      return false;
+    }
     setVista(j.vista);
     setAvisos(j.avisos ?? []);
-    textos.current.clear();
+    setInfo(vista.tipo === "xlsx" ? "Guardado. El cuadro de pérdida del informe y sus totales se actualizaron solos." : "Guardado en el documento.");
+    sucios.current.clear();
     setNTextos(0);
+    setEliminados(new Set());
+    setNuevos([]);
     setCeldas(new Map());
     setVersion((v) => v + 1);
+    setPdf({ cargando: false });
     onGuardado();
+    return true;
   }
 
-  const alCambiarTexto: Cambio = (i, t, original) => {
-    if (t === original.replace(/ /g, " ")) textos.current.delete(i);
-    else textos.current.set(i, t);
-    setNTextos(textos.current.size);
+  const contexto: Contexto = {
+    alCambiar: (i, el) => {
+      if (el) sucios.current.set(i, el);
+      else sucios.current.delete(i);
+      setNTextos(sucios.current.size);
+    },
+    alFoco: (i) => (foco.current = i),
+    // Doble clic en una foto: se guarda lo pendiente y se abre su editor; al terminar, el documento ya trae la foto como quedó.
+    alDobleClicFoto: async (fotoId) => {
+      if (!(await guardar())) return;
+      const r = await fetch(`/api/casos/${casoId}/archivos`, { cache: "no-store" });
+      const lista = (await r.json().catch(() => [])) as ArchivoMeta[];
+      const f = lista.find((a) => a.id === fotoId);
+      if (f) setFoto(f);
+      else setError("No se encontró la fotografía de esta imagen.");
+    },
+    eliminados,
   };
+
+  const formato = (cmd: "bold" | "italic" | "underline") => document.execCommand(cmd);
+  const insertarDebajo = () => {
+    if (foco.current == null) return setError("Haz clic primero en el párrafo debajo del cual quieres insertar uno nuevo.");
+    setNuevos((n) => [...n, { despuesDe: foco.current!, texto: "" }]);
+  };
+  const quitar = () => {
+    const i = foco.current;
+    if (i == null) return setError("Haz clic primero en el párrafo que quieres quitar.");
+    setEliminados((e) => {
+      const n = new Set(e);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  };
+
+  async function verPdf() {
+    setPestana("pdf");
+    if (pdf.url || pdf.cargando) return;
+    setPdf({ cargando: true });
+    const r = await fetch(`/api/casos/${casoId}/archivos/${archivoId}/vista?pdf=1`, { cache: "no-store" });
+    if (!r.ok) return setPdf({ cargando: false, error: ((await r.json().catch(() => ({}))) as { error?: string }).error ?? `Error ${r.status}` });
+    setPdf({ cargando: false, url: URL.createObjectURL(await r.blob()) });
+  }
 
   const hojaActual = vista?.tipo === "xlsx" ? vista.hojas[hoja] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && !foto && onCerrar()}>
       <div ref={dialogo} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Vista previa de ${nombre}`} className="panel flex max-h-full w-full max-w-5xl flex-col gap-3 overflow-hidden p-3 outline-none sm:p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-[color:var(--texto)]">{nombre}</h2>
             <p className="text-xs text-[color:var(--suave)]">
               {vista?.tipo === "xlsx"
-                ? "Clic en una celda para editarla. Las celdas con fórmula se recalculan solas al guardar."
-                : "Haz clic en cualquier texto para corregirlo. Los cambios se guardan en el documento; el PDF y el paquete ZIP se rehacen."}
+                ? "Clic en una celda para editarla. Las fórmulas se recalculan solas y el cuadro de pérdida del informe se actualiza al guardar."
+                : "Clic en cualquier texto para corregirlo; doble clic en una foto para editarla. Al guardar se rehacen el PDF y el ZIP."}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <span role="status" className="text-xs text-[color:var(--texto)]">{cambios > 0 ? `${cambios} cambio(s) sin guardar` : "Sin cambios"}</span>
-            <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar cambios"} deshabilitado={guardando || cambios === 0} onClick={guardar} />
+            <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar cambios"} deshabilitado={guardando || cambios === 0} onClick={() => void guardar()} />
             <BotonIcono icono="cerrar" etiqueta="Cerrar" onClick={onCerrar} />
           </div>
         </div>
         {error && <p role="alert" className="aviso aviso-error">{error}</p>}
+        {info && <p role="status" className="aviso aviso-ok">{info}</p>}
         {avisos.map((a, i) => <p key={i} role="status" className="aviso aviso-alerta">{a}</p>)}
         {!vista && !error && <p className="texto-suave text-sm">Cargando vista previa…</p>}
 
         {vista?.tipo === "docx" && (
-          <div className="overflow-auto rounded-lg border border-[color:var(--borde)] bg-[#6b7280] p-3" style={{ maxHeight: "68vh" }}>
-            <style>{`.doc-ed p[contenteditable="true"]:hover{background:rgba(37,99,235,.07)}.doc-ed p[contenteditable="true"]:focus{outline:2px solid #2563eb;outline-offset:1px}.doc-ed p[data-sucio="1"]{box-shadow:inset 3px 0 0 #d97706}`}</style>
-            <div key={version} className="doc-ed mx-auto" style={{ background: "#fff", color: "#000", maxWidth: 816, padding: "48px 56px", fontFamily: '"Times New Roman", "Liberation Serif", serif', fontSize: 16, lineHeight: 1.3, boxShadow: "0 1px 6px rgba(0,0,0,.4)" }}>
-              <Bloques bloques={vista.bloques} alCambiar={alCambiarTexto} />
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" className={`btn ${pestana === "editar" ? "" : "btn-sec"} !px-3 !py-1 text-sm`} onClick={() => setPestana("editar")}>Editar</button>
+              <button type="button" className={`btn ${pestana === "pdf" ? "" : "btn-sec"} !px-3 !py-1 text-sm`} onClick={() => void verPdf()}>Vista exacta (PDF)</button>
+              {pestana === "editar" && (
+                <span className="ml-auto flex items-center gap-2" role="toolbar" aria-label="Formato del texto">
+                  <BotonIcono icono="negrita" etiqueta="Negrita (Ctrl+B)" onClick={() => formato("bold")} />
+                  <BotonIcono icono="cursiva" etiqueta="Cursiva (Ctrl+I)" onClick={() => formato("italic")} />
+                  <BotonIcono icono="subrayado" etiqueta="Subrayado (Ctrl+U)" onClick={() => formato("underline")} />
+                  <BotonIcono icono="insertar" etiqueta="Insertar párrafo debajo del seleccionado" onClick={insertarDebajo} />
+                  <BotonIcono icono="papelera" etiqueta="Quitar o restaurar el párrafo seleccionado" onClick={quitar} />
+                </span>
+              )}
             </div>
-          </div>
+            {pestana === "editar" ? (
+              <div className="overflow-auto rounded-lg border border-[color:var(--borde)] bg-[#6b7280] p-3" style={{ maxHeight: "64vh" }}>
+                <style>{`.doc-ed p[contenteditable="true"]:hover{background:rgba(37,99,235,.07)}.doc-ed p[contenteditable="true"]:focus{outline:2px solid #2563eb;outline-offset:1px}.doc-ed p[data-sucio="1"]{box-shadow:inset 3px 0 0 #d97706}`}</style>
+                <div key={version} className="doc-ed mx-auto" style={{ background: "#fff", color: "#000", maxWidth: 816, padding: "48px 56px", fontFamily: '"Times New Roman", "Liberation Serif", serif', fontSize: 16, lineHeight: 1.3, boxShadow: "0 1px 6px rgba(0,0,0,.4)" }}>
+                  <Bloques bloques={vista.bloques} c={contexto} />
+                  {nuevos.length > 0 && (
+                    <div style={{ borderTop: "2px dashed #d97706", marginTop: 12, paddingTop: 8 }}>
+                      <p style={{ fontSize: 12, color: "#92400e", margin: "0 0 4px" }}>Párrafos nuevos (cada uno se inserta debajo del párrafo que tenías seleccionado):</p>
+                      {nuevos.map((n, k) => (
+                        <div key={k} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+                          <textarea
+                            aria-label={`Párrafo nuevo ${k + 1}`}
+                            value={n.texto}
+                            rows={2}
+                            placeholder="Escribe el texto del párrafo nuevo"
+                            onChange={(e) => setNuevos((l) => l.map((x, j) => (j === k ? { ...x, texto: e.target.value } : x)))}
+                            style={{ flex: 1, border: "1px solid #d97706", padding: 4, font: "inherit", background: "#fffbeb", color: "#000" }}
+                          />
+                          <button type="button" aria-label={`Descartar párrafo nuevo ${k + 1}`} title="Descartar" onClick={() => setNuevos((l) => l.filter((_, j) => j !== k))} style={{ border: "1px solid #9ca3af", background: "#fff", color: "#111", padding: "2px 8px", borderRadius: 4 }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-[color:var(--borde)] bg-[color:var(--panel-2)]" style={{ height: "64vh" }}>
+                {pdf.cargando && <p className="texto-suave p-4 text-sm">Generando la vista exacta con LibreOffice…</p>}
+                {pdf.error && <p role="alert" className="aviso aviso-alerta m-3">{pdf.error}</p>}
+                {pdf.url && <iframe title="Vista exacta del documento (PDF)" src={pdf.url} className="h-full w-full" />}
+              </div>
+            )}
+          </>
         )}
 
         {vista?.tipo === "xlsx" && hojaActual && (
@@ -271,6 +446,19 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
           </>
         )}
       </div>
+      {foto && (
+        <EditorFoto
+          key={foto.id}
+          casoId={casoId}
+          foto={foto}
+          onCerrar={() => setFoto(null)}
+          onGuardado={() => {
+            setFoto(null);
+            setInfo("Foto actualizada en el documento.");
+            void cargar().then(onGuardado);
+          }}
+        />
+      )}
     </div>
   );
 }

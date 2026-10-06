@@ -6,7 +6,8 @@ export const FOTO_EMU = { cx: Math.round(FOTO_ANCHO_CM * 360000), cy: Math.round
 /** Píxeles de la imagen incrustada (≈300 ppp) con la misma proporción que la caja de 7,8 × 6,5 cm. */
 export const FOTO_PX = { ancho: 936, alto: 780 };
 
-export type FotoCelda = { rid: string; leyenda: string };
+/** `id` es el del archivo de la foto: queda en el nombre de la imagen del Word (`foto:<id>`) para poder reemplazarla al editarla. */
+export type FotoCelda = { rid: string; leyenda: string; id?: string };
 
 export const leyendaCorta = (t: string): string => {
   const limpio = t.replace(/\s+/g, " ").trim();
@@ -41,7 +42,7 @@ export function tablasDeFotos(fotos: FotoCelda[], opciones: { titulo?: string; f
       );
     if (n === 0 && opciones.fachada) filas.push(`<w:tr><w:trPr><w:cantSplit/></w:trPr>${celda(opciones.fachada, "fachada", ancho * FOTOS_COLUMNAS, FOTOS_COLUMNAS)}</w:tr>`);
     for (let i = 0; i < g.length; i += FOTOS_COLUMNAS) {
-      const tcs = Array.from({ length: FOTOS_COLUMNAS }, (_, k) => celda(g[i + k], `foto-${n * FOTOS_POR_TABLA + i + k + 1}`, ancho));
+      const tcs = Array.from({ length: FOTOS_COLUMNAS }, (_, k) => celda(g[i + k], g[i + k]?.id ? `foto:${g[i + k].id}` : `foto-${n * FOTOS_POR_TABLA + i + k + 1}`, ancho));
       filas.push(`<w:tr><w:trPr><w:cantSplit/></w:trPr>${tcs.join("")}</w:tr>`);
     }
     return (

@@ -41,6 +41,7 @@ export default function FotosInforme({ casoId, fotos }: { casoId: string; fotos:
         <strong>{elegidas}</strong> elegidas para el informe · <strong>{editadas}</strong> con recorte editado · {fotos.length} en total
       </p>
       {error && <p role="alert" className="aviso aviso-error">{error}</p>}
+      {ocupado && <p role="status" className="aviso aviso-ok">Actualizando el informe, el anexo y el PDF con tus cambios… puede tardar unos segundos.</p>}
       {[...porRecinto.entries()].map(([recinto, lista]) => (
         <section key={recinto} aria-label={`Fotos de ${recinto}`}>
           <h4 className="mb-2 text-sm font-semibold text-[color:var(--texto)]">{recinto} <span className="texto-suave font-normal">({lista.length})</span></h4>

@@ -19,6 +19,11 @@ function rutaSoffice(): string | null {
   return null;
 }
 
+/** ¿Hay LibreOffice en este servidor? (con él el PDF es idéntico al Word y se puede mostrar la vista exacta). */
+export async function motorPdfDisponible(): Promise<boolean> {
+  return rutaSoffice() !== null;
+}
+
 /**
  * Convierte el .docx en PDF. Con LibreOffice el resultado es idéntico al Word (cabeceras, pies, versalitas).
  * Sin LibreOffice se usa una conversión a HTML + Chromium: conserva el contenido y las imágenes, no el formato exacto.

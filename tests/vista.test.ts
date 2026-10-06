@@ -5,7 +5,7 @@ import { generarExcel } from "../lib/docs/excel";
 import { datosCasoSchema } from "../lib/domain/tipos";
 import { evaluarFormula, numeroACol, colANumero } from "../lib/docs/formulas";
 import { aplicarCeldas, cargarLibro, interpretarEntrada, libroAVista, recalcular } from "../lib/docs/vista-xlsx";
-import { aplicarTextos, docxAVista, type ParrafoVista, type BloqueVista } from "../lib/docs/vista-docx";
+import { aplicarEdiciones, docxAVista, type ParrafoVista, type BloqueVista } from "../lib/docs/vista-docx";
 
 describe("fórmulas de la planilla", () => {
   const celdas: Record<string, unknown> = { "1,1": 4, "1,2": 5, "1,3": 6, "2,1": 10 };
@@ -95,19 +95,48 @@ describe("vista y edición del Word", () => {
     expect(new Set(ps.map((p) => p.i)).size).toBe(ps.length);
     expect(ps.some((p) => p.texto.length > 20)).toBe(true);
   });
+  const base = () => {
+    const ps = parrafos(docxAVista(plantilla()).bloques);
+    return { ps, objetivo: ps.find((p) => p.editable && p.texto.length > 30)! };
+  };
   it("cambiar el texto de un párrafo solo cambia ese párrafo y deja el documento válido", () => {
-    const v = docxAVista(plantilla());
-    const ps = parrafos(v.bloques);
-    const objetivo = ps.find((p) => p.editable && p.texto.length > 30)!;
-    const { buffer, aplicados } = aplicarTextos(plantilla(), { [objetivo.i]: "Texto corregido por el usuario" });
+    const { ps, objetivo } = base();
+    const { buffer, aplicados } = aplicarEdiciones(plantilla(), { parrafos: { [objetivo.i]: [{ t: "Texto corregido por el usuario" }] } });
     expect(aplicados).toBe(1);
-    const v2 = docxAVista(buffer);
-    const ps2 = parrafos(v2.bloques);
+    const ps2 = parrafos(docxAVista(buffer).bloques);
     expect(ps2.find((p) => p.i === objetivo.i)!.texto).toBe("Texto corregido por el usuario");
     expect(ps2.length).toBe(ps.length);
     expect(ps2.filter((p) => p.texto !== ps.find((q) => q.i === p.i)!.texto).length).toBe(1);
   });
+  it("conserva el formato elegido: negrita, cursiva y subrayado por tramos", () => {
+    const { objetivo } = base();
+    const { buffer } = aplicarEdiciones(plantilla(), { parrafos: { [objetivo.i]: [{ t: "Normal " }, { t: "negrita", b: true }, { t: " cursiva", i: true }, { t: " sub", u: true }] } });
+    const p = parrafos(docxAVista(buffer).bloques).find((x) => x.i === objetivo.i)!;
+    expect(p.runs.map((r) => [r.t, !!r.b, !!r.i, !!r.u])).toEqual([["Normal ", false, false, false], ["negrita", true, false, false], [" cursiva", false, true, false], [" sub", false, false, true]]);
+  });
+  it("inserta un párrafo nuevo debajo y elimina otro, resolviendo contra los índices originales", () => {
+    const { ps, objetivo } = base();
+    const otro = ps.find((p) => p.editable && p.texto.length > 30 && p.i > objetivo.i + 3 && !p.texto.includes("Nuevo"))!;
+    const { buffer } = aplicarEdiciones(plantilla(), { insertar: [{ despuesDe: objetivo.i, runs: [{ t: "Nuevo párrafo" }] }], eliminar: [otro.i] });
+    const ps2 = parrafos(docxAVista(buffer).bloques);
+    expect(ps2.map((p) => p.texto)).toContain("Nuevo párrafo");
+    const cuenta = (l: ParrafoVista[], t: string) => l.filter((p) => p.texto === t).length;
+    expect(cuenta(ps2, otro.texto)).toBe(cuenta(ps, otro.texto) - 1);
+  });
   it("rechaza índices inexistentes", () => {
-    expect(() => aplicarTextos(plantilla(), { "99999": "x" })).toThrow(/no existe/);
+    expect(() => aplicarEdiciones(plantilla(), { parrafos: { "99999": [{ t: "x" }] } })).toThrow(/no existe/);
+  });
+});
+
+describe("sincronización del Word con los cambios", () => {
+  it("actualiza los totales del texto sin tocar números más largos que los contienen", async () => {
+    const { actualizarTotales } = await import("../lib/docs/sincronizar-word");
+    const plantilla = readFileSync("plantillas/informe.docx");
+    const ps = (b: Buffer) => { const out: string[] = []; const rec = (bs: BloqueVista[]) => bs.forEach((x) => (x.tipo === "p" ? out.push(x.texto) : x.filas.forEach((f) => f.celdas.forEach((c) => rec(c.bloques))))); rec(docxAVista(b).bloques); return out; };
+    const objetivo = docxAVista(plantilla).bloques.flatMap(function r(x): ParrafoVista[] { return x.tipo === "p" ? [x] : x.filas.flatMap((f) => f.celdas.flatMap((c) => c.bloques.flatMap(r))); }).find((p) => p.editable && p.texto.length > 30)!;
+    const { buffer } = aplicarEdiciones(plantilla, { parrafos: { [objetivo.i]: [{ t: "Valor 46,73 UF; otro 146,73 UF; pesos $1.234.567." }] } });
+    const r = actualizarTotales(buffer, [["46,73", "40,00"], ["$1.234.567", "$9.999"], ["40,00", "99,99"]]);
+    expect(r.reemplazos).toBe(2);
+    expect(ps(r.buffer)).toContain("Valor 40,00 UF; otro 146,73 UF; pesos $9.999.");
   });
 });

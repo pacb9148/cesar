@@ -1,10 +1,10 @@
 import PizZip from "pizzip";
 import sharp from "sharp";
 import { extractImages, getDocumentProxy } from "unpdf";
-import { cuadroPng, cuadroTablaXml, resumenCuadro } from "../docs/cuadro";
+import { cuadroTablaXml, resumenCuadro } from "../docs/cuadro";
 import { generarExcel, type EntradaExcel } from "../docs/excel";
 import { generarAnexo } from "../docs/anexo";
-import { fotosDelAreaAfectada, leyendaDeFoto } from "../docs/fotos-seleccion";
+import { leyendaDeFoto, seleccionarFotosInforme } from "../docs/fotos-seleccion";
 import { docxAPdf } from "../docs/pdf";
 import { generarInforme, type FotoInforme, type Meteo } from "../docs/word";
 import { GG_UTILIDADES_UNIFICADO, IVA } from "../domain/constantes";
@@ -219,25 +219,19 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
   const entrada = entradaExcelDe(datos, acta, recl, salida, valorUF);
   const res = resumenCuadro(entrada);
   emitir("info", "informe", `Ajuste v${aj.version ?? "?"} cargado: UF reclamada ${res.recUF.toFixed(2)}, ajustada ${res.ajUF.toFixed(2)}, a indemnizar ${res.indemnizacionUF.toFixed(2)}`);
-  emitir("info", "informe", "Generando Excel, cuadro comparativo, captura meteorológica, fachada y fotos en paralelo (la captura de agrometeorologia.cl puede tardar)");
+  emitir("info", "informe", "Generando Excel, captura meteorológica, fachada y fotos en paralelo (la captura de agrometeorologia.cl puede tardar)");
 
-  const [xlsx, cuadro, met, fachada, fotosDb] = await Promise.all([
+  const [xlsx, met, fachada, fotosDb] = await Promise.all([
     generarExcel(entrada),
-    cuadroPng(entrada).catch((err: unknown) => {
-      // Sin navegador en el servidor: el cuadro va como tabla de Word en vez de imagen; el informe no se detiene.
-      emitir("error", "informe", `No se pudo dibujar el cuadro como imagen (${err instanceof Error ? err.message : "error"}): irá como tabla de Word`);
-      return null;
-    }),
     meteo(casoId, datos),
     fachadaDelActa(casoId),
     archivosConContenido(casoId, "foto"),
   ]);
 
-  const todas: FotoInforme[] = fotosDb.map((f) => ({ recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: leyendaDeFoto(f.recinto ?? "General", acta), edicion: f.edicion }));
+  const todas: FotoInforme[] = fotosDb.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: leyendaDeFoto(f.recinto ?? "General", acta), edicion: f.edicion }));
   // Si el usuario marcó fotos para el informe, van esas (con su recorte); si no, las del área afectada. El anexo lleva todas.
-  const elegidas = todas.filter((f) => f.edicion?.incluir === true);
-  const paraInforme = elegidas.length > 0 ? elegidas : fotosDelAreaAfectada(todas, acta);
-  emitir("info", "informe", `${paraInforme.length} fotos para el informe (${elegidas.length > 0 ? "elegidas por ti" : "automáticas del área afectada"}); ${todas.filter((f) => f.edicion).length} con recorte editado`);
+  const { fotos: paraInforme, elegidas } = seleccionarFotosInforme(todas, acta);
+  emitir("info", "informe", `${paraInforme.length} fotos para el informe (${elegidas ? "elegidas por ti" : "automáticas del área afectada"}); ${todas.filter((f) => f.edicion).length} con recorte editado`);
 
   emitir("ok", "informe", `Excel, cuadro y fotos listos; meteorología: ${met ? `estación ${met.estacion}` : "no disponible"}; ${fotosDb.length} fotos del caso, ${fachada.length} de fachada`);
   emitir("info", "informe", "Armando el informe Word con la plantilla");
@@ -249,8 +243,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     ajusteTexto: salida.ajuste_de_perdida_texto,
     totales: { reclamacionPesos: res.recTotalPesos, reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF },
     meteo: met,
-    cuadroPng: cuadro,
-    cuadroTabla: cuadro ? undefined : cuadroTablaXml(entrada),
+    cuadroTabla: cuadroTablaXml(entrada),
     fotos: paraInforme,
     fachada,
     siniestrosAnteriores: false,

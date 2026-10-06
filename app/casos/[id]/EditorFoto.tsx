@@ -207,6 +207,7 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
           </div>
         </div>
         {error && <p role="alert" className="aviso aviso-error">{error}</p>}
+        {guardando && <p role="status" className="aviso aviso-ok">Guardando y actualizando el informe, el anexo y el PDF con tu recorte… puede tardar unos segundos.</p>}
 
         <div className="grid gap-3 lg:grid-cols-[15rem_1fr_15rem]">
           {/* Izquierda: encuadre y ajustes de imagen */}

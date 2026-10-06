@@ -24,7 +24,7 @@ import {
   type Reemplazo,
 } from "./docx-xml";
 
-export type FotoInforme = { recinto: string; buffer: Buffer; leyenda?: string; edicion?: EdicionFoto | null };
+export type FotoInforme = { id?: string; recinto: string; buffer: Buffer; leyenda?: string; edicion?: EdicionFoto | null };
 
 export type Meteo = {
   estacion: string | null;
@@ -41,9 +41,8 @@ export type EntradaInforme = {
   ajusteTexto: string;
   totales: { reclamacionPesos: number; reclamacionUF: number; ajusteUF: number; indemnizacionUF: number };
   meteo: Meteo | null;
-  /** Imagen del cuadro de pérdida; si no se pudo dibujar (sin navegador) va como tabla de Word en `cuadroTabla`. */
-  cuadroPng: Buffer | null;
-  cuadroTabla?: string[];
+  /** Cuadro de pérdida como tabla de Word (editable y actualizable al editar el Excel). */
+  cuadroTabla: string[];
   fotos: FotoInforme[];
   fachada: Buffer[];
   siniestrosAnteriores: boolean;
@@ -269,7 +268,7 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     }
     // Una sola cuadrícula de 2 × 3 (varias si hay más fotos); la fachada, si existe, abre la primera como fila de cabecera.
     const celdas: FotoCelda[] = [];
-    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer, 0, { foto: true })).rid, leyenda: f.edicion?.leyenda || f.leyenda || f.recinto });
+    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer, 0, { foto: true })).rid, leyenda: f.edicion?.leyenda || f.leyenda || f.recinto, id: f.id });
     const fachada: FotoCelda | null = e.fachada[0] ? { rid: (await paq.imagen(e.fachada[0], 0, { foto: true })).rid, leyenda: "Fachada del inmueble" } : null;
     let ancla: Node = pImgs;
     for (const xml of tablasDeFotos(celdas, { fachada })) {
@@ -357,16 +356,11 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
   }
   if (pTabla) {
     for (const r of porTag(pTabla, "r")) r.parentNode!.removeChild(r);
-    if (e.cuadroPng) {
-      const m = await paq.imagen(e.cuadroPng, 6.9, { maxPx: 2000 });
-      pTabla.appendChild(crearEl(doc, `<w:r>${xmlImagen(m.rid, m.cx, m.cy, "cuadro-de-perdida")}</w:r>`));
-    } else {
-      let ancla: Node = pTabla;
-      for (const xml of e.cuadroTabla ?? []) {
-        const el = crearEl(doc, xml);
-        ancla.parentNode!.insertBefore(el, ancla.nextSibling);
-        ancla = el;
-      }
+    let ancla: Node = pTabla;
+    for (const xml of e.cuadroTabla) {
+      const el = crearEl(doc, xml);
+      ancla.parentNode!.insertBefore(el, ancla.nextSibling);
+      ancla = el;
     }
   }
 

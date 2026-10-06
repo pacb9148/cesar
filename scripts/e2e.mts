@@ -142,3 +142,64 @@ import PizZip from "pizzip";
   const fotos = (xml.match(/<wp:extent cx="2808000" cy="2340000"\/>/g) ?? []).length;
   console.log("fotos 7,8×6,5 cm en el informe:", fotos, "(esperado 3, o 4 con fachada); leyenda editada:", xml.includes("Leyenda editada"));
 }
+
+// ---- Edición completa: Excel → cuadro y totales del Word; foto → informe y anexo; formato en el Word; PDF exacto ----
+{
+  const lista = async () => (await (await api(`/api/casos/${id}/archivos`)).json()) as { id: string; nombre: string; tipo: string; tamano: number }[];
+  const bajar = async (aid: string) => Buffer.from(await (await api(`/api/casos/${id}/archivos/${aid}?descargar=1`)).arrayBuffer());
+  const textoWord = (b: Buffer) => new PizZip(b).file("word/document.xml")!.asText();
+  let sal = (await lista()).filter((a) => a.tipo === "salida");
+  const xlsxId = sal.find((a) => /\.xlsx$/.test(a.nombre))!.id;
+  const informeId = sal.find((a) => /INFORME\.docx$/.test(a.nombre))!.id;
+  const antesWord = textoWord(await bajar(informeId));
+
+  // 1. Editar una cantidad en el Excel.
+  const vx = (await (await api(`/api/casos/${id}/archivos/${xlsxId}/vista`)).json()) as { hojas: { nombre: string; celdas: { r: number; c: number; raw: string; f?: string }[] }[] };
+  const celda = vx.hojas.find((h) => h.nombre === "EDIFICIO")!.celdas.find((c) => c.c === 8 && c.r > 11 && !c.f && Number(c.raw) > 0)!;
+  const rx = await api(`/api/casos/${id}/archivos/${xlsxId}/vista`, { method: "PUT", json: { celdas: [{ hoja: "EDIFICIO", r: celda.r, c: 8, valor: "0" }] } });
+  const jx = (await rx.json()) as { avisos?: string[]; error?: string };
+  console.log("excel editado:", rx.status, jx.error ?? jx.avisos);
+  const despuesWord = textoWord(await bajar(informeId));
+  const marcas = (x: string) => (x.match(/46,73/g) ?? []).length;
+  console.log("cuadro y totales del Word al editar el Excel → cambió:", despuesWord !== antesWord, "| «46,73» antes/después:", marcas(antesWord), "/", marcas(despuesWord), "| tabla del cuadro presente:", despuesWord.includes('w:tblCaption w:val="cuadro-de-perdida"'));
+
+  // 2. Editar el recorte de una foto del informe: debe cambiar la imagen del Word y del anexo.
+  const fotoElegida = fotosCaso[0];
+  const imgDe = (b: Buffer, fid: string) => {
+    const z = new PizZip(b);
+    const x = z.file("word/document.xml")!.asText();
+    const m = new RegExp(String.raw`name="foto:${fid}"[\s\S]*?r:embed="([^"]+)"`).exec(x);
+    const rels = z.file("word/_rels/document.xml.rels")!.asText();
+    const t = m && new RegExp(`Id="${m[1]}"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Id="${m[1]}"`).exec(rels);
+    const destino = t && (t[1] ?? t[2]);
+    return destino ? Buffer.from(z.file(`word/${destino}`)!.asUint8Array()) : null;
+  };
+  const antesImg = imgDe(await bajar(informeId), fotoElegida.id);
+  const re = await api(`/api/casos/${id}/archivos/${fotoElegida.id}/edicion`, { method: "PUT", json: { ...edit, zoom: 3, cx: 0.8, cy: 0.2, giro: 0, volteoH: false, leyenda: "Otra leyenda" } });
+  const je = (await re.json()) as { avisos?: string[] };
+  const informe2 = await bajar(informeId);
+  { const x = textoWord(informe2); const i = x.indexOf("foto:"); console.log("nombres foto: en el Word:", (x.match(/name="foto:/g) ?? []).length, "| contexto:", i < 0 ? "ninguno" : x.slice(i - 40, i + 380).replace(/\s+/g, " ")); }
+  const despuesImg = imgDe(informe2, fotoElegida.id);
+  console.log("foto editada → informe actualizado:", re.status, "| imagen distinta:", !!antesImg && !!despuesImg && !antesImg.equals(despuesImg), `(${antesImg?.length ?? "no encontrada"} → ${despuesImg?.length ?? "no encontrada"} bytes)`, "| leyenda nueva:", textoWord(informe2).includes("Otra leyenda"), "| avisos:", je.avisos);
+  sal = (await lista()).filter((a) => a.tipo === "salida");
+  const anexoXml = textoWord(await bajar(sal.find((a) => /^Anexo/.test(a.nombre))!.id));
+  console.log("anexo regenerado con la foto:", anexoXml.includes(`foto:${fotoElegida.id}`), "| leyenda:", anexoXml.includes("Otra leyenda"));
+
+  // 3. Formato en el Word (negrita) y PDF exacto.
+  const vw = (await (await api(`/api/casos/${id}/archivos/${informeId}/vista`)).json()) as { bloques: unknown[] };
+  type P = { tipo: "p"; i: number; texto: string; editable: boolean };
+  const todos: P[] = [];
+  const rec = (bs: unknown[]) => bs.forEach((b) => { const x = b as { tipo: string; filas?: { celdas: { bloques: unknown[] }[] }[] }; if (x.tipo === "p") todos.push(x as unknown as P); else x.filas?.forEach((f) => f.celdas.forEach((c) => rec(c.bloques))); });
+  rec(vw.bloques);
+  const p = todos.find((t) => t.editable && t.texto.length > 40)!;
+  const rw = await api(`/api/casos/${id}/archivos/${informeId}/vista`, { method: "PUT", json: { word: { parrafos: { [p.i]: [{ t: "Texto " }, { t: "destacado", b: true }] }, insertar: [{ despuesDe: p.i, runs: [{ t: "Párrafo agregado por el usuario" }] }] } } });
+  const zdoc = textoWord(await bajar(informeId));
+  const vw2 = (await (await api(`/api/casos/${id}/archivos/${informeId}/vista`)).json()) as { bloques: unknown[] };
+  const todos2: { runs: { t: string; b?: boolean }[]; texto: string }[] = [];
+  const rec2 = (bs: unknown[]) => bs.forEach((b) => { const x = b as { tipo: string; filas?: { celdas: { bloques: unknown[] }[] }[] }; if (x.tipo === "p") todos2.push(x as never); else x.filas?.forEach((f) => f.celdas.forEach((c) => rec2(c.bloques))); });
+  rec2(vw2.bloques);
+  console.log("formato en el Word:", rw.status, "| negrita:", todos2.some((t) => t.runs.some((r) => r.t === "destacado" && r.b)), "| párrafo insertado:", zdoc.includes("Párrafo agregado por el usuario"));
+  const pdf = await api(`/api/casos/${id}/archivos/${informeId}/vista?pdf=1`);
+  const bytes = Buffer.from(await pdf.arrayBuffer());
+  console.log("PDF exacto (LibreOffice):", pdf.status, bytes.subarray(0, 5).toString(), Math.round(bytes.length / 1024), "KB");
+}

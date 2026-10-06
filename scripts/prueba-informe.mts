@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { leerPlanilla } from "../lib/extraccion/planilla";
 import { datosCasoSchema } from "../lib/domain/tipos";
 import { generarExcel, type EntradaExcel } from "../lib/docs/excel";
-import { cuadroPng, resumenCuadro } from "../lib/docs/cuadro";
+import { cuadroTablaXml, resumenCuadro } from "../lib/docs/cuadro";
 import { generarInforme } from "../lib/docs/word";
 
 const dir = globSync("fuente/1981023*")[0];
@@ -34,8 +34,7 @@ const entrada: EntradaExcel = {
 };
 const xlsx = await generarExcel(entrada);
 writeFileSync("tmp/p-ajuste.xlsx", xlsx);
-const png = await cuadroPng(entrada);
-writeFileSync("tmp/p-cuadro.png", png);
+const tablaCuadro = cuadroTablaXml(entrada);
 const res = resumenCuadro(entrada);
 console.log("UF rec/aj:", res.recUF.toFixed(2), res.ajUF.toFixed(2));
 
@@ -60,7 +59,7 @@ const informe = await generarInforme({
   ajusteTexto: "Sin perjuicio de la reclamación presentada, se revisó que los valores unitarios se ajustaran a precios de mercado y las cantidades a las cubicaciones efectuadas in situ por quienes suscriben.\nSe incluyen actividades como parte de los gastos generales.",
   totales: { reclamacionPesos: res.recTotalPesos, reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF },
   meteo: { estacion: "Carriel Sur, Concepción", precipitacionMm: 39.2, rafagaKmh: 110.5, imagenPng: null },
-  cuadroPng: png,
+  cuadroTabla: tablaCuadro,
   fotos,
   fachada: [],
   siniestrosAnteriores: false,
