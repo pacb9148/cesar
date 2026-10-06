@@ -202,4 +202,5 @@ import PizZip from "pizzip";
   const pdf = await api(`/api/casos/${id}/archivos/${informeId}/vista?pdf=1`);
   const bytes = Buffer.from(await pdf.arrayBuffer());
   console.log("PDF exacto (LibreOffice):", pdf.status, bytes.subarray(0, 5).toString(), Math.round(bytes.length / 1024), "KB");
+  if (pdf.status !== 200) console.log("  motivo:", bytes.toString().slice(0, 300));
 }
