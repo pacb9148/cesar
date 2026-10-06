@@ -3,13 +3,19 @@
 import type { ArchivoMeta, Caso } from "@/lib/caso/repositorio";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Icono } from "@/components/Iconos";
 import FotosInforme from "./FotosInforme";
+import VistaDocumento from "./VistaDocumento";
 
 type Gen = { entregables: { id: string; nombre: string }[]; motorPdf: string; faltantes: string[]; totales: { reclamacionUF: number; ajusteUF: number; indemnizacionUF: number } };
 
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
 
 export default function Informe({ caso, archivos, tieneAjuste }: { caso: Caso; archivos: ArchivoMeta[]; tieneAjuste: boolean }) {
+  const router = useRouter();
+  const [viendo, setViendo] = useState<{ id: string; nombre: string } | null>(null);
   const gen = useFlujo<Gen>(`/api/casos/${caso.id}/generar`);
   const salidas = archivos.filter((a) => a.tipo === "salida");
   const faltantes = gen.resultado?.faltantes ?? [];
@@ -48,12 +54,20 @@ export default function Informe({ caso, archivos, tieneAjuste }: { caso: Caso; a
             {salidas.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-3 py-2">
                 <span className="min-w-0 truncate">{a.nombre} <span className="texto-suave text-xs">· {kb(a.tamano)}</span></span>
-                <a className="btn btn-sec shrink-0" href={`/api/casos/${caso.id}/archivos/${a.id}?descargar=1`}>Descargar</a>
+                <span className="flex shrink-0 gap-2">
+                  {/\.(docx|xlsx)$/i.test(a.nombre) && !/^Anexo/i.test(a.nombre) && (
+                    <button type="button" className="btn btn-sec" onClick={() => setViendo({ id: a.id, nombre: a.nombre })} aria-label={`Ver y editar ${a.nombre}`}>
+                      <Icono nombre="ojo" /> Ver y editar
+                    </button>
+                  )}
+                  <a className="btn btn-sec" href={`/api/casos/${caso.id}/archivos/${a.id}?descargar=1`}>Descargar</a>
+                </span>
               </li>
             ))}
           </ul>
         </div>
       )}
+      {viendo && <VistaDocumento key={viendo.id} casoId={caso.id} archivoId={viendo.id} nombre={viendo.nombre} onCerrar={() => setViendo(null)} onGuardado={() => router.refresh()} />}
     </section>
   );
 }
