@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BotonIcono, Icono, type NombreIcono } from "@/components/Iconos";
+import VentanaModal from "@/components/VentanaModal";
 import { LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
 import { EDICION_INICIAL, PROPORCION_FOTO, ZOOM_MAX, centroValido, dimensionesGiradas, girar, ventanaDeRecorte, type EdicionFoto } from "@/lib/fotos/recorte";
@@ -76,7 +77,6 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
   const lienzo = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
   const escenario = useRef<HTMLDivElement>(null);
-  const dialogo = useRef<HTMLDivElement>(null);
   const arrastre = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -142,7 +142,6 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
   }, [zoomPor]);
 
   useEffect(() => {
-    dialogo.current?.focus();
     const tecla = (ev: KeyboardEvent) => {
       if (ev.key === "Escape") onCerrar();
     };
@@ -195,21 +194,26 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
       }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
-      <div ref={dialogo} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Editar fotografía ${foto.nombre}`} className="panel flex max-h-full w-full max-w-6xl flex-col gap-3 overflow-y-auto p-3 outline-none sm:p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="min-w-0 truncate text-base font-semibold text-[color:var(--texto)]">{foto.recinto ? `${foto.recinto} · ` : ""}{foto.nombre}</h2>
-          <div className="flex items-center gap-2">
-            <BotonIcono icono="check" etiqueta={ed.incluir ? "Va al informe (clic para quitarla)" : "Incluir en el informe"} activo={!!ed.incluir} onClick={() => setEd((e) => ({ ...e, incluir: !e.incluir }))} />
-            <BotonIcono icono="reiniciar" etiqueta="Restablecer todo" onClick={() => setEd({ ...EDICION_INICIAL, incluir: ed.incluir })} />
-            <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar edición"} deshabilitado={guardando} onClick={guardar} />
-            <BotonIcono icono="cerrar" etiqueta="Cerrar sin guardar" onClick={onCerrar} />
-          </div>
-        </div>
+    <VentanaModal
+      etiqueta={`Editar fotografía ${foto.nombre}`}
+      titulo={`${foto.recinto ? `${foto.recinto} · ` : ""}${foto.nombre}`}
+      onCerrar={onCerrar}
+      ancho="max-w-6xl"
+      nivel={60}
+      acciones={
+        <>
+          <BotonIcono icono="check" etiqueta={ed.incluir ? "Va al informe (clic para quitarla)" : "Incluir en el informe"} activo={!!ed.incluir} onClick={() => setEd((e) => ({ ...e, incluir: !e.incluir }))} />
+          <BotonIcono icono="reiniciar" etiqueta="Restablecer todo" onClick={() => setEd({ ...EDICION_INICIAL, incluir: ed.incluir })} />
+          <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar edición"} deshabilitado={guardando} onClick={guardar} />
+        </>
+      }
+    >
+      {({ maximizada }) => (
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
         {error && <p role="alert" className="aviso aviso-error">{error}</p>}
         {guardando && <p role="status" className="aviso aviso-ok">Guardando y actualizando el informe, el anexo y el PDF con tu recorte… puede tardar unos segundos.</p>}
 
-        <div className="grid gap-3 lg:grid-cols-[15rem_1fr_15rem]">
+        <div className={`grid gap-3 ${maximizada ? "lg:grid-cols-[13rem_1fr_13rem]" : "lg:grid-cols-[15rem_1fr_15rem]"}`}>
           {/* Izquierda: encuadre y ajustes de imagen */}
           <div className="space-y-3 rounded-lg border border-[color:var(--borde)] bg-[color:var(--panel-2)] p-3">
             <div className="flex flex-wrap gap-2">
@@ -236,7 +240,7 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
           <div className="space-y-2">
             <div
               ref={escenario}
-              className="relative mx-auto w-full max-w-[640px] touch-none select-none overflow-hidden rounded-lg border border-[color:var(--borde)] bg-black"
+              className={`relative mx-auto w-full touch-none select-none overflow-hidden rounded-lg border border-[color:var(--borde)] bg-black ${maximizada ? "max-w-none" : "max-w-[640px]"}`}
               style={{ aspectRatio: `${PROPORCION_FOTO}`, cursor: modo === "cuadricula" ? "move" : "grab" }}
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId);
@@ -301,6 +305,7 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
           </div>
         </div>
       </div>
-    </div>
+      )}
+    </VentanaModal>
   );
 }

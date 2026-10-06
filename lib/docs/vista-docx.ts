@@ -140,13 +140,15 @@ export type EdicionesWord = {
 };
 
 
-function construirRuns(doc: Doc, base: Element | undefined, runs: RunEdicion[]): Element[] {
+function construirRuns(doc: Doc, base: Element | undefined, runs: RunEdicion[], sinAdornos = false): Element[] {
   return runs
     .filter((r) => r.t !== "")
     .map((r) => {
       const run = crearEl(doc, `<w:r></w:r>`);
       const rpr = base ? (base.cloneNode(true) as Element) : doc.createElementNS(NS_W, "w:rPr");
-      for (const c of hijos(rpr)) if (["b", "i", "u"].includes(c.localName ?? "")) rpr.removeChild(c);
+      // Un párrafo nuevo toma la fuente y el tamaño del vecino, pero no sus adornos de título (versalitas, sombra).
+      const quitar = sinAdornos ? ["b", "i", "u", "smallCaps", "caps", "shadow"] : ["b", "i", "u"];
+      for (const c of hijos(rpr)) if (quitar.includes(c.localName ?? "")) rpr.removeChild(c);
       // El orden de los hijos de rPr importa para Word: b, i, ..., u van antes de color/sz/etc.
       if (r.u) rpr.insertBefore(doc.createElementNS(NS_W, "w:u"), rpr.firstChild);
       if (r.i) rpr.insertBefore(doc.createElementNS(NS_W, "w:i"), rpr.firstChild);
@@ -209,7 +211,7 @@ export function aplicarEdiciones(buf: Buffer, e: EdicionesWord): { buffer: Buffe
       for (const c of hijos(copia)) if (["sectPr", "pageBreakBefore", "keepNext"].includes(c.localName ?? "")) copia.removeChild(c);
       nuevo.appendChild(copia);
     }
-    for (const r of construirRuns(doc, baseRpr(ref), ins.runs)) nuevo.appendChild(r);
+    for (const r of construirRuns(doc, baseRpr(ref), ins.runs, true)) nuevo.appendChild(r);
     ref.parentNode!.insertBefore(nuevo, ref.nextSibling);
     aplicados++;
   }

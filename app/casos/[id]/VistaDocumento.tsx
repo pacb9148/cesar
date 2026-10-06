@@ -5,6 +5,7 @@ import { BotonIcono } from "@/components/Iconos";
 import type { VistaDocumento as Vista } from "@/lib/caso/edicion-documentos";
 import type { BloqueVista, ParrafoVista, RunEdicion, RunVista } from "@/lib/docs/vista-docx";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
+import VentanaModal from "@/components/VentanaModal";
 import EditorFoto from "./EditorFoto";
 import type { HojaVista } from "@/lib/docs/vista-xlsx";
 
@@ -124,7 +125,7 @@ const colLetra = (n: number) => {
   return s;
 };
 
-function Hoja({ h, ediciones, alEditar }: { h: HojaVista; ediciones: Map<string, string>; alEditar: (r: number, c: number, v: string, original: string) => void }) {
+function Hoja({ h, ediciones, alEditar, zoom, maximizada }: { h: HojaVista; ediciones: Map<string, string>; alEditar: (r: number, c: number, v: string, original: string) => void; zoom: number; maximizada: boolean }) {
   const [activa, setActiva] = useState<{ r: number; c: number } | null>(null);
   const celdas = useMemo(() => new Map(h.celdas.map((c) => [`${c.r},${c.c}`, c])), [h]);
   const origen = useMemo(() => new Map(h.combinadas.map((m) => [`${m.r1},${m.c1}`, m])), [h]);
@@ -137,8 +138,8 @@ function Hoja({ h, ediciones, alEditar }: { h: HojaVista; ediciones: Map<string,
   const cols = Array.from({ length: h.columnas }, (_, i) => i + 1);
   const th = { position: "sticky" as const, top: 0, background: "#e5e7eb", color: "#111827", border: "1px solid #cbd0d8", fontWeight: 600, fontSize: 11, padding: "1px 4px", zIndex: 1 };
   return (
-    <div className="overflow-auto" style={{ maxHeight: "62vh", background: "#fff", color: "#111827", border: "1px solid #cbd0d8" }}>
-      <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", minWidth: "100%" }}>
+    <div className={`overflow-auto ${maximizada ? "min-h-0 flex-1" : ""}`} style={{ maxHeight: maximizada ? undefined : "62vh", background: "#fff", color: "#111827", border: "1px solid #cbd0d8" }}>
+      <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", minWidth: "100%", zoom }}>
         <colgroup>
           <col style={{ width: 36 }} />
           {h.anchos.map((w, i) => <col key={i} style={{ width: Math.max(40, w) }} />)}
@@ -220,7 +221,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
   const [celdas, setCeldas] = useState(new Map<string, string>()); // "hoja|r,c" → valor
   const [foto, setFoto] = useState<ArchivoMeta | null>(null);
   const [pdf, setPdf] = useState<{ url?: string; error?: string; cargando: boolean }>({ cargando: false });
-  const dialogo = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
 
   const aplicarVista = (j: Vista) => {
     setVista(j);
@@ -257,7 +258,6 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
   }, [casoId, archivoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    dialogo.current?.focus();
     const t = (e: KeyboardEvent) => e.key === "Escape" && !foto && onCerrar();
     window.addEventListener("keydown", t);
     return () => window.removeEventListener("keydown", t);
@@ -346,25 +346,35 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
   }
 
   const hojaActual = vista?.tipo === "xlsx" ? vista.hojas[hoja] : null;
+  const cambiarZoom = (d: number) => setZoom((z) => Math.min(2, Math.max(0.5, Math.round((z + d) * 10) / 10)));
+  const controlesZoom = (
+    <span className="flex items-center gap-1" role="group" aria-label="Tamaño del contenido">
+      <BotonIcono icono="zoomMenos" etiqueta="Reducir el contenido" deshabilitado={zoom <= 0.5} onClick={() => cambiarZoom(-0.1)} />
+      <button type="button" className="btn btn-sec !px-2 !py-1 text-xs" title="Volver al 100 %" aria-label={`Tamaño ${Math.round(zoom * 100)} %, clic para volver al 100 %`} onClick={() => setZoom(1)}>{Math.round(zoom * 100)} %</button>
+      <BotonIcono icono="zoomMas" etiqueta="Ampliar el contenido" deshabilitado={zoom >= 2} onClick={() => cambiarZoom(0.1)} />
+    </span>
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && !foto && onCerrar()}>
-      <div ref={dialogo} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Vista previa de ${nombre}`} className="panel flex max-h-full w-full max-w-5xl flex-col gap-3 overflow-hidden p-3 outline-none sm:p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-[color:var(--texto)]">{nombre}</h2>
-            <p className="text-xs text-[color:var(--suave)]">
-              {vista?.tipo === "xlsx"
-                ? "Clic en una celda para editarla. Las fórmulas se recalculan solas y el cuadro de pérdida del informe se actualiza al guardar."
-                : "Clic en cualquier texto para corregirlo; doble clic en una foto para editarla. Al guardar se rehacen el PDF y el ZIP."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span role="status" className="text-xs text-[color:var(--texto)]">{cambios > 0 ? `${cambios} cambio(s) sin guardar` : "Sin cambios"}</span>
-            <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar cambios"} deshabilitado={guardando || cambios === 0} onClick={() => void guardar()} />
-            <BotonIcono icono="cerrar" etiqueta="Cerrar" onClick={onCerrar} />
-          </div>
-        </div>
+    <>
+    <VentanaModal
+      etiqueta={`Vista previa de ${nombre}`}
+      titulo={nombre}
+      subtitulo={
+        vista?.tipo === "xlsx"
+          ? "Clic en una celda para editarla. Las fórmulas se recalculan solas y el cuadro de pérdida del informe se actualiza al guardar."
+          : "Clic en cualquier texto para corregirlo; doble clic en una foto para editarla. Al guardar se rehacen el PDF y el ZIP."
+      }
+      onCerrar={() => !foto && onCerrar()}
+      acciones={
+        <>
+          <span role="status" className="text-xs text-[color:var(--texto)]">{cambios > 0 ? `${cambios} cambio(s) sin guardar` : "Sin cambios"}</span>
+          <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar cambios"} deshabilitado={guardando || cambios === 0} onClick={() => void guardar()} />
+        </>
+      }
+    >
+      {({ maximizada }) => (
+      <>
         {error && <p role="alert" className="aviso aviso-error">{error}</p>}
         {info && <p role="status" className="aviso aviso-ok">{info}</p>}
         {avisos.map((a, i) => <p key={i} role="status" className="aviso aviso-alerta">{a}</p>)}
@@ -375,8 +385,9 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" className={`btn ${pestana === "editar" ? "" : "btn-sec"} !px-3 !py-1 text-sm`} onClick={() => setPestana("editar")}>Editar</button>
               <button type="button" className={`btn ${pestana === "pdf" ? "" : "btn-sec"} !px-3 !py-1 text-sm`} onClick={() => void verPdf()}>Vista exacta (PDF)</button>
+              {pestana === "editar" && <span className="ml-auto">{controlesZoom}</span>}
               {pestana === "editar" && (
-                <span className="ml-auto flex items-center gap-2" role="toolbar" aria-label="Formato del texto">
+                <span className="flex items-center gap-2" role="toolbar" aria-label="Formato del texto">
                   <BotonIcono icono="negrita" etiqueta="Negrita (Ctrl+B)" onClick={() => formato("bold")} />
                   <BotonIcono icono="cursiva" etiqueta="Cursiva (Ctrl+I)" onClick={() => formato("italic")} />
                   <BotonIcono icono="subrayado" etiqueta="Subrayado (Ctrl+U)" onClick={() => formato("underline")} />
@@ -386,9 +397,9 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
               )}
             </div>
             {pestana === "editar" ? (
-              <div className="overflow-auto rounded-lg border border-[color:var(--borde)] bg-[#6b7280] p-3" style={{ maxHeight: "64vh" }}>
+              <div className={`overflow-auto rounded-lg border border-[color:var(--borde)] bg-[#6b7280] p-3 ${maximizada ? "min-h-0 flex-1" : ""}`} style={{ maxHeight: maximizada ? undefined : "64vh" }}>
                 <style>{`.doc-ed p[contenteditable="true"]:hover{background:rgba(37,99,235,.07)}.doc-ed p[contenteditable="true"]:focus{outline:2px solid #2563eb;outline-offset:1px}.doc-ed p[data-sucio="1"]{box-shadow:inset 3px 0 0 #d97706}`}</style>
-                <div key={version} className="doc-ed mx-auto" style={{ background: "#fff", color: "#000", maxWidth: 816, padding: "48px 56px", fontFamily: '"Times New Roman", "Liberation Serif", serif', fontSize: 16, lineHeight: 1.3, boxShadow: "0 1px 6px rgba(0,0,0,.4)" }}>
+                <div key={version} className="doc-ed mx-auto" style={{ background: "#fff", color: "#000", maxWidth: 816, padding: "48px 56px", fontFamily: '"Times New Roman", "Liberation Serif", serif', fontSize: 16, lineHeight: 1.3, boxShadow: "0 1px 6px rgba(0,0,0,.4)", zoom }}>
                   <Bloques bloques={vista.bloques} c={contexto} />
                   {nuevos.length > 0 && (
                     <div style={{ borderTop: "2px dashed #d97706", marginTop: 12, paddingTop: 8 }}>
@@ -411,7 +422,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
                 </div>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-lg border border-[color:var(--borde)] bg-[color:var(--panel-2)]" style={{ height: "64vh" }}>
+              <div className={`overflow-hidden rounded-lg border border-[color:var(--borde)] bg-[color:var(--panel-2)] ${maximizada ? "min-h-0 flex-1" : ""}`} style={{ height: maximizada ? undefined : "64vh" }}>
                 {pdf.cargando && <p className="texto-suave p-4 text-sm">Generando la vista exacta con LibreOffice…</p>}
                 {pdf.error && <p role="alert" className="aviso aviso-alerta m-3">{pdf.error}</p>}
                 {pdf.url && <iframe title="Vista exacta del documento (PDF)" src={pdf.url} className="h-full w-full" />}
@@ -422,16 +433,19 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
 
         {vista?.tipo === "xlsx" && hojaActual && (
           <>
-            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Hojas del Excel">
+            <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Hojas del Excel">
               {vista.hojas.map((h, i) => (
                 <button key={h.nombre} type="button" role="tab" aria-selected={hoja === i} className={`btn ${hoja === i ? "" : "btn-sec"} !px-3 !py-1 text-sm`} onClick={() => setHoja(i)}>
                   {h.nombre}
                 </button>
               ))}
+              <span className="ml-auto">{controlesZoom}</span>
             </div>
             <Hoja
               key={`${hojaActual.nombre}-${version}`}
               h={hojaActual}
+              zoom={zoom}
+              maximizada={maximizada}
               ediciones={new Map([...celdas].filter(([k]) => k.startsWith(`${hojaActual.nombre}|`)).map(([k, v]) => [k.split("|")[1], v]))}
               alEditar={(r, c, v, original) =>
                 setCeldas((m) => {
@@ -445,7 +459,9 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
             />
           </>
         )}
-      </div>
+      </>
+      )}
+    </VentanaModal>
       {foto && (
         <EditorFoto
           key={foto.id}
@@ -459,6 +475,6 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
           }}
         />
       )}
-    </div>
+    </>
   );
 }

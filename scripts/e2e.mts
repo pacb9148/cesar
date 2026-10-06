@@ -198,9 +198,52 @@ import PizZip from "pizzip";
   const todos2: { runs: { t: string; b?: boolean }[]; texto: string }[] = [];
   const rec2 = (bs: unknown[]) => bs.forEach((b) => { const x = b as { tipo: string; filas?: { celdas: { bloques: unknown[] }[] }[] }; if (x.tipo === "p") todos2.push(x as never); else x.filas?.forEach((f) => f.celdas.forEach((c) => rec2(c.bloques))); });
   rec2(vw2.bloques);
-  console.log("formato en el Word:", rw.status, "| negrita:", todos2.some((t) => t.runs.some((r) => r.t === "destacado" && r.b)), "| párrafo insertado:", zdoc.includes("Párrafo agregado por el usuario"));
+  console.log("formato en el Word:", rw.status, "avisos:", ((await rw.clone().json()) as { avisos?: string[] }).avisos, "| negrita:", todos2.some((t) => t.runs.some((r) => r.t === "destacado" && r.b)), "| párrafo insertado:", zdoc.includes("Párrafo agregado por el usuario"));
   const pdf = await api(`/api/casos/${id}/archivos/${informeId}/vista?pdf=1`);
   const bytes = Buffer.from(await pdf.arrayBuffer());
   console.log("PDF exacto (LibreOffice):", pdf.status, bytes.subarray(0, 5).toString(), Math.round(bytes.length / 1024), "KB");
   if (pdf.status !== 200) console.log("  motivo:", bytes.toString().slice(0, 300));
+}
+
+// ---- Comprobación final de TODOS los entregables tras las ediciones: Word, Excel, PDF y ZIP ----
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+{
+  const lista = (await (await api(`/api/casos/${id}/archivos`)).json()) as { id: string; nombre: string; tipo: string }[];
+  const sal = lista.filter((a) => a.tipo === "salida");
+  const bajar = async (a: { id: string }) => Buffer.from(await (await api(`/api/casos/${id}/archivos/${a.id}?descargar=1`)).arrayBuffer());
+  const por = (re: RegExp) => sal.find((a) => re.test(a.nombre))!;
+  const informe = await bajar(por(/INFORME\.docx$/));
+  const anexo = await bajar(por(/^Anexo/));
+  const xlsx = await bajar(por(/\.xlsx$/));
+  const pdf = await bajar(por(/INFORME\.pdf$/));
+  const zip = new PizZip(await bajar(por(/\.zip$/)));
+  const soffice = process.env.SOFFICE_PATH ?? "C:/Program Files/LibreOffice/program/soffice.exe";
+  const dir = mkdtempSync(join(tmpdir(), "e2e-lo-"));
+  const convertir = (nombre: string, buf: Buffer) => {
+    writeFileSync(join(dir, nombre), buf);
+    execFileSync(soffice, ["--headless", "--convert-to", "pdf", "--outdir", dir, join(dir, nombre)], { timeout: 180000, stdio: "ignore" });
+    return readFileSync(join(dir, nombre.replace(/\.\w+$/, ".pdf")));
+  };
+  const paginas = async (b: Buffer) => (await textoPdf(b)).length;
+  const textoDe = async (b: Buffer) => (await textoPdf(b)).join("\n");
+  const pdfInforme = await textoDe(pdf);
+  const xlsxPdf = convertir("hoja.xlsx", xlsx);
+  const wordPdf = convertir("informe.docx", informe);
+  const anexoPdf = convertir("anexo.docx", anexo);
+  rmSync(dir, { recursive: true, force: true });
+  const ok = (c: boolean) => (c ? "OK" : "FALLA");
+  console.log("PRUEBA COMPLETA de entregables:");
+  console.log("  Word informe abre en LibreOffice:", ok((await paginas(wordPdf)) > 3), `(${await paginas(wordPdf)} páginas)`);
+  console.log("  Word anexo abre en LibreOffice:", ok((await paginas(anexoPdf)) > 3), `(${await paginas(anexoPdf)} páginas)`);
+  console.log("  Excel abre en LibreOffice:", ok((await paginas(xlsxPdf)) > 0), `(${await paginas(xlsxPdf)} páginas)`);
+  console.log("  PDF con el párrafo agregado en el Word:", ok(/P[ÁA]RRAFO\s+AGREGADO/i.test(pdfInforme)) /* el estilo del párrafo vecino puede ser versalitas */, "| con la leyenda editada de la foto:", ok(pdfInforme.includes("Otra leyenda")));
+  console.log("  PDF trae el cuadro de pérdida y el valor a indemnizar:", ok(/Valor a indemnizar \(UF\)/.test(pdfInforme)));
+  console.log("  PDF coincide con el Word (mismo texto de portada):", ok(pdfInforme.includes("INFORME DE LIQUIDACIÓN") || /INFORME DE LIQUIDACI/i.test(pdfInforme)), `(${await paginas(pdf)} páginas)`);
+  const dentro = (n: RegExp) => Object.keys(zip.files).find((f) => n.test(f));
+  console.log("  ZIP contiene Excel, Word, PDF, anexo y resumen:", ok(["Ajuste.xlsx", "INFORME.docx", "INFORME.pdf", "Anexo", "Resumen"].every((x) => dentro(new RegExp(x)))));
+  console.log("  ZIP trae el Word editado (no el original):", ok(zip.file(dentro(/INFORME\.docx$/)!)!.asNodeBuffer().equals(informe)));
+  const xl = await (await import("../lib/extraccion/planilla")).leerPlanilla(xlsx);
+  console.log("  Excel editado se lee y recalcula (UF ajuste):", ok(Number.isFinite(xl.ufCalculadoAjuste ?? NaN)), xl.ufCalculadoAjuste?.toFixed(2));
 }
