@@ -1,3 +1,6 @@
+import { aplicarEdicion } from "../fotos/aplicar";
+import { esEdicionNula } from "../fotos/recorte";
+import type { EdicionFoto } from "../fotos/recorte";
 import { FOTO_PX, FOTO_EMU, tablasDeFotos, type FotoCelda } from "./fotos-xml";
 import PizZip from "pizzip";
 import sharp from "sharp";
@@ -21,7 +24,7 @@ import {
   type Reemplazo,
 } from "./docx-xml";
 
-export type FotoInforme = { recinto: string; buffer: Buffer; leyenda?: string };
+export type FotoInforme = { recinto: string; buffer: Buffer; leyenda?: string; edicion?: EdicionFoto | null };
 
 export type Meteo = {
   estacion: string | null;
@@ -266,7 +269,7 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     }
     // Una sola cuadrícula de 2 × 3 (varias si hay más fotos); la fachada, si existe, abre la primera como fila de cabecera.
     const celdas: FotoCelda[] = [];
-    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.buffer, 0, { foto: true })).rid, leyenda: f.leyenda ?? f.recinto });
+    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer, 0, { foto: true })).rid, leyenda: f.edicion?.leyenda || f.leyenda || f.recinto });
     const fachada: FotoCelda | null = e.fachada[0] ? { rid: (await paq.imagen(e.fachada[0], 0, { foto: true })).rid, leyenda: "Fachada del inmueble" } : null;
     let ancla: Node = pImgs;
     for (const xml of tablasDeFotos(celdas, { fachada })) {

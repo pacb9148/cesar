@@ -11,6 +11,8 @@ import { GG_UTILIDADES_UNIFICADO, IVA } from "../domain/constantes";
 import { datosCasoSchema, type DatosCaso, type Reclamacion, type SalidaAgente } from "../domain/tipos";
 import type { ActaInspeccion } from "../extraccion/acta";
 import { esEscaneado, textoPdf } from "../extraccion/pdf";
+import { cargarPrevias, guardarResultado, limpiarAnalisis } from "./analisis-partidas";
+import { PROMPT_VERSION } from "../ia/prompt";
 import { ajustarCaso, tamanosDelAjuste, type EntradaAgente, type FotoModelo, type ResultadoAgente } from "../ia/agente";
 import { destinoDe, listarProveedores } from "../ia/repo-proveedores";
 import { emitir } from "../traza";
@@ -64,6 +66,11 @@ async function fotosParaModelo(casoId: string): Promise<FotoModelo[]> {
   return out;
 }
 
+/** Identifica a qué reclamación y a qué instrucciones pertenecen los resultados temporales de la lectura por partidas. */
+async function huellaDe(casoId: string): Promise<string> {
+  return `${(await leerReclamacion(casoId))?.hash ?? "sin-reclamacion"}:${PROMPT_VERSION}`;
+}
+
 async function prepararAjuste(casoId: string, usuarioId: string): Promise<EntradaAgente> {
   const { acta, datos, valorUF, recl } = await cargar(casoId, usuarioId);
   const modo = datos.modo;
@@ -79,6 +86,7 @@ async function prepararAjuste(casoId: string, usuarioId: string): Promise<Entrad
 export async function vistaPreviaAjuste(casoId: string, usuarioId: string) {
   const entrada = await prepararAjuste(casoId, usuarioId);
   const t = tamanosDelAjuste(entrada);
+  const reanudables = (await cargarPrevias(casoId, await huellaDe(casoId))).size;
   const bytesFotos = entrada.fotos.reduce((tt, f) => tt + f.base64.length, 0);
   const porRecinto: Record<string, number> = {};
   for (const f of entrada.fotos) porRecinto[f.recinto] = (porRecinto[f.recinto] ?? 0) + 1;
@@ -99,11 +107,13 @@ export async function vistaPreviaAjuste(casoId: string, usuarioId: string) {
     recintosActa: entrada.acta.danos.length,
     fotos: { cantidad: entrada.fotos.length, kb: Math.round(bytesFotos / 1024), porRecinto },
     pasos: [
-      ...t.lotes.map((l, i) => ({ nombre: `Clasificar partidas ${l.desde}–${l.hasta} (lote ${i + 1})`, kb: Math.round((l.caracteres + t.instruccionesClasificar) / 1024), tokens: tokens(l.caracteres + t.instruccionesClasificar), fotos: 0 })),
+      ...(t.partidas > 0
+        ? [{ nombre: `Leer cada partida por separado (${t.partidas} peticiones chicas, ${t.paralelo} a la vez${reanudables > 0 ? `; ${reanudables} ya analizadas se retoman sin repetir` : ""})`, kb: Math.round((t.caracteresPorPartida.medio + t.instruccionesClasificar) / 1024), tokens: tokens(t.caracteresPorPartida.medio + t.instruccionesClasificar), fotos: 0 }]
+        : []),
       { nombre: "Redactar descripción, evidencia y resumen (con las fotos)", kb: Math.round((t.datosRedactar + t.instruccionesRedactar + bytesFotos) / 1024), tokens: tokens(t.datosRedactar + t.instruccionesRedactar) + entrada.fotos.length * 400, fotos: entrada.fotos.length },
     ],
     proveedores,
-    muestraDatos: t.muestraLote,
+    muestraDatos: t.muestraPartida,
   };
 }
 
@@ -113,10 +123,15 @@ export async function ejecutarAjuste(casoId: string, usuarioId: string, cliente?
   // BYOK abierto: proveedores del propio usuario en orden de prioridad, con salto automático al siguiente si uno no responde.
   const cli = cliente ?? new ClienteConRespaldo(new RegistroDb(usuarioId));
   try {
-    const r = await ajustarCaso(entrada, cli);
+    const huella = await huellaDe(casoId);
+    const r = await ajustarCaso(entrada, cli, {
+      previas: () => cargarPrevias(casoId, huella),
+      guardar: (item, res) => guardarResultado(casoId, huella, item, res),
+    });
     const version = await guardarAjuste(casoId, r.salida, "agente", r.modelo, r.promptVersion);
     await registrarLlm({ casoId, tarea: "ajuste", modelo: r.modelo, promptVersion: r.promptVersion, tin: r.tokensEntrada, tout: r.tokensSalida, ok: r.validacion.errores.length === 0 });
     await actualizarCaso(casoId, { estado: "ajustado" });
+    await limpiarAnalisis(casoId); // el ajuste ya quedó consolidado en un solo documento: los resultados temporales sobran
     emitir("ok", "guardado", `Ajuste guardado como versión ${version} (${r.intentos} intento(s), ${r.validacion.errores.length} error(es) pendientes)`);
     return { ...r, version };
   } catch (e) {
@@ -218,9 +233,11 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     archivosConContenido(casoId, "foto"),
   ]);
 
-  const todas: FotoInforme[] = fotosDb.map((f) => ({ recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: leyendaDeFoto(f.recinto ?? "General", acta) }));
-  // El informe lleva solo el área afectada; el anexo, todas las fotos del caso.
-  const paraInforme = fotosDelAreaAfectada(todas, acta);
+  const todas: FotoInforme[] = fotosDb.map((f) => ({ recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: leyendaDeFoto(f.recinto ?? "General", acta), edicion: f.edicion }));
+  // Si el usuario marcó fotos para el informe, van esas (con su recorte); si no, las del área afectada. El anexo lleva todas.
+  const elegidas = todas.filter((f) => f.edicion?.incluir === true);
+  const paraInforme = elegidas.length > 0 ? elegidas : fotosDelAreaAfectada(todas, acta);
+  emitir("info", "informe", `${paraInforme.length} fotos para el informe (${elegidas.length > 0 ? "elegidas por ti" : "automáticas del área afectada"}); ${todas.filter((f) => f.edicion).length} con recorte editado`);
 
   emitir("ok", "informe", `Excel, cuadro y fotos listos; meteorología: ${met ? `estación ${met.estacion}` : "no disponible"}; ${fotosDb.length} fotos del caso, ${fachada.length} de fachada`);
   emitir("info", "informe", "Armando el informe Word con la plantilla");

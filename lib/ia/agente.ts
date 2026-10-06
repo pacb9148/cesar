@@ -7,8 +7,9 @@ import { armarFilas } from "../engine/filas";
 import { calcularTotales } from "../engine/totales";
 import { emitir } from "../traza";
 import { esquemaParaGemini, type ClienteLlm, type Parte } from "./gemini";
-import { clasificacionPorDefecto, clasificacionSchema, decidirLinea, loteSchema, type Clasificacion, type ContextoLinea } from "./motor-ajuste";
+import { clasificacionPorDefecto, clasificacionSchema, decidirLinea, type Clasificacion, type ContextoLinea } from "./motor-ajuste";
 import { PROMPT_VERSION, SYSTEM_CLASIFICAR, SYSTEM_NARRATIVA } from "./prompt";
+import { SinProveedores } from "./rotacion";
 import { validarSalida, type ResultadoValidacion } from "./validadores";
 
 export type FotoModelo = { id: string; recinto: string; mime: string; base64: string };
@@ -60,38 +61,34 @@ export function contextoDe(e: EntradaAgente, l: LineaReclamacion): ContextoLinea
   return { cub, m2Acta: m2 > 0 ? Math.round(m2 * 100) / 100 : null };
 }
 
-const TAM_LOTE = 10;
-const PARALELO = 3;
+const PARALELO = 4;
 
-export type Lote = { lineas: LineaReclamacion[]; texto: string };
+/** Todo lo que el modelo necesita para clasificar UNA partida: ella, su recinto, el daño del acta y sus candidatos de baremo. */
+export function textoDePartida(e: EntradaAgente, l: LineaReclamacion): string {
+  const c = contextoDe(e, l);
+  const dano = e.acta.danos.find((d) => coincide(norm(l.recinto), norm(d.recinto)));
+  const datos = {
+    caso: { fecha_siniestro: e.fechaSiniestro, hechos_del_acta: (e.acta.hechos ?? "").slice(0, 700), plancha_m2: PLANCHA_M2, cantidad_preventiva: CANTIDAD_PREVENTIVA },
+    partida: {
+      item: l.item,
+      seccion: l.recinto,
+      descripcion: l.descripcion,
+      um: l.um,
+      cantidad: l.cantidad,
+      pu: l.pu,
+      m2_danados_acta: c.m2Acta,
+      dano_en_acta: dano ? { tipo: dano.tipoDano, descripcion: dano.descripcion } : null,
+      medidas_recinto: c.cub ? { muro_neto: c.cub.muroNeto, pano: c.cub.pano, cielo: c.cub.cielo, piso: c.cub.piso, ml: c.cub.ml } : null,
+      baremo_candidatos: candidatos(l.descripcion, 4),
+    },
+  };
+  return `PARTIDA A CLASIFICAR (JSON):\n${JSON.stringify(datos)}`;
+}
 
-/** Partidas agrupadas de a pocas, con solo el contexto que cada una necesita: peticiones chicas que cualquier modelo contesta rápido. */
-export function lotesDeClasificacion(e: EntradaAgente, lineas = e.reclamacion.lineas): Lote[] {
-  const lotes: Lote[] = [];
-  for (let i = 0; i < lineas.length; i += TAM_LOTE) {
-    const grupo = lineas.slice(i, i + TAM_LOTE);
-    const datos = {
-      caso: { fecha_siniestro: e.fechaSiniestro, hechos_del_acta: (e.acta.hechos ?? "").slice(0, 700), plancha_m2: PLANCHA_M2, cantidad_preventiva: CANTIDAD_PREVENTIVA },
-      partidas: grupo.map((l) => {
-        const c = contextoDe(e, l);
-        const dano = e.acta.danos.find((d) => coincide(norm(l.recinto), norm(d.recinto)));
-        return {
-          item: l.item,
-          seccion: l.recinto,
-          descripcion: l.descripcion,
-          um: l.um,
-          cantidad: l.cantidad,
-          pu: l.pu,
-          m2_danados_acta: c.m2Acta,
-          dano_en_acta: dano ? { tipo: dano.tipoDano, descripcion: dano.descripcion } : null,
-          medidas_recinto: c.cub ? { muro_neto: c.cub.muroNeto, pano: c.cub.pano, cielo: c.cub.cielo, piso: c.cub.piso, ml: c.cub.ml } : null,
-          baremo_candidatos: candidatos(l.descripcion, 4),
-        };
-      }),
-    };
-    lotes.push({ lineas: grupo, texto: `PARTIDAS A CLASIFICAR (JSON):\n${JSON.stringify(datos)}` });
-  }
-  return lotes;
+/** Persistencia temporal de lo analizado, para retomar un ajuste interrumpido. En las pruebas y sin base no hace nada. */
+export interface AlmacenPartidas {
+  previas(): Promise<Map<string, Clasificacion>>;
+  guardar(item: string, r: { ok: true; clasificacion: Clasificacion; modelo?: string } | { ok: false; error: string }): Promise<void>;
 }
 
 export type ResultadoAgente = {
@@ -133,30 +130,72 @@ function leerJson(texto: string): unknown {
   }
 }
 
-/** Pide la clasificación de un lote; lo que el modelo no entregue bien se pide una vez más y, si sigue faltando, lo resuelve el motor por defecto. */
-async function clasificarLote(e: EntradaAgente, lote: Lote, n: number, total: number, cliente: ClienteLlm, acu: Acumulado): Promise<Map<string, Clasificacion>> {
-  const schema = esquemaParaGemini(loteSchema);
-  const buenas = new Map<string, Clasificacion>();
-  let pendientes = lote.lineas;
-  for (let intento = 1; intento <= 2 && pendientes.length > 0; intento++) {
-    const texto = intento === 1 ? lote.texto : lotesDeClasificacion(e, pendientes)[0].texto;
-    emitir("info", "clasificar", `Lote ${n}/${total}: se pide clasificar ${pendientes.length} partida(s)${intento > 1 ? " (reintento de las que faltaron)" : ""}`);
-    const r = await cliente.generarJson({ system: SYSTEM_CLASIFICAR, partes: [{ text: texto }], schema, maxSalida: 8192 });
+const SIN_ITEM = clasificacionSchema.omit({ item: true });
+
+const esFalloDeProveedores = (e: unknown) => e instanceof SinProveedores || (e instanceof Error && /^Ning[uú]n proveedor/i.test(e.message));
+
+/** Lectura de UNA partida: una petición pequeña y propia. Si la respuesta no es válida se pide una vez más; si sigue mal, devuelve null. */
+async function clasificarPartida(e: EntradaAgente, l: LineaReclamacion, cliente: ClienteLlm, acu: Acumulado): Promise<{ clasificacion: Clasificacion | null; modelo?: string; error?: string }> {
+  const schema = esquemaParaGemini(SIN_ITEM);
+  let ultimo = "";
+  for (let intento = 1; intento <= 2; intento++) {
+    const r = await cliente.generarJson({ system: SYSTEM_CLASIFICAR, partes: [{ text: textoDePartida(e, l) }], schema, maxSalida: 4096 });
     acu.llamadas++;
     acu.tin += r.tokensEntrada ?? 0;
     acu.tout += r.tokensSalida ?? 0;
     acu.modelos.add(r.modelo);
     for (const a of r.avisos ?? []) aviso(acu, a);
-    const j = leerJson(r.texto) as { decisiones?: unknown[] } | null;
-    const items = new Set(pendientes.map((l) => l.item));
-    for (const d of Array.isArray(j?.decisiones) ? j.decisiones : []) {
-      const p = clasificacionSchema.safeParse(d);
-      if (p.success && items.has(p.data.item)) buenas.set(p.data.item, p.data);
-    }
-    pendientes = lote.lineas.filter((l) => !buenas.has(l.item));
-    emitir(pendientes.length === 0 ? "ok" : "error", "clasificar", pendientes.length === 0 ? `Lote ${n}/${total}: ${lote.lineas.length} partida(s) clasificada(s)` : `Lote ${n}/${total}: faltan ${pendientes.length} partida(s) bien formadas (${pendientes.map((l) => l.item).join(", ")})`, pendientes.length ? r.texto.slice(0, 500) : undefined);
+    const p = SIN_ITEM.safeParse(leerJson(r.texto));
+    if (p.success) return { clasificacion: { ...p.data, item: l.item }, modelo: r.modelo };
+    ultimo = `respuesta no válida: ${p.error.issues.slice(0, 3).map((x) => `${x.path.join(".")} ${x.message}`).join("; ")}`;
+    emitir("error", "partida", `Partida ${l.item}: ${ultimo}${intento < 2 ? " (se reintenta)" : ""}`, r.texto.slice(0, 400));
   }
-  return buenas;
+  return { clasificacion: null, error: ultimo };
+}
+
+/**
+ * Lee el presupuesto partida por partida (cada una en su propia petición, varias a la vez), guarda cada resultado apenas llega y,
+ * al terminar todas, los junta. Lo ya analizado en una corrida anterior interrumpida no se repite.
+ */
+async function clasificarTodas(e: EntradaAgente, cliente: ClienteLlm, acu: Acumulado, almacen?: AlmacenPartidas): Promise<Map<string, Clasificacion>> {
+  const lineas = e.modo === "reclamacion" ? e.reclamacion.lineas : [];
+  const clasif = new Map<string, Clasificacion>(await (almacen?.previas() ?? Promise.resolve(new Map<string, Clasificacion>())));
+  const pendientes = lineas.filter((l) => !clasif.has(l.item));
+  if (lineas.length === 0) {
+    emitir("info", "partida", "Sin presupuesto del contratista: no hay partidas que leer");
+    return clasif;
+  }
+  emitir("info", "partida", `${lineas.length} partidas: ${clasif.size} ya analizadas en una corrida anterior, ${pendientes.length} por leer (una petición por partida, ${PARALELO} a la vez)`);
+  let hechas = clasif.size;
+  let fatal: unknown = null;
+  await conLimite(pendientes, PARALELO, async (l) => {
+    if (fatal) return;
+    try {
+      const r = await clasificarPartida(e, l, cliente, acu);
+      hechas++;
+      if (r.clasificacion) {
+        clasif.set(l.item, r.clasificacion);
+        await almacen?.guardar(l.item, { ok: true, clasificacion: r.clasificacion, modelo: r.modelo });
+        emitir("ok", "partida", `Partida ${l.item} leída (${hechas}/${lineas.length}): ${r.clasificacion.categoria}${r.clasificacion.baremo_id != null ? `, baremo ${r.clasificacion.baremo_id}` : ""}, base ${r.clasificacion.base}`);
+      } else {
+        await almacen?.guardar(l.item, { ok: false, error: r.error ?? "sin respuesta válida" });
+        emitir("error", "partida", `Partida ${l.item} (${hechas}/${lineas.length}): sin clasificación válida; la resolverán las reglas automáticas`);
+      }
+    } catch (err) {
+      if (esFalloDeProveedores(err)) {
+        fatal = err;
+        await almacen?.guardar(l.item, { ok: false, error: err instanceof Error ? err.message : "proveedores sin respuesta" });
+        emitir("error", "partida", `Partida ${l.item}: ningún proveedor respondió; se detiene la lectura`, err instanceof Error ? err.message : undefined);
+        return;
+      }
+      throw err;
+    }
+  });
+  if (fatal) {
+    const faltan = lineas.filter((l) => !clasif.has(l.item)).length;
+    throw new Error(`${fatal instanceof Error ? fatal.message : "Los proveedores no respondieron."} Se leyeron ${clasif.size} de ${lineas.length} partidas y quedaron guardadas: al volver a ejecutar se retoma con las ${faltan} que faltan.`);
+  }
+  return clasif;
 }
 
 type Digesto = { directoReclamado: number; directoAjustado: number; ufReclamada: number; ufAjustada: number; porLetra: Record<string, number>; partidas: number };
@@ -262,13 +301,9 @@ async function redactar(e: EntradaAgente, lineas: DecisionLinea[], d: Digesto, c
  * permitido (baremo y medición del acta). 2) El modelo redacta la parte descriptiva con las fotos. Si un paso del modelo
  * falla por formato, el motor resuelve por defecto y deja el aviso; un fallo de conexión con todos los proveedores sí se propaga.
  */
-export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm): Promise<ResultadoAgente> {
+export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm, almacen?: AlmacenPartidas): Promise<ResultadoAgente> {
   const acu: Acumulado = { tin: 0, tout: 0, llamadas: 0, modelos: new Set(), avisos: [] };
-  const lotes = e.modo === "reclamacion" ? lotesDeClasificacion(e) : [];
-  emitir("info", "clasificar", lotes.length ? `${e.reclamacion.lineas.length} partidas en ${lotes.length} lote(s) de hasta ${TAM_LOTE}, hasta ${PARALELO} a la vez` : "Sin presupuesto del contratista: no hay partidas que clasificar");
-  const resultados = await conLimite(lotes, PARALELO, (l, i) => clasificarLote(e, l, i + 1, lotes.length, cliente, acu));
-  const clasif = new Map<string, Clasificacion>();
-  for (const m of resultados) for (const [k, v] of m) clasif.set(k, v);
+  const clasif = await clasificarTodas(e, cliente, acu, almacen);
 
   const lineas: DecisionLinea[] = [];
   let porDefecto = 0;
@@ -291,12 +326,15 @@ export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm): Promis
 
 /** Tamaños de lo que se enviará en cada paso, sin llamar a la IA (para la vista previa). */
 export function tamanosDelAjuste(e: EntradaAgente) {
-  const lotes = e.modo === "reclamacion" ? lotesDeClasificacion(e) : [];
+  const textos = e.modo === "reclamacion" ? e.reclamacion.lineas.map((l) => textoDePartida(e, l)) : [];
+  const largos = textos.map((t) => t.length);
   return {
-    lotes: lotes.map((l) => ({ partidas: l.lineas.length, caracteres: l.texto.length, desde: l.lineas[0].item, hasta: l.lineas[l.lineas.length - 1].item })),
+    partidas: textos.length,
+    caracteresPorPartida: { min: largos.length ? Math.min(...largos) : 0, max: largos.length ? Math.max(...largos) : 0, medio: largos.length ? Math.round(largos.reduce((a, b) => a + b, 0) / largos.length) : 0 },
     instruccionesClasificar: SYSTEM_CLASIFICAR.length,
     instruccionesRedactar: SYSTEM_NARRATIVA.length,
     datosRedactar: JSON.stringify(datosNarrativa(e, null)).length,
-    muestraLote: lotes[0]?.texto.slice(0, 1800) ?? "",
+    paralelo: PARALELO,
+    muestraPartida: textos[0]?.slice(0, 1800) ?? "",
   };
 }

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { consulta, transaccion, uno } from "../db";
 import type { DatosCaso, Reclamacion, SalidaAgente } from "../domain/tipos";
+import type { EdicionFoto } from "../fotos/recorte";
 import type { TipoArchivo } from "./clasificar";
 
 export type Caso = {
@@ -24,6 +25,8 @@ export type ArchivoMeta = {
   tamano: number;
   recinto: string | null;
   orden: number;
+  /** Edición de la fotografía (recorte, giro, ajustes y si va al informe); null si no se tocó. */
+  edicion: EdicionFoto | null;
 };
 
 const tocar = "update casos set actualizado = now() where id = $1";
@@ -65,7 +68,7 @@ export async function guardarArchivo(a: { casoId: string; nombre: string; tipo: 
 
 export const listarArchivos = (casoId: string, tipo?: string) =>
   consulta<ArchivoMeta>(
-    `select id, caso_id, nombre, tipo, mime, tamano, recinto, orden from archivos
+    `select id, caso_id, nombre, tipo, mime, tamano, recinto, orden, edicion from archivos
      where caso_id = $1 ${tipo ? "and tipo = $2" : ""} order by tipo, recinto nulls first, orden, nombre`,
     tipo ? [casoId, tipo] : [casoId],
   );
@@ -75,10 +78,16 @@ export async function contenidoArchivo(id: string, casoId: string): Promise<{ no
 }
 
 export async function archivosConContenido(casoId: string, tipo: string) {
-  return consulta<{ id: string; nombre: string; mime: string; recinto: string | null; contenido: Buffer }>(
-    "select id, nombre, mime, recinto, contenido from archivos where caso_id = $1 and tipo = $2 order by recinto nulls first, orden, nombre",
+  return consulta<{ id: string; nombre: string; mime: string; recinto: string | null; contenido: Buffer; edicion: EdicionFoto | null }>(
+    "select id, nombre, mime, recinto, contenido, edicion from archivos where caso_id = $1 and tipo = $2 order by recinto nulls first, orden, nombre",
     [casoId, tipo],
   );
+}
+
+export async function guardarEdicionFoto(id: string, casoId: string, edicion: EdicionFoto | null): Promise<boolean> {
+  const r = await uno<{ id: string }>("update archivos set edicion = $3::jsonb where id = $1 and caso_id = $2 and tipo = 'foto' returning id", [id, casoId, edicion ? JSON.stringify(edicion) : null]);
+  if (r) await consulta(tocar, [casoId]);
+  return !!r;
 }
 
 export async function eliminarArchivo(id: string, casoId: string) {

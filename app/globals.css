@@ -58,6 +58,15 @@ body {
   .btn:hover:not(:disabled) { filter: brightness(1.08); }
   .btn:disabled { opacity: .55; cursor: not-allowed; }
   .btn-sec { background: var(--panel-2); color: var(--texto); border-color: var(--borde); }
+  /* Botones de solo icono (editor de fotos): interruptores con aria-pressed. */
+  .btn-icono {
+    display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem;
+    background: var(--panel-2); color: var(--texto); border: 1px solid var(--borde); border-radius: .5rem; cursor: pointer;
+  }
+  .btn-icono:hover:not(:disabled) { border-color: var(--acento); }
+  .btn-icono[aria-pressed="true"] { background: var(--acento); color: var(--acento-texto); border-color: var(--acento); }
+  .btn-icono:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-icono:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
   .campo {
     width: 100%; background: var(--panel); color: var(--texto); border: 1px solid var(--borde);
     border-radius: .5rem; padding: .5rem .65rem;

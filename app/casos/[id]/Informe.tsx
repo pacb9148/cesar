@@ -3,6 +3,7 @@
 import type { ArchivoMeta, Caso } from "@/lib/caso/repositorio";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
+import FotosInforme from "./FotosInforme";
 
 type Gen = { entregables: { id: string; nombre: string }[]; motorPdf: string; faltantes: string[]; totales: { reclamacionUF: number; ajusteUF: number; indemnizacionUF: number } };
 
@@ -39,6 +40,7 @@ export default function Informe({ caso, archivos, tieneAjuste }: { caso: Caso; a
           </div>
         )}
       </div>
+      <FotosInforme casoId={caso.id} fotos={archivos.filter((a) => a.tipo === "foto")} />
       {salidas.length > 0 && (
         <div className="panel p-5">
           <h3 className="mb-2 font-semibold">Descargas</h3>

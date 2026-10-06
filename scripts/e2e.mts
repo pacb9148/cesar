@@ -112,6 +112,17 @@ const salida: SalidaAgente = {
 const put = await api(`/api/casos/${id}/ajuste`, { method: "PUT", json: salida });
 console.log("ajuste manual:", put.status, put.status === 200 ? "" : await put.text());
 
+// Edición de fotos: se eligen 3 para el informe, una con zoom, giro y volteo; deben ser exactamente las que aparecen.
+const listado = (await (await api(`/api/casos/${id}/archivos`)).json()) as { id: string; tipo: string; nombre: string }[];
+const fotosCaso = listado.filter((a) => a.tipo === "foto");
+const edit = { giro: 90, volteoH: true, volteoV: false, zoom: 2, cx: 0.3, cy: 0.6, brillo: 10, contraste: 10, saturacion: 0, leyenda: "Leyenda editada", incluir: true };
+for (const [i, f] of fotosCaso.slice(0, 3).entries()) {
+  const r = await api(`/api/casos/${id}/archivos/${f.id}/edicion`, { method: "PUT", json: i === 0 ? edit : { ...edit, giro: 0, volteoH: false, zoom: 1, cx: 0.5, cy: 0.5, brillo: 0, contraste: 0, leyenda: undefined } });
+  console.log("edición foto", i + 1, r.status);
+}
+const miniatura = await api(`/api/casos/${id}/archivos/${fotosCaso[0].id}?miniatura=1`);
+console.log("miniatura:", miniatura.status, miniatura.headers.get("content-type"), (await miniatura.arrayBuffer()).byteLength, "bytes");
+
 const t0 = Date.now();
 const gen = await api(`/api/casos/${id}/generar`, { method: "POST" });
 const g = await resultadoDeFlujo<{ entregables?: { id: string; nombre: string }[]; totales?: unknown; faltantes?: string[]; motorPdf?: string }>(gen);
@@ -121,4 +132,13 @@ for (const e of g.entregables ?? []) {
   const r = await api(`/api/casos/${id}/archivos/${e.id}?descargar=1`);
   writeFileSync(join("tmp/e2e", e.nombre), Buffer.from(await r.arrayBuffer()));
   console.log("  →", e.nombre);
+}
+
+// Comprobación del informe: solo las 3 fotos elegidas (+ la fachada de cabecera, si hay) y con la leyenda editada.
+import PizZip from "pizzip";
+{
+  const docx = new PizZip(readFileSync(join("tmp/e2e", `${(g.entregables ?? []).find((e) => /INFORME\.docx$/.test(e.nombre))?.nombre}`)));
+  const xml = docx.file("word/document.xml")!.asText();
+  const fotos = (xml.match(/<wp:extent cx="2808000" cy="2340000"\/>/g) ?? []).length;
+  console.log("fotos 7,8×6,5 cm en el informe:", fotos, "(esperado 3, o 4 con fachada); leyenda editada:", xml.includes("Leyenda editada"));
 }
