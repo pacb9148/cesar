@@ -5,7 +5,7 @@ import { BotonIcono, Icono, type NombreIcono } from "@/components/Iconos";
 import VentanaModal from "@/components/VentanaModal";
 import { LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
-import { EDICION_INICIAL, PROPORCION_FOTO, ZOOM_MAX, centroValido, dimensionesGiradas, girar, ventanaDeRecorte, type EdicionFoto } from "@/lib/fotos/recorte";
+import { EDICION_INICIAL, PROPORCION_FOTO, ZOOM_MAX, centroValido, dimensionesGiradas, encuadreDeRectangulo, girar, ventanaBase, ventanaDeRecorte, type EdicionFoto } from "@/lib/fotos/recorte";
 
 type ColorCuadricula = "negro" | "blanco" | "gris";
 type Cuadricula = { visible: boolean; cols: number; filas: number; cuadradas: boolean; diagonales: boolean; etiquetas: boolean; color: ColorCuadricula; opacidad: number; grosor: 0.5 | 1; ox: number; oy: number };
@@ -70,7 +70,8 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
   const [ed, setEd] = useState<EdicionFoto>(() => ({ ...EDICION_INICIAL, ...(foto.edicion ?? {}) }));
   // El editor solo se monta al abrirlo (en el navegador): se pueden leer las preferencias directamente.
   const [gr, setGr] = useState<Cuadricula>(leerPrefs);
-  const [modo, setModo] = useState<"imagen" | "cuadricula">("imagen");
+  const [modo, setModo] = useState<"imagen" | "cuadricula" | "area">("imagen");
+  const [banda, setBanda] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -78,6 +79,8 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
   const mini = useRef<HTMLCanvasElement>(null);
   const escenario = useRef<HTMLDivElement>(null);
   const arrastre = useRef<{ x: number; y: number } | null>(null);
+  // Arrastre sobre el mapa: mover el marco o cambiar su tamaño desde una esquina (la opuesta queda fija).
+  const mapaArrastre = useRef<{ tipo: "mover"; dx: number; dy: number } | { tipo: "tamano"; ax: number; ay: number; sx: 1 | -1; sy: 1 | -1 } | null>(null);
 
   useEffect(() => {
     try {
@@ -124,6 +127,14 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
       cm.lineWidth = 1.5;
       cm.strokeStyle = "#fff";
       cm.strokeRect(v.x * k, v.y * k, v.w * k, v.h * k);
+      // Asas de las esquinas: se arrastran para ampliar o reducir el marco.
+      for (const [hx, hy] of [[v.x, v.y], [v.x + v.w, v.y], [v.x, v.y + v.h], [v.x + v.w, v.y + v.h]]) {
+        cm.fillStyle = "#fff";
+        cm.strokeStyle = "#000";
+        cm.lineWidth = 1.5;
+        cm.fillRect(hx * k - 5, hy * k - 5, 10, 10);
+        cm.strokeRect(hx * k - 5, hy * k - 5, 10, 10);
+      }
     }
   }, [prep, ed]);
 
@@ -161,10 +172,62 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
     cambiar({ cx: ed.cx - (dx * (v.w / ancho)) / prep.width, cy: ed.cy - (dy * (v.h / alto)) / prep.height });
   }
 
-  async function guardar() {
+  /** Posición del puntero sobre el mapa, en píxeles de la imagen girada. */
+  function enMapa(e: React.PointerEvent<HTMLCanvasElement>) {
+    const m = mini.current!;
+    const r = m.getBoundingClientRect();
+    const k = m.width / prep!.width;
+    return { px: ((e.clientX - r.left) * (m.width / r.width)) / k, py: ((e.clientY - r.top) * (m.height / r.height)) / k, k: k * (r.width / m.width) };
+  }
+  function mapaAbajo(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!prep) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const { px, py, k } = enMapa(e);
+    const v = ventanaDeRecorte(prep.width, prep.height, ed);
+    const radio = 12 / k;
+    const esquinas: [number, number, 1 | -1, 1 | -1][] = [
+      [v.x, v.y, -1, -1],
+      [v.x + v.w, v.y, 1, -1],
+      [v.x, v.y + v.h, -1, 1],
+      [v.x + v.w, v.y + v.h, 1, 1],
+    ];
+    const e1 = esquinas.find(([x, y]) => Math.hypot(px - x, py - y) <= radio);
+    if (e1) {
+      // La esquina opuesta queda fija.
+      const [, , sx, sy] = e1;
+      mapaArrastre.current = { tipo: "tamano", ax: sx === 1 ? v.x : v.x + v.w, ay: sy === 1 ? v.y : v.y + v.h, sx, sy };
+      return;
+    }
+    const dentro = px >= v.x && px <= v.x + v.w && py >= v.y && py <= v.y + v.h;
+    if (!dentro) cambiar({ cx: px / prep.width, cy: py / prep.height });
+    mapaArrastre.current = { tipo: "mover", dx: dentro ? px - (v.x + v.w / 2) : 0, dy: dentro ? py - (v.y + v.h / 2) : 0 };
+  }
+  function mapaMueve(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!prep) return;
+    const { px, py } = enMapa(e);
+    const a = mapaArrastre.current;
+    if (!a) {
+      // Cursor según lo que hay bajo el puntero.
+      const v = ventanaDeRecorte(prep.width, prep.height, ed);
+      const { k } = enMapa(e);
+      const cerca = [[v.x, v.y], [v.x + v.w, v.y + v.h], [v.x + v.w, v.y], [v.x, v.y + v.h]].some(([x, y]) => Math.hypot(px - x, py - y) <= 12 / k);
+      e.currentTarget.style.cursor = cerca ? "nwse-resize" : px >= v.x && px <= v.x + v.w && py >= v.y && py <= v.y + v.h ? "move" : "crosshair";
+      return;
+    }
+    if (a.tipo === "mover") {
+      cambiar({ cx: (px - a.dx) / prep.width, cy: (py - a.dy) / prep.height });
+      return;
+    }
+    const base = ventanaBase(prep.width, prep.height);
+    const w = limitar(Math.max(Math.abs(px - a.ax), Math.abs(py - a.ay) * PROPORCION_FOTO), base.w / ZOOM_MAX, base.w);
+    const h = w / PROPORCION_FOTO;
+    cambiar({ zoom: base.w / w, cx: (a.ax + (a.sx * w) / 2) / prep.width, cy: (a.ay + (a.sy * h) / 2) / prep.height });
+  }
+
+  async function guardar(insertar = false) {
     setGuardando(true);
     setError(null);
-    const cuerpo = { ...ed, leyenda: ed.leyenda?.trim() || undefined };
+    const cuerpo = { ...ed, ...(insertar ? { incluir: true } : {}), leyenda: ed.leyenda?.trim() || undefined };
     const r = await fetch(`/api/casos/${casoId}/archivos/${foto.id}/edicion`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
     setGuardando(false);
     if (!r.ok) return setError(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar");
@@ -202,9 +265,12 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
       nivel={60}
       acciones={
         <>
-          <BotonIcono icono="check" etiqueta={ed.incluir ? "Va al informe (clic para quitarla)" : "Incluir en el informe"} activo={!!ed.incluir} onClick={() => setEd((e) => ({ ...e, incluir: !e.incluir }))} />
+          <button type="button" className="btn !px-3 !py-1.5 text-sm" disabled={guardando} onClick={() => void guardar(true)} title="Guarda el recorte, marca la foto para el informe y actualiza el documento">
+            <Icono nombre="check" tam={18} /> Insertar en el informe
+          </button>
+          <BotonIcono icono="check" etiqueta={ed.incluir ? "Va al informe (clic para quitarla)" : "Marcar para el informe"} activo={!!ed.incluir} onClick={() => setEd((e) => ({ ...e, incluir: !e.incluir }))} />
           <BotonIcono icono="reiniciar" etiqueta="Restablecer todo" onClick={() => setEd({ ...EDICION_INICIAL, incluir: ed.incluir })} />
-          <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar edición"} deshabilitado={guardando} onClick={guardar} />
+          <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar edición"} deshabilitado={guardando} onClick={() => void guardar()} />
         </>
       }
     >
@@ -225,6 +291,21 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
               <BotonIcono icono="volteoH" etiqueta="Voltear izquierda/derecha" activo={ed.volteoH} onClick={() => cambiar({ volteoH: !ed.volteoH })} />
               <BotonIcono icono="volteoV" etiqueta="Voltear arriba/abajo" activo={ed.volteoV} onClick={() => cambiar({ volteoV: !ed.volteoV })} />
             </div>
+            <div>
+              <canvas
+                ref={mini}
+                width={480}
+                height={360}
+                className="mx-auto block w-full touch-none rounded border border-[color:var(--borde)]"
+                aria-label="Mapa de la fotografía: arrastra el marco para moverlo y sus esquinas para ampliarlo o reducirlo"
+                role="img"
+                onPointerDown={mapaAbajo}
+                onPointerMove={mapaMueve}
+                onPointerUp={() => (mapaArrastre.current = null)}
+                onPointerCancel={() => (mapaArrastre.current = null)}
+              />
+              <p className="mt-1 text-center text-xs text-[color:var(--suave)]">Arrastra el marco para moverlo y sus esquinas para ampliar o reducir.</p>
+            </div>
             <Deslizador icono="zoomMas" etiqueta="Ampliación" valor={ed.zoom} min={1} max={ZOOM_MAX} paso={0.05} onChange={(n) => cambiar({ zoom: n })} />
             <Deslizador icono="sol" etiqueta="Brillo" valor={ed.brillo} min={-100} max={100} paso={1} onChange={(n) => cambiar({ brillo: n })} />
             <Deslizador icono="contraste" etiqueta="Contraste" valor={ed.contraste} min={-100} max={100} paso={1} onChange={(n) => cambiar({ contraste: n })} />
@@ -241,20 +322,46 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
             <div
               ref={escenario}
               className={`relative mx-auto w-full touch-none select-none overflow-hidden rounded-lg border border-[color:var(--borde)] bg-black ${maximizada ? "max-w-none" : "max-w-[640px]"}`}
-              style={{ aspectRatio: `${PROPORCION_FOTO}`, cursor: modo === "cuadricula" ? "move" : "grab" }}
+              style={{ aspectRatio: `${PROPORCION_FOTO}`, cursor: modo === "area" ? "crosshair" : modo === "cuadricula" ? "move" : "grab" }}
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId);
-                arrastre.current = { x: e.clientX, y: e.clientY };
+                const r = e.currentTarget.getBoundingClientRect();
+                if (modo === "area") setBanda({ x0: e.clientX - r.left, y0: e.clientY - r.top, x1: e.clientX - r.left, y1: e.clientY - r.top });
+                else arrastre.current = { x: e.clientX, y: e.clientY };
               }}
               onPointerMove={(e) => {
+                if (modo === "area") {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const x1 = e.clientX - r.left;
+                  const y1 = e.clientY - r.top;
+                  setBanda((b) => (b ? { ...b, x1, y1 } : b));
+                  return;
+                }
                 if (!arrastre.current) return;
                 mover(e.clientX - arrastre.current.x, e.clientY - arrastre.current.y);
                 arrastre.current = { x: e.clientX, y: e.clientY };
               }}
-              onPointerUp={() => (arrastre.current = null)}
-              onPointerCancel={() => (arrastre.current = null)}
+              onPointerUp={() => {
+                arrastre.current = null;
+                if (!banda || !prep || !escenario.current) return setBanda(null);
+                // El rectángulo dibujado pasa a ser el nuevo encuadre (ampliado a la proporción del marco).
+                const W = escenario.current.clientWidth;
+                const H = escenario.current.clientHeight;
+                const v = ventanaDeRecorte(prep.width, prep.height, ed);
+                const x = Math.min(banda.x0, banda.x1);
+                const y = Math.min(banda.y0, banda.y1);
+                const w = Math.abs(banda.x1 - banda.x0);
+                const h = Math.abs(banda.y1 - banda.y0);
+                setBanda(null);
+                if (w < 8 || h < 8) return;
+                cambiar(encuadreDeRectangulo(prep.width, prep.height, { x: v.x + (x / W) * v.w, y: v.y + (y / H) * v.h, w: (w / W) * v.w, h: (h / H) * v.h }));
+              }}
+              onPointerCancel={() => {
+                arrastre.current = null;
+                setBanda(null);
+              }}
               role="img"
-              aria-label="Vista del recorte. Arrastra para mover la imagen; la rueda amplía y reduce."
+              aria-label="Vista del recorte. Arrastra para mover la imagen; la rueda amplía y reduce; en el modo selección, dibuja un rectángulo para ampliar esa zona."
             >
               <canvas ref={lienzo} width={936} height={780} className="block h-full w-full" style={{ filter: `brightness(${1 + ed.brillo / 100}) contrast(${1 + ed.contraste / 100}) saturate(${1 + ed.saturacion / 100})` }} />
               {gr.visible && (
@@ -274,16 +381,20 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
                     })}
                 </>
               )}
+              {banda && (
+                <div className="pointer-events-none absolute" style={{ left: Math.min(banda.x0, banda.x1), top: Math.min(banda.y0, banda.y1), width: Math.abs(banda.x1 - banda.x0), height: Math.abs(banda.y1 - banda.y0), border: "1px dashed #fff", outline: "1px solid #000", background: "rgba(255,255,255,.12)" }} aria-hidden="true" />
+              )}
               {!img && !error && <span className="absolute inset-0 grid place-items-center text-sm text-white">Cargando fotografía…</span>}
             </div>
-            <p className="text-center text-xs text-[color:var(--suave)]">Marco de 7,8 × 6,5 cm, tal como irá en el informe. Arrastra para encuadrar el área; la rueda amplía.</p>
+            <p className="text-center text-xs text-[color:var(--suave)]">Marco de 7,8 × 6,5 cm, tal como irá en el informe. Arrastra para encuadrar; la rueda amplía; con el icono de selección dibuja un rectángulo sobre el detalle que quieres.</p>
           </div>
 
           {/* Derecha: cuadrícula de guía y mapa */}
           <div className="space-y-3 rounded-lg border border-[color:var(--borde)] bg-[color:var(--panel-2)] p-3">
             <div className="flex flex-wrap gap-2">
+              <BotonIcono icono="seleccion" etiqueta="Seleccionar un área para ampliarla (dibuja un rectángulo)" activo={modo === "area"} onClick={() => setModo((m) => (m === "area" ? "imagen" : "area"))} />
               <BotonIcono icono="cuadricula" etiqueta="Mostrar cuadrícula" activo={gr.visible} onClick={() => setGr((g) => ({ ...g, visible: !g.visible }))} />
-              <BotonIcono icono="mano" etiqueta="Mover la cuadrícula (en vez de la imagen)" activo={modo === "cuadricula"} onClick={() => setModo((m) => (m === "imagen" ? "cuadricula" : "imagen"))} deshabilitado={!gr.visible} />
+              <BotonIcono icono="mano" etiqueta="Mover la cuadrícula (en vez de la imagen)" activo={modo === "cuadricula"} onClick={() => setModo((m) => (m === "cuadricula" ? "imagen" : "cuadricula"))} deshabilitado={!gr.visible} />
               <BotonIcono icono="cuadrado" etiqueta="Celdas cuadradas" activo={gr.cuadradas} onClick={() => setGr((g) => ({ ...g, cuadradas: !g.cuadradas }))} />
               <BotonIcono icono="diagonal" etiqueta="Líneas diagonales" activo={gr.diagonales} onClick={() => setGr((g) => ({ ...g, diagonales: !g.diagonales }))} />
               <BotonIcono icono="etiqueta" etiqueta="Etiquetar celdas" activo={gr.etiquetas} onClick={() => setGr((g) => ({ ...g, etiquetas: !g.etiquetas }))} />
@@ -298,10 +409,6 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
               <BotonIcono icono="grosor" etiqueta={gr.grosor === 0.5 ? "Línea ultrafina (clic para 1 px)" : "Línea de 1 px (clic para ultrafina)"} activo={gr.grosor === 1} onClick={() => setGr((g) => ({ ...g, grosor: g.grosor === 0.5 ? 1 : 0.5 }))} />
             </div>
             <Deslizador icono="opacidad" etiqueta="Opacidad de la cuadrícula" valor={gr.opacidad} min={0.1} max={1} paso={0.05} onChange={(n) => setGr((g) => ({ ...g, opacidad: n }))} />
-            <div>
-              <canvas ref={mini} width={200} height={150} className="mx-auto block w-full max-w-[200px] rounded border border-[color:var(--borde)]" aria-label="Ubicación del recorte en la fotografía completa" role="img" />
-              <p className="mt-1 text-center text-xs text-[color:var(--suave)]">Ubicación en la foto completa</p>
-            </div>
           </div>
         </div>
       </div>

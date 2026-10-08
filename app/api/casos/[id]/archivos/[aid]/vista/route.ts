@@ -14,6 +14,8 @@ const cuerpo = z.object({
       parrafos: z.record(z.string().regex(/^\d+$/), runs).refine((o) => Object.keys(o).length <= 500, "Demasiados párrafos editados").optional(),
       insertar: z.array(z.object({ despuesDe: z.number().int().min(0), runs })).max(200).optional(),
       eliminar: z.array(z.number().int().min(0)).max(500).optional(),
+      imagenes: z.array(z.object({ idx: z.number().int().min(0), cx: z.number().int().min(36000).max(10800000), cy: z.number().int().min(36000).max(10800000) })).max(200).optional(),
+      quitarImagenes: z.array(z.number().int().min(0)).max(200).optional(),
     })
     .optional(),
   celdas: z.array(z.object({ hoja: z.string().max(60), r: z.number().int().min(1), c: z.number().int().min(1), valor: z.string().max(500) })).max(2000).optional(),

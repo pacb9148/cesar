@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import sharp from "sharp";
-import { EDICION_INICIAL, centroValido, edicionFotoSchema, girar, ventanaDeRecorte, PROPORCION_FOTO } from "../lib/fotos/recorte";
+import { EDICION_INICIAL, ZOOM_MAX, centroValido, edicionFotoSchema, encuadreDeRectangulo, girar, ventanaBase, ventanaDeRecorte, PROPORCION_FOTO } from "../lib/fotos/recorte";
 import { aplicarEdicion } from "../lib/fotos/aplicar";
 import { FOTO_PX } from "../lib/docs/fotos-xml";
 
@@ -35,6 +35,28 @@ describe("recorte de fotografías", () => {
     expect(edicionFotoSchema.safeParse(EDICION_INICIAL).success).toBe(true);
     expect(edicionFotoSchema.safeParse({ ...EDICION_INICIAL, zoom: 20 }).success).toBe(false);
     expect(edicionFotoSchema.safeParse({ ...EDICION_INICIAL, giro: 45 }).success).toBe(false);
+  });
+});
+
+describe("marco flexible: encuadre de un rectángulo", () => {
+  it("un detalle pequeño amplía el marco y queda centrado en él", () => {
+    const e = encuadreDeRectangulo(2000, 1000, { x: 1400, y: 300, w: 200, h: 200 });
+    const v = ventanaDeRecorte(2000, 1000, e);
+    expect(e.zoom).toBeGreaterThan(2);
+    expect(v.x).toBeLessThanOrEqual(1400);
+    expect(v.x + v.w).toBeGreaterThanOrEqual(1600);
+    expect(v.y).toBeLessThanOrEqual(300);
+    expect(v.y + v.h).toBeGreaterThanOrEqual(500);
+    expect(v.w / v.h).toBeCloseTo(PROPORCION_FOTO, 5);
+  });
+  it("un rectángulo mayor que el marco base deja el zoom en 1 y uno diminuto no pasa del máximo", () => {
+    expect(encuadreDeRectangulo(2000, 1000, { x: 0, y: 0, w: 2000, h: 1000 }).zoom).toBe(1);
+    expect(encuadreDeRectangulo(2000, 1000, { x: 10, y: 10, w: 2, h: 2 }).zoom).toBe(ZOOM_MAX);
+  });
+  it("la ventana base es la mayor con la proporción del marco", () => {
+    const b = ventanaBase(2000, 1000);
+    expect(b.h).toBe(1000);
+    expect(b.w / b.h).toBeCloseTo(PROPORCION_FOTO, 5);
   });
 });
 

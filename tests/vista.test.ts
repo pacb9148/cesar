@@ -140,3 +140,42 @@ describe("sincronización del Word con los cambios", () => {
     expect(ps(r.buffer)).toContain("Valor 40,00 UF; otro 146,73 UF; pesos $9.999.");
   });
 });
+
+describe("imágenes del Word: una vez cada una, con tamaño editable", () => {
+  const plantilla = () => readFileSync("plantillas/informe.docx");
+  const imgs = (b: Buffer) => { const out: { idx: number; w: number; h: number; src: string }[] = []; const rec = (bs: BloqueVista[]) => bs.forEach((x) => (x.tipo === "p" ? out.push(...x.imagenes) : x.filas.forEach((f) => f.celdas.forEach((c) => rec(c.bloques))))); rec(docxAVista(b).bloques); return out; };
+  it("las firmas aparecen una sola vez (no se cuentan las alternativas de compatibilidad ni los cuadros de texto vacíos)", () => {
+    const todas = imgs(plantilla());
+    const idxs = todas.map((i) => i.idx);
+    expect(new Set(idxs).size).toBe(idxs.length);
+    const porImagen = new Map<string, number>();
+    for (const i of todas) porImagen.set(i.src, (porImagen.get(i.src) ?? 0) + 1);
+    // La firma (image6.png) está una vez en el documento y no se repite en la vista.
+    expect([...porImagen.values()].filter((n) => n === 1).length).toBeGreaterThan(0);
+    expect(Math.max(...[...porImagen.entries()].filter(([, n]) => n <= 3).map(([, n]) => n))).toBe(1);
+  });
+  it("cambia el tamaño de una imagen y la puede quitar", () => {
+    const antes = imgs(plantilla());
+    const objetivo = antes[antes.length - 1];
+    const { buffer } = aplicarEdiciones(plantilla(), { imagenes: [{ idx: objetivo.idx, cx: 1800000, cy: 900000 }] });
+    const despues = imgs(buffer).find((i) => i.idx === objetivo.idx)!;
+    expect([despues.w, despues.h]).toEqual([Math.round(1800000 / 9525), Math.round(900000 / 9525)]);
+    const sin = aplicarEdiciones(plantilla(), { quitarImagenes: [objetivo.idx] }).buffer;
+    expect(imgs(sin).length).toBe(antes.length - 1);
+  });
+  it("un párrafo con texto e imagen se puede corregir sin perder la imagen", () => {
+    const v = docxAVista(plantilla());
+    const ps: ParrafoVista[] = [];
+    const rec = (bs: BloqueVista[]) => bs.forEach((x) => (x.tipo === "p" ? ps.push(x) : x.filas.forEach((f) => f.celdas.forEach((c) => rec(c.bloques)))));
+    rec(v.bloques);
+    const mixto = ps.find((p) => p.imagenes.length > 0 && p.texto.trim() !== "" && p.editable);
+    if (!mixto) return; // la plantilla puede no tener ninguno: no es un fallo
+    const { buffer } = aplicarEdiciones(plantilla(), { parrafos: { [mixto.i]: [{ t: "Texto nuevo" }] } });
+    expect(imgs(buffer).length).toBe(imgs(plantilla()).length);
+    // El texto anterior desaparece del todo (aunque estuviera en el mismo tramo que la imagen) y no se duplica.
+    const despues: ParrafoVista[] = [];
+    const rec2 = (bs: BloqueVista[]) => bs.forEach((x) => (x.tipo === "p" ? despues.push(x) : x.filas.forEach((f) => f.celdas.forEach((c) => rec2(c.bloques)))));
+    rec2(docxAVista(buffer).bloques);
+    expect(despues.find((p) => p.i === mixto.i)!.texto).toBe("Texto nuevo");
+  });
+});

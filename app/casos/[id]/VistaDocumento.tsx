@@ -21,7 +21,8 @@ function runHtml(r: RunVista): string {
 type Contexto = {
   alCambiar: (i: number, el: HTMLElement | null) => void;
   alFoco: (i: number) => void;
-  alDobleClicFoto: (fotoId: string) => void;
+  alClicFoto: (fotoId: string) => void;
+  alClicImagen: (el: HTMLImageElement) => void;
   eliminados: Set<number>;
 };
 
@@ -31,7 +32,7 @@ function Parrafo({ p, c }: { p: ParrafoVista; c: Contexto }) {
     () =>
       p.runs.map(runHtml).join("") +
       p.imagenes
-        .map((m) => `<img src="${m.src}" width="${m.w}" height="${m.h}" style="max-width:100%;height:auto;vertical-align:middle;${m.fotoId ? "cursor:pointer;outline:1px dashed #2563eb;outline-offset:1px" : ""}" alt="" contenteditable="false"${m.fotoId ? ` data-foto="${m.fotoId}" title="Doble clic para editar esta foto"` : ""}>`)
+        .map((m) => `<img src="${m.src}" width="${m.w}" height="${m.h}" style="max-width:100%;height:auto;vertical-align:middle;cursor:pointer;${m.h >= 20 ? `outline:1px dashed ${m.fotoId ? "#2563eb" : "#9ca3af"};outline-offset:1px` : ""}" alt="" contenteditable="false" data-idx="${m.idx}"${m.fotoId ? ` data-foto="${m.fotoId}" title="Clic para editar esta foto"` : ` title="Clic para cambiar su tamaño o quitarla"`}>`)
         .join(""),
     [p],
   );
@@ -54,9 +55,12 @@ function Parrafo({ p, c }: { p: ParrafoVista; c: Contexto }) {
         // Enter no parte el párrafo (el navegador lo ensuciaría): para uno nuevo está el botón «Insertar párrafo debajo».
         if (e.key === "Enter" && !e.shiftKey) e.preventDefault();
       }}
-      onDoubleClick={(e) => {
+      onClick={(e) => {
         const t = e.target as HTMLElement;
-        if (t instanceof HTMLImageElement && t.dataset.foto) c.alDobleClicFoto(t.dataset.foto);
+        if (!(t instanceof HTMLImageElement)) return;
+        // Una foto del caso se abre en su editor; cualquier otra imagen (gráfico, firma, fachada) se selecciona para cambiar su tamaño.
+        if (t.dataset.foto) c.alClicFoto(t.dataset.foto);
+        else c.alClicImagen(t);
       }}
       style={{ margin: "0 0 6px", minHeight: "1.2em", textAlign: p.jc, paddingLeft: p.sangria, whiteSpace: "pre-wrap", opacity: borrado ? 0.45 : 1, textDecoration: borrado ? "line-through" : undefined }}
       dangerouslySetInnerHTML={{ __html: html }}
@@ -222,6 +226,11 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
   const [foto, setFoto] = useState<ArchivoMeta | null>(null);
   const [pdf, setPdf] = useState<{ url?: string; error?: string; cargando: boolean }>({ cargando: false });
   const [zoom, setZoom] = useState(1);
+  const [imgSel, setImgSel] = useState<{ idx: number; w: number; h: number } | null>(null);
+  const imgEl = useRef<HTMLImageElement | null>(null); // la imagen seleccionada en el documento (se modifica su estilo directamente)
+  const [imgCambios, setImgCambios] = useState<Map<number, { w: number; h: number }>>(new Map()); // tamaño en px de pantalla
+  const [imgQuitar, setImgQuitar] = useState<Set<number>>(new Set());
+  const [proporcion, setProporcion] = useState(true);
 
   const aplicarVista = (j: Vista) => {
     setVista(j);
@@ -230,6 +239,9 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
     setEliminados(new Set());
     setNuevos([]);
     setCeldas(new Map());
+    setImgSel(null);
+    setImgCambios(new Map());
+    setImgQuitar(new Set());
     setVersion((v) => v + 1);
   };
   const traer = async () => {
@@ -263,7 +275,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
     return () => window.removeEventListener("keydown", t);
   }, [onCerrar, foto]);
 
-  const cambios = vista?.tipo === "xlsx" ? celdas.size : nTextos + eliminados.size + nuevos.length;
+  const cambios = vista?.tipo === "xlsx" ? celdas.size : nTextos + eliminados.size + nuevos.length + imgCambios.size + imgQuitar.size;
 
   async function guardar(): Promise<boolean> {
     if (!vista || cambios === 0) return true;
@@ -277,6 +289,8 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
               parrafos: Object.fromEntries([...sucios.current].filter(([i]) => !eliminados.has(i)).map(([i, el]) => [String(i), leerRuns(el)])),
               insertar: nuevos.filter((n) => n.texto.trim() !== "").map((n) => ({ despuesDe: n.despuesDe, runs: [{ t: n.texto }] })),
               eliminar: [...eliminados],
+              imagenes: [...imgCambios].map(([idx, v]) => ({ idx, cx: Math.round(v.w * 9525), cy: Math.round(v.h * 9525) })),
+              quitarImagenes: [...imgQuitar],
             },
           }
         : { celdas: [...celdas].map(([k, valor]) => { const [h, rc] = k.split("|"); const [r, c] = rc.split(",").map(Number); return { hoja: h, r, c, valor }; }) };
@@ -295,6 +309,9 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
     setEliminados(new Set());
     setNuevos([]);
     setCeldas(new Map());
+    setImgSel(null);
+    setImgCambios(new Map());
+    setImgQuitar(new Set());
     setVersion((v) => v + 1);
     setPdf({ cargando: false });
     onGuardado();
@@ -309,7 +326,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
     },
     alFoco: (i) => (foco.current = i),
     // Doble clic en una foto: se guarda lo pendiente y se abre su editor; al terminar, el documento ya trae la foto como quedó.
-    alDobleClicFoto: async (fotoId) => {
+    alClicFoto: async (fotoId) => {
       if (!(await guardar())) return;
       const r = await fetch(`/api/casos/${casoId}/archivos`, { cache: "no-store" });
       const lista = (await r.json().catch(() => [])) as ArchivoMeta[];
@@ -317,7 +334,57 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
       if (f) setFoto(f);
       else setError("No se encontró la fotografía de esta imagen.");
     },
+    alClicImagen: (el) => {
+      const idx = Number(el.dataset.idx);
+      if (!Number.isInteger(idx)) return;
+      const ya = imgCambios.get(idx);
+      imgEl.current = el;
+      // El tamaño del documento está en los atributos de la imagen (el renderizado puede medir 0 si aún no se pintó).
+      setImgSel({ idx, w: ya?.w ?? (Number(el.getAttribute("width")) || el.width), h: ya?.h ?? (Number(el.getAttribute("height")) || el.height) });
+    },
     eliminados,
+  };
+
+  /** Cambia el tamaño de la imagen seleccionada (en px de pantalla) y lo anota para guardarlo. */
+  const medirImagen = (w: number, h: number) => {
+    const el = imgEl.current;
+    if (!imgSel || !el) return;
+    el.style.maxWidth = "none";
+    el.style.width = `${w}px`;
+    el.style.height = `${h}px`;
+    setImgCambios((m) => new Map(m).set(imgSel.idx, { w, h }));
+  };
+  const PX_CM = 37.795;
+  const anchoCm = imgSel ? (imgCambios.get(imgSel.idx)?.w ?? imgSel.w) / PX_CM : 0;
+  const altoCm = imgSel ? (imgCambios.get(imgSel.idx)?.h ?? imgSel.h) / PX_CM : 0;
+  const cambiarCm = (campo: "w" | "h", cm: number) => {
+    if (!imgSel || !(cm > 0.3 && cm <= 30)) return;
+    const w = imgCambios.get(imgSel.idx)?.w ?? imgSel.w;
+    const h = imgCambios.get(imgSel.idx)?.h ?? imgSel.h;
+    if (!(w > 0 && h > 0)) return;
+    const px = cm * PX_CM;
+    if (campo === "w") medirImagen(px, proporcion ? (px * h) / w : h);
+    else medirImagen(proporcion ? (px * w) / h : w, px);
+  };
+  const escalarImagen = (f: number) => {
+    if (!imgSel) return;
+    const w = (imgCambios.get(imgSel.idx)?.w ?? imgSel.w) * f;
+    const h = (imgCambios.get(imgSel.idx)?.h ?? imgSel.h) * f;
+    if (!(w > 0 && h > 0)) return;
+    if (w / PX_CM > 0.3 && w / PX_CM <= 30 && h / PX_CM > 0.3 && h / PX_CM <= 30) medirImagen(w, h);
+  };
+  const quitarImagen = () => {
+    const el = imgEl.current;
+    if (!imgSel || !el) return;
+    const quitar = !imgQuitar.has(imgSel.idx);
+    el.style.opacity = quitar ? "0.2" : "1";
+    el.style.outline = quitar ? "2px dashed #dc2626" : "1px dashed #9ca3af";
+    setImgQuitar((q) => {
+      const n = new Set(q);
+      if (quitar) n.add(imgSel.idx);
+      else n.delete(imgSel.idx);
+      return n;
+    });
   };
 
   const formato = (cmd: "bold" | "italic" | "underline") => document.execCommand(cmd);
@@ -363,7 +430,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
       subtitulo={
         vista?.tipo === "xlsx"
           ? "Clic en una celda para editarla. Las fórmulas se recalculan solas y el cuadro de pérdida del informe se actualiza al guardar."
-          : "Clic en cualquier texto para corregirlo; doble clic en una foto para editarla. Al guardar se rehacen el PDF y el ZIP."
+          : "Clic en cualquier texto para corregirlo; clic en una foto para editarla; clic en un gráfico o una firma para cambiar su tamaño o quitarlo. Al guardar se rehacen el PDF y el ZIP."
       }
       onCerrar={() => !foto && onCerrar()}
       acciones={
@@ -376,6 +443,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
       {({ maximizada }) => (
       <>
         {error && <p role="alert" className="aviso aviso-error">{error}</p>}
+        {guardando && <p role="status" className="aviso aviso-ok">Guardando y rehaciendo el PDF y el paquete ZIP… puede tardar unos segundos.</p>}
         {info && <p role="status" className="aviso aviso-ok">{info}</p>}
         {avisos.map((a, i) => <p key={i} role="status" className="aviso aviso-alerta">{a}</p>)}
         {!vista && !error && <p className="texto-suave text-sm">Cargando vista previa…</p>}
@@ -396,6 +464,24 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
                 </span>
               )}
             </div>
+            {pestana === "editar" && imgSel && (
+              <div role="group" aria-label="Propiedades de la imagen seleccionada" className="flex flex-wrap items-center gap-3 rounded-lg border border-[color:var(--borde)] bg-[color:var(--panel-2)] p-2 text-sm text-[color:var(--texto)]">
+                <span className="font-semibold">Imagen seleccionada{imgQuitar.has(imgSel.idx) ? " (se quitará)" : ""}</span>
+                <label className="flex items-center gap-1">Ancho (cm)
+                  <input type="number" step="0.1" min="0.5" max="30" className="campo w-20 px-2 py-1" aria-label="Ancho de la imagen en centímetros" value={anchoCm.toFixed(1)} onChange={(e) => cambiarCm("w", Number(e.target.value))} />
+                </label>
+                <label className="flex items-center gap-1">Alto (cm)
+                  <input type="number" step="0.1" min="0.5" max="30" className="campo w-20 px-2 py-1" aria-label="Alto de la imagen en centímetros" value={altoCm.toFixed(1)} onChange={(e) => cambiarCm("h", Number(e.target.value))} />
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={proporcion} onChange={(e) => setProporcion(e.target.checked)} /> Mantener proporción
+                </label>
+                <BotonIcono icono="zoomMenos" etiqueta="Reducir la imagen un 10 %" onClick={() => escalarImagen(0.9)} />
+                <BotonIcono icono="zoomMas" etiqueta="Ampliar la imagen un 10 %" onClick={() => escalarImagen(1.1)} />
+                <BotonIcono icono="papelera" etiqueta={imgQuitar.has(imgSel.idx) ? "No quitar la imagen" : "Quitar la imagen del documento"} activo={imgQuitar.has(imgSel.idx)} onClick={quitarImagen} />
+                <BotonIcono icono="cerrar" etiqueta="Dejar de seleccionar la imagen" onClick={() => setImgSel(null)} />
+              </div>
+            )}
             {pestana === "editar" ? (
               <div className={`overflow-auto rounded-lg border border-[color:var(--borde)] bg-[#6b7280] p-3 ${maximizada ? "min-h-0 flex-1" : ""}`} style={{ maxHeight: maximizada ? undefined : "64vh" }}>
                 <style>{`.doc-ed p[contenteditable="true"]:hover{background:rgba(37,99,235,.07)}.doc-ed p[contenteditable="true"]:focus{outline:2px solid #2563eb;outline-offset:1px}.doc-ed p[data-sucio="1"]{box-shadow:inset 3px 0 0 #d97706}`}</style>

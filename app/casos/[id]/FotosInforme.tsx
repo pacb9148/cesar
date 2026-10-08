@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
-import { BotonIcono } from "@/components/Iconos";
+import { BotonIcono, Icono } from "@/components/Iconos";
 import { EDICION_INICIAL, esEdicionNula } from "@/lib/fotos/recorte";
 import { FOTO_ALTO_CM, FOTO_ANCHO_CM } from "@/lib/domain/constantes";
 import EditorFoto from "./EditorFoto";
@@ -43,16 +43,29 @@ export default function FotosInforme({ casoId, fotos }: { casoId: string; fotos:
       {error && <p role="alert" className="aviso aviso-error">{error}</p>}
       {ocupado && <p role="status" className="aviso aviso-ok">Actualizando el informe, el anexo y el PDF con tus cambios… puede tardar unos segundos.</p>}
       {[...porRecinto.entries()].map(([recinto, lista]) => (
-        <section key={recinto} aria-label={`Fotos de ${recinto}`}>
-          <h4 className="mb-2 text-sm font-semibold text-[color:var(--texto)]">{recinto} <span className="texto-suave font-normal">({lista.length})</span></h4>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        // Cada estancia es un grupo plegable, cerrado al comienzo; el resumen dice cuántas fotos van al informe.
+        <details key={recinto} className="rounded-lg border border-[color:var(--borde)] bg-[color:var(--panel)]">
+          <summary className="flex cursor-pointer flex-wrap items-center gap-2 p-2 text-sm font-semibold text-[color:var(--texto)]">
+            <span>{recinto}</span>
+            <span className="texto-suave font-normal">({lista.length} fotos)</span>
+            {lista.some((f) => f.edicion?.incluir) && <span className="marca marca-usr !ml-0">{lista.filter((f) => f.edicion?.incluir).length} en el informe</span>}
+            {lista.some((f) => f.edicion && !esEdicionNula(f.edicion)) && <span className="marca marca-sin !ml-0">{lista.filter((f) => f.edicion && !esEdicionNula(f.edicion)).length} editadas</span>}
+          </summary>
+          <ul className="grid grid-cols-2 gap-3 p-2 sm:grid-cols-3 lg:grid-cols-4">
             {lista.map((f) => {
               const incluida = !!f.edicion?.incluir;
               const editada = !!f.edicion && !esEdicionNula(f.edicion);
               return (
-                <li key={f.id} className={`overflow-hidden rounded-lg border bg-[color:var(--panel-2)] ${incluida ? "border-[color:var(--ok)]" : "border-[color:var(--borde)]"}`}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1`} alt={`${recinto}: ${f.nombre}`} loading="lazy" className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}` }} />
+                <li key={f.id} className={`overflow-hidden rounded-lg bg-[color:var(--panel-2)] ${incluida ? "border-2 border-[color:var(--ok)]" : "border border-[color:var(--borde)]"}`}>
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1`} alt={`${recinto}: ${f.nombre}`} loading="lazy" className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}` }} />
+                    {incluida && (
+                      <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: "var(--ok)", color: "var(--ok-fondo)" }}>
+                        <Icono nombre="check" tam={14} /> En el informe
+                      </span>
+                    )}
+                  </div>
                   <div className="space-y-1 p-2">
                     <p className="truncate text-xs text-[color:var(--texto)]" title={f.nombre}>{f.nombre}</p>
                     <div className="flex flex-wrap gap-1 text-[11px]">
@@ -69,7 +82,7 @@ export default function FotosInforme({ casoId, fotos }: { casoId: string; fotos:
               );
             })}
           </ul>
-        </section>
+        </details>
       ))}
       {editando && <EditorFoto key={editando.id} casoId={casoId} foto={editando} onCerrar={() => setEditando(null)} onGuardado={() => { setEditando(null); router.refresh(); }} />}
     </div>

@@ -5,7 +5,7 @@ import { FOTO_ALTO_CM, FOTO_ANCHO_CM } from "../domain/constantes";
  * Edición de una fotografía del informe. Se guardan solo parámetros (el original no se toca) y el mismo cálculo lo usan la
  * pantalla de edición y el servidor al generar el documento, para que lo que se ve sea exactamente lo que se inserta.
  */
-export const ZOOM_MAX = 8;
+export const ZOOM_MAX = 16;
 
 export const edicionFotoSchema = z.object({
   /** true = va al informe; sin ninguna marcada, el informe usa solo las fotos del área afectada. */
@@ -63,3 +63,20 @@ export const girar = (giro: EdicionFoto["giro"], sentido: 1 | -1): EdicionFoto["
 /** Edición sin cambios de imagen (solo, quizá, la marca de inclusión): se trata como foto sin editar, con el recorte automático. */
 export const esEdicionNula = (e: EdicionFoto): boolean =>
   e.giro === 0 && !e.volteoH && !e.volteoV && e.zoom === 1 && e.cx === 0.5 && e.cy === 0.5 && e.brillo === 0 && e.contraste === 0 && e.saturacion === 0;
+
+/** Tamaño de la ventana de recorte sin ampliar (la mayor con la proporción 7,8 × 6,5 que cabe en la imagen). */
+export function ventanaBase(anchoGirado: number, altoGirado: number): { w: number; h: number } {
+  const v = ventanaDeRecorte(anchoGirado, altoGirado, { zoom: 1, cx: 0.5, cy: 0.5 });
+  return { w: v.w, h: v.h };
+}
+
+/**
+ * Zoom y centro que encuadran un rectángulo cualquiera (en píxeles de la imagen girada): el marco mantiene su proporción,
+ * así que se toma el menor marco con esa proporción que contiene el rectángulo, centrado en él.
+ */
+export function encuadreDeRectangulo(anchoGirado: number, altoGirado: number, r: { x: number; y: number; w: number; h: number }): Pick<EdicionFoto, "zoom" | "cx" | "cy"> {
+  const base = ventanaBase(anchoGirado, altoGirado);
+  const w = Math.max(r.w, r.h * PROPORCION_FOTO, 1);
+  const e = { zoom: Math.min(ZOOM_MAX, Math.max(1, base.w / w)), cx: (r.x + r.w / 2) / anchoGirado, cy: (r.y + r.h / 2) / altoGirado };
+  return { ...e, ...centroValido(anchoGirado, altoGirado, e) };
+}

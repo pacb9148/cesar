@@ -38,6 +38,7 @@ export const ICONOS = {
   opacidad: <><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" opacity=".5" /></>,
   grosor: D("M4 6h16M4 12h16M4 18h16"),
   columnas: D("M3 3h18v18H3zM9 3v18M15 3v18"),
+  seleccion: D("M4 4h3M10 4h4M17 4h3v3M20 10v4M20 17v3h-3M14 20h-4M7 20H4v-3M4 14v-4M4 7V4"),
   negrita: D("M6 4h7a4 4 0 0 1 0 8H6zM6 12h8a4 4 0 0 1 0 8H6z"),
   cursiva: D("M19 4h-9M14 20H5M15 4L9 20"),
   subrayado: D("M6 4v7a6 6 0 0 0 12 0V4M4 21h16"),
