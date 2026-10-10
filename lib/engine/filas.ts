@@ -18,6 +18,8 @@ export type FilaCuadro =
       rec: { um: Unidad; cantidad: number; pu: number } | null;
       aj: { um: Unidad; cantidad: number; pu: number } | null;
       obs: string[];
+      /** La última edición de la partida la hizo el usuario (solo él puede dejarla en 0). */
+      usuario?: boolean;
     };
 
 /** Ordena secciones, líneas, sublíneas y adicionales en el mismo orden en que se imprimen. */
@@ -62,8 +64,9 @@ export function armarFilas(e: EntradaFilas): FilaCuadro[] {
         rec,
         aj: respeta
           ? { um: l.um, cantidad: l.cantidad, pu: l.pu }
-          : { um: d.um ?? l.um, cantidad: conMinimo(d.cantidad ?? 0, l.cantidad), pu: d.pu ?? l.pu },
+          : { um: d.um ?? l.um, cantidad: d.fuente === "usuario" ? (d.cantidad ?? 0) : conMinimo(d.cantidad ?? 0, l.cantidad), pu: d.pu ?? l.pu },
         obs: respeta && d.obs.length === 0 ? ["F"] : d.obs,
+        usuario: d.fuente === "usuario" || undefined,
       });
     }
     let n = propias.length;

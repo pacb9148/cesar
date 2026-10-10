@@ -43,7 +43,7 @@ export function auditarAjuste(filas: FilaCuadro[], reclamacion: Reclamacion): Au
       mutacion.push(`${f.item}: la reclamación mostrada difiere de la original.`);
     if (!f.aj) continue;
     if (f.aj.pu <= 0) ceros.push(`${f.item}: precio unitario ${f.aj.pu}.`);
-    if (f.aj.cantidad < cantidadMinima(f.rec?.cantidad)) ceros.push(`${f.item}: cantidad ${f.aj.cantidad} (mínimo ${cantidadMinima(f.rec?.cantidad)}).`);
+    if (!f.usuario && f.aj.cantidad < cantidadMinima(f.rec?.cantidad)) ceros.push(`${f.item}: cantidad ${f.aj.cantidad} (mínimo ${cantidadMinima(f.rec?.cantidad)}).`);
     if (!f.rec) continue;
     const mismaUm = f.aj.um === f.rec.um;
     if (mismaUm && f.aj.pu > f.rec.pu + EPS) inflaPrecio.push(`${f.item}: ajustado ${pesos(f.aj.pu)} > reclamado ${pesos(f.rec.pu)}.`);
@@ -59,7 +59,7 @@ export function auditarAjuste(filas: FilaCuadro[], reclamacion: Reclamacion): Au
   const verificaciones = [
     v("ERR_MUTATION", "La reclamación del contratista no se modifica (descripción, unidad, cantidad y precio)", mutacion),
     v("ERR_PRICE_INFLATION", "El precio ajustado nunca supera el reclamado", inflaPrecio),
-    v("ERR_ZERO_PRICE", "Ninguna partida queda en 0: precio mayor a 0 y cantidad mínima 1", ceros),
+    v("ERR_ZERO_PRICE", "Ninguna partida queda en 0 salvo que el usuario lo decida: precio mayor a 0 y cantidad mínima 1", ceros),
     v("ERR_QTY_INFLATION", "La cantidad ajustada nunca supera la reclamada (misma unidad)", inflaCantidad),
     v("ERR_NO_OBS", "Toda partida ajustada lleva su letra de observación", sinLetra),
   ];

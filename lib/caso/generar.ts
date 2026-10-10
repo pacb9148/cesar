@@ -4,7 +4,7 @@ import { extractImages, getDocumentProxy } from "unpdf";
 import { cuadroTablaXml, resumenCuadro } from "../docs/cuadro";
 import { generarExcel, type EntradaExcel } from "../docs/excel";
 import { generarAnexo } from "../docs/anexo";
-import { leyendaDeFoto, seleccionarFotosInforme } from "../docs/fotos-seleccion";
+import { seleccionarFotosInforme } from "../docs/fotos-seleccion";
 import { docxAPdf } from "../docs/pdf";
 import { generarInforme, type FotoInforme, type Meteo } from "../docs/word";
 import { GG_UTILIDADES_UNIFICADO, IVA } from "../domain/constantes";
@@ -228,7 +228,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     archivosConContenido(casoId, "foto"),
   ]);
 
-  const todas: FotoInforme[] = fotosDb.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: leyendaDeFoto(f.recinto ?? "General", acta), edicion: f.edicion }));
+  const todas: FotoInforme[] = fotosDb.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: "", edicion: f.edicion }));
   // Si el usuario marcó fotos para el informe, van esas (con su recorte); si no, las del área afectada. El anexo lleva todas.
   const { fotos: paraInforme, elegidas } = seleccionarFotosInforme(todas, acta);
   emitir("info", "informe", `${paraInforme.length} fotos para el informe (${elegidas ? "elegidas por ti" : "automáticas del área afectada"}); ${todas.filter((f) => f.edicion).length} con recorte editado`);

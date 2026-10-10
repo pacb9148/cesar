@@ -268,8 +268,8 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     }
     // Una sola cuadrícula de 2 × 3 (varias si hay más fotos); la fachada, si existe, abre la primera como fila de cabecera.
     const celdas: FotoCelda[] = [];
-    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer, 0, { foto: true })).rid, leyenda: f.edicion?.leyenda || f.leyenda || f.recinto, id: f.id });
-    const fachada: FotoCelda | null = e.fachada[0] ? { rid: (await paq.imagen(e.fachada[0], 0, { foto: true })).rid, leyenda: "Fachada del inmueble" } : null;
+    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer, 0, { foto: true })).rid, leyenda: f.edicion?.leyenda ?? "", id: f.id });
+    const fachada: FotoCelda | null = e.fachada[0] ? { rid: (await paq.imagen(e.fachada[0], 0, { foto: true })).rid, leyenda: "" } : null;
     let ancla: Node = pImgs;
     for (const xml of tablasDeFotos(celdas, { fachada })) {
       const tabla = crearEl(doc, xml);

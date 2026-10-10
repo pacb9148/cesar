@@ -21,7 +21,8 @@ export type Cambio = { cantidad?: number; pu?: number; alternar?: LetraObs };
 export function editarDecision(rec: LineaReclamacion, actual: DecisionLinea | undefined, c: Cambio): DecisionLinea {
   const base = actual ?? decisionRespetar(rec);
   const um = base.um ?? rec.um;
-  const cantidad = conMinimo(c.cantidad ?? base.cantidad ?? rec.cantidad, rec.cantidad);
+  // Solo el usuario puede dejar una partida en 0: lo que escribe (o dejó antes) se respeta; lo demás respeta el mínimo.
+  const cantidad = c.cantidad !== undefined ? Math.max(0, c.cantidad) : base.fuente === "usuario" && base.cantidad != null ? base.cantidad : conMinimo(base.cantidad ?? rec.cantidad, rec.cantidad);
   const pu = c.pu !== undefined && c.pu > 0 ? c.pu : (base.pu ?? rec.pu);
   const origenBase = base.pu_origen ?? "reclamacion";
   const pu_origen = c.pu !== undefined ? (pu === rec.pu ? "reclamacion" : "mercado:manual") : origenBase;

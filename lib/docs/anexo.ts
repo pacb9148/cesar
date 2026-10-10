@@ -53,7 +53,7 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
   const tablas: string[] = [];
   for (const rc of recintos) {
     const celdas: FotoCelda[] = [];
-    for (const f of o.fotos.filter((x) => x.recinto === rc)) celdas.push({ rid: await add(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer), leyenda: f.edicion?.leyenda || f.leyenda || rc, id: f.id });
+    for (const f of o.fotos.filter((x) => x.recinto === rc)) celdas.push({ rid: await add(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer), leyenda: f.edicion?.leyenda ?? "", id: f.id });
     tablas.push(...tablasDeFotos(celdas, { titulo: rc }));
   }
   tablas.forEach((t, i) => {

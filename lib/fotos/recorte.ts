@@ -10,6 +10,8 @@ export const ZOOM_MAX = 16;
 export const edicionFotoSchema = z.object({
   /** true = va al informe; sin ninguna marcada, el informe usa solo las fotos del área afectada. */
   incluir: z.boolean().optional(),
+  /** true = el usuario la quitó del informe (no entra ni siquiera por la selección automática). */
+  excluir: z.boolean().optional(),
   leyenda: z.string().trim().max(120).optional(),
   giro: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
   volteoH: z.boolean(),

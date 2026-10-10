@@ -69,7 +69,7 @@ export function validarSalida(s: SalidaAgente, ctx: ContextoValidacion): Resulta
     }
     if (l.obs.length === 0) errores.push(`${d}: toda partida ajustada lleva al menos una letra de observación.`);
     if (l.pu <= 0) errores.push(`${d}: el precio unitario nunca va a 0.`);
-    if (l.cantidad < cantidadMinima(rc?.cantidad)) errores.push(`${d}: ninguna partida va a 0, la cantidad mínima es ${cantidadMinima(rc?.cantidad)}.`);
+    if (l.fuente !== "usuario" && l.cantidad < cantidadMinima(rc?.cantidad)) errores.push(`${d}: ninguna partida va a 0, la cantidad mínima es ${cantidadMinima(rc?.cantidad)}.`);
     if (l.obs.includes("F")) {
       if (l.obs.length > 1) errores.push(`${d}: F (se respeta lo reclamado) no se combina con otras letras.`);
       if (rc && (Math.abs(l.cantidad - rc.cantidad) > 1e-9 || Math.abs(l.pu - rc.pu) > 0.5))

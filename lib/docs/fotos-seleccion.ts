@@ -34,7 +34,7 @@ export function fotosDelAreaAfectada<T extends { recinto: string }>(fotos: T[], 
 }
 
 /** Fotos del informe: las que el usuario marcó con ✓ (con su recorte) o, si no marcó ninguna, las del área afectada. */
-export function seleccionarFotosInforme<T extends { recinto: string; edicion?: { incluir?: boolean } | null }>(todas: T[], acta: ActaInspeccion): { fotos: T[]; elegidas: boolean } {
+export function seleccionarFotosInforme<T extends { recinto: string; edicion?: { incluir?: boolean; excluir?: boolean } | null }>(todas: T[], acta: ActaInspeccion): { fotos: T[]; elegidas: boolean } {
   const elegidas = todas.filter((f) => f.edicion?.incluir === true);
-  return elegidas.length > 0 ? { fotos: elegidas, elegidas: true } : { fotos: fotosDelAreaAfectada(todas, acta), elegidas: false };
+  return elegidas.length > 0 ? { fotos: elegidas, elegidas: true } : { fotos: fotosDelAreaAfectada(todas.filter((f) => f.edicion?.excluir !== true), acta), elegidas: false };
 }

@@ -49,9 +49,15 @@ describe("auditoría de reglas duras ACAS", () => {
     expect(d.pu).toBe(100);
   });
 
-  it("una edición manual en 0 se lleva al mínimo", () => {
+  it("solo el usuario puede dejar una partida en 0; lo demás respeta el mínimo", () => {
     const d = editarDecision(recl.lineas[0], undefined, { cantidad: 0 });
-    expect(d.cantidad).toBe(1);
+    expect(d.cantidad).toBe(0);
+    expect(d.fuente).toBe("usuario");
+    // un cambio posterior de solo precio no devuelve la cantidad al mínimo
+    expect(editarDecision(recl.lineas[0], d, { pu: 5000 }).cantidad).toBe(0);
+    const a = auditarAjuste(filasCon([d]), recl);
+    expect(a.cumple).toBe(true);
+    expect(a.verificaciones.find((x) => x.codigo === "ERR_ZERO_PRICE")?.ok).toBe(true);
   });
 
   it("detecta un precio inflado, un 0 y una partida tocada sin letra", () => {

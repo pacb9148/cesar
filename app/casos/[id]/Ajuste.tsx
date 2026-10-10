@@ -10,7 +10,6 @@ import { armarFilas, type FilaCuadro } from "@/lib/engine/filas";
 import { editarDecision, estadoDe, type Cambio, type EstadoPartida } from "@/lib/engine/edicion";
 import { calcularTotales } from "@/lib/engine/totales";
 import { auditarAjuste } from "@/lib/engine/auditoria";
-import { cantidadMinima } from "@/lib/engine/minimos";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
 import VistaPreviaAjuste from "./VistaPreviaAjuste";
@@ -227,7 +226,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
                               editable && rl ? (
                                 <>
                                   <td className="text-center">{f.aj.um}</td>
-                                  <td><input aria-label={`Cantidad ${f.item}`} className="campo w-20 px-1 py-0.5 text-right" type="number" step="any" min={cantidadMinima(rl.cantidad)} placeholder={String(rl.cantidad)} value={borrador[`${f.item}|cantidad`] ?? String(f.aj.cantidad)} onChange={(e) => escribir(rl, "cantidad", e.target.value)} onBlur={() => soltar(rl, "cantidad")} /></td>
+                                  <td><input aria-label={`Cantidad ${f.item}`} className="campo w-20 px-1 py-0.5 text-right" type="number" step="any" min="0" placeholder={String(rl.cantidad)} value={borrador[`${f.item}|cantidad`] ?? String(f.aj.cantidad)} onChange={(e) => escribir(rl, "cantidad", e.target.value)} onBlur={() => soltar(rl, "cantidad")} /></td>
                                   <td><input aria-label={`Precio unitario ${f.item}`} className="campo w-24 px-1 py-0.5 text-right" type="number" step="any" min="1" placeholder={String(rl.pu)} value={borrador[`${f.item}|pu`] ?? String(f.aj.pu)} onChange={(e) => escribir(rl, "pu", e.target.value)} onBlur={() => soltar(rl, "pu")} /></td>
                                   <td className="n">{n0(f.aj.cantidad * f.aj.pu)}</td>
                                 </>

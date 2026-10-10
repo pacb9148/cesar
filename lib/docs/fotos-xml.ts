@@ -21,8 +21,8 @@ const fuente = (sz: number, extra = "") => `<w:rPr><w:rFonts w:ascii="Times New 
 const celda = (f: FotoCelda | undefined, nombre: string, ancho: number, span = 1) => {
   const contenido = f
     ? `<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>${xmlImagen(f.rid, FOTO_EMU.cx, FOTO_EMU.cy, nombre)}</w:r></w:p>` +
-      // Leyenda de una sola línea (Times New Roman 10, cursiva, centrada), pegada a la imagen.
-      `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>${fuente(20, "<w:i/><w:noProof/>")}<w:t xml:space="preserve">${escXml(leyendaCorta(f.leyenda))}</w:t></w:r></w:p>`
+      // Leyenda opcional: solo si el usuario la escribió. Una línea (Times New Roman 10, cursiva, centrada), pegada a la imagen.
+      (f.leyenda.trim() ? `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>${fuente(20, "<w:i/><w:noProof/>")}<w:t xml:space="preserve">${escXml(leyendaCorta(f.leyenda))}</w:t></w:r></w:p>` : "")
     : `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>`;
   return `<w:tc><w:tcPr><w:tcW w:w="${ancho}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ""}</w:tcPr>${contenido}</w:tc>`;
 };

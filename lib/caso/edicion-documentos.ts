@@ -4,7 +4,7 @@ import { consulta, uno } from "../db";
 import { cuadroTablaXml, n0, nf2, resumenCuadro } from "../docs/cuadro";
 import { generarAnexo } from "../docs/anexo";
 import { docxAPdf, motorPdfDisponible } from "../docs/pdf";
-import { leyendaDeFoto, seleccionarFotosInforme } from "../docs/fotos-seleccion";
+import { seleccionarFotosInforme } from "../docs/fotos-seleccion";
 import { actualizarTotales, reemplazarCuadro, reemplazarFotos, type FotoParaWord } from "../docs/sincronizar-word";
 import { aplicarEdiciones, docxAVista, type BloqueVista, type EdicionesWord } from "../docs/vista-docx";
 import { aplicarCeldas, cargarLibro, libroAVista, type CambioCelda, type CambioFormato, type HojaVista } from "../docs/vista-xlsx";
@@ -113,7 +113,7 @@ async function sincronizarWordConExcel(casoId: string, usuarioId: string, antes:
 async function fotosParaWord(casoId: string): Promise<{ todas: (FotoParaWord & { edicion: FotoParaWord["edicion"] })[]; acta: ActaInspeccion | null }> {
   const acta = await leerExtraccion<ActaInspeccion>(casoId, "acta");
   const filas = await archivosConContenido(casoId, "foto");
-  const todas = filas.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: acta ? leyendaDeFoto(f.recinto ?? "General", acta) : (f.recinto ?? "General"), edicion: f.edicion }));
+  const todas = filas.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: "", edicion: f.edicion }));
   return { todas, acta };
 }
 

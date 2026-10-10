@@ -104,11 +104,11 @@ export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[]): Prom
   const rels = { texto: zip.file("word/_rels/document.xml.rels")!.asText() };
   const celdas: FotoCelda[] = [];
   let n = 0;
-  for (const f of fotos) celdas.push({ rid: agregarJpg(zip, rels, await fotoFinal(f), n++), leyenda: f.edicion?.leyenda || f.leyenda || f.recinto, id: f.id });
+  for (const f of fotos) celdas.push({ rid: agregarJpg(zip, rels, await fotoFinal(f), n++), leyenda: f.edicion?.leyenda ?? "", id: f.id });
   for (const t of viejas) t.parentNode!.removeChild(t);
 
   let ultimo: Node = ancla;
-  for (const xml of tablasDeFotos(celdas, { fachada: ridFachada ? { rid: ridFachada, leyenda: "Fachada del inmueble" } : null })) {
+  for (const xml of tablasDeFotos(celdas, { fachada: ridFachada ? { rid: ridFachada, leyenda: "" } : null })) {
     const tabla = crearEl(doc, xml);
     ultimo.parentNode!.insertBefore(tabla, ultimo.nextSibling);
     const sep = crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>`);

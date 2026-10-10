@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { tablasDeFotos, FOTO_EMU, leyendaCorta } from "../lib/docs/fotos-xml";
-import { fotosDelAreaAfectada, leyendaDeFoto } from "../lib/docs/fotos-seleccion";
+import { fotosDelAreaAfectada, leyendaDeFoto, seleccionarFotosInforme } from "../lib/docs/fotos-seleccion";
 import type { ActaInspeccion } from "../lib/extraccion/acta";
 
 const celdas = (n: number) => Array.from({ length: n }, (_, i) => ({ rid: `rId${i}`, leyenda: `Foto ${i}` }));
@@ -34,6 +34,17 @@ describe("fotos del informe: 8,66 × 6,70 cm en cuadrícula de 2 × 3", () => {
     expect(t).not.toContain("<w:tblBorders>");
     expect(t).toMatch(/<w:spacing w:before="0" w:after="0"\/><\/w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman"[^>]*\/><w:b\/><w:i\/><w:sz w:val="24"\/>/);
     expect(t).toMatch(/<w:i\/><w:noProof\/><w:sz w:val="20"\/>/);
+  });
+  it("la leyenda es opcional: sin texto no sale ninguna, con texto sale una línea", () => {
+    const [sin] = tablasDeFotos([{ rid: "a", leyenda: "" }, { rid: "b", leyenda: "  " }]);
+    expect(sin).not.toContain("<w:noProof/>");
+    const [con] = tablasDeFotos([{ rid: "a", leyenda: "Cielo con mancha" }]);
+    expect(con).toContain("Cielo con mancha");
+  });
+  it("la foto quitada por el usuario no entra ni por la selección automática", () => {
+    const acta = { danos: [{ recinto: "LIVING", descripcion: "x", tipoDano: "y" }] } as unknown as ActaInspeccion;
+    const fotos = [{ recinto: "Living", id: 1, edicion: { excluir: true } }, { recinto: "Living", id: 2, edicion: null }];
+    expect(seleccionarFotosInforme(fotos, acta).fotos.map((f) => f.id)).toEqual([2]);
   });
   it("la leyenda es de una sola línea (se acorta)", () => {
     expect(leyendaCorta("a".repeat(100)).length).toBeLessThanOrEqual(52);
