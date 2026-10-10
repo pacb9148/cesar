@@ -143,7 +143,7 @@ import PizZip from "pizzip";
   const docx = new PizZip(readFileSync(join("tmp/e2e", `${(g.entregables ?? []).find((e) => /INFORME\.docx$/.test(e.nombre))?.nombre}`)));
   const xml = docx.file("word/document.xml")!.asText();
   const fotos = (xml.match(/<wp:extent cx="3117600" cy="2412000"\/>/g) ?? []).length;
-  console.log("fotos 8,66×6,70 cm en el informe:", fotos, "(esperado 3, o 4 con fachada); leyenda editada:", xml.includes("Leyenda editada"));
+  console.log("fotos 8,66×6,70 cm en el informe:", fotos, "(las elegidas más las automáticas del área afectada, con fachada); leyenda editada:", xml.includes("Leyenda editada"));
 }
 
 // ---- Edición completa: Excel → cuadro y totales del Word; foto → informe y anexo; formato en el Word; PDF exacto ----

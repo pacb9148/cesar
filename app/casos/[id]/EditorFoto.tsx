@@ -66,8 +66,12 @@ const Deslizador = ({ icono, etiqueta, valor, min, max, paso, onChange }: { icon
 );
 
 
-export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { casoId: string; foto: ArchivoMeta; onCerrar: () => void; onGuardado: () => void }) {
-  const [ed, setEd] = useState<EdicionFoto>(() => ({ ...EDICION_INICIAL, ...(foto.edicion ?? {}) }));
+/** `enInforme`: la foto ya va en el informe (la puso el sistema o el usuario); así el editor la muestra marcada desde el principio. */
+export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, onGuardado }: { casoId: string; foto: ArchivoMeta; enInforme?: boolean; onCerrar: () => void; onGuardado: () => void }) {
+  const [ed, setEd] = useState<EdicionFoto>(() => {
+    const e = { ...EDICION_INICIAL, ...(foto.edicion ?? {}) };
+    return { ...e, incluir: e.excluir ? false : (e.incluir ?? enInforme) };
+  });
   // El editor solo se monta al abrirlo (en el navegador): se pueden leer las preferencias directamente.
   const [gr, setGr] = useState<Cuadricula>(leerPrefs);
   const [modo, setModo] = useState<"imagen" | "cuadricula" | "area">("imagen");

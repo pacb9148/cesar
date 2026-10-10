@@ -17,7 +17,7 @@ const PESTANAS = [
   ["informe", "4 · Informe"],
 ] as const;
 
-export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; iaConfigurada: boolean }) {
+export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; iaConfigurada: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; informeAlDia: boolean }) {
   const [tab, setTab] = useState<(typeof PESTANAS)[number][0]>("documentos");
   const alertas = p.caso.datos.alertas ?? [];
   return (
@@ -44,7 +44,7 @@ export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; recl
       {tab === "documentos" && <Documentos {...p} />}
       {tab === "datos" && <Datos caso={p.caso} />}
       {tab === "ajuste" && <Ajuste caso={p.caso} reclamacion={p.reclamacion} ajuste={p.ajuste} iaConfigurada={p.iaConfigurada} />}
-      {tab === "informe" && <Informe caso={p.caso} archivos={p.archivos} tieneAjuste={!!p.ajuste} />}
+      {tab === "informe" && <Informe caso={p.caso} archivos={p.archivos} tieneAjuste={!!p.ajuste} enInforme={p.enInforme} leyendasGrupos={p.leyendasGrupos} alDia={p.informeAlDia} />}
     </div>
   );
 }

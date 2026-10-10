@@ -21,6 +21,7 @@ import { RegistroDb } from "../ia/repo-proveedores";
 import { ClienteConRespaldo } from "../ia/rotacion";
 import { evidenciaMeteorologica } from "../meteo/inia";
 import { consulta } from "../db";
+import { leerLeyendasGrupos, marcarAlDia } from "./generacion";
 import {
   actualizarCaso,
   archivosConContenido,
@@ -121,7 +122,7 @@ export async function ejecutarAjuste(casoId: string, usuarioId: string, cliente?
   emitir("info", "datos", "Leyendo el caso y preparando lo que se enviará a la IA");
   const entrada = await prepararAjuste(casoId, usuarioId);
   // BYOK abierto: proveedores del propio usuario en orden de prioridad, con salto automático al siguiente si uno no responde.
-  const cli = cliente ?? new ClienteConRespaldo(new RegistroDb(usuarioId));
+  const cli = cliente ?? new ClienteConRespaldo(new RegistroDb(usuarioId), 3);
   try {
     const huella = await huellaDe(casoId);
     const r = await ajustarCaso(entrada, cli, {
@@ -245,6 +246,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     meteo: met,
     cuadroTabla: cuadroTablaXml(entrada),
     fotos: paraInforme,
+    piesGrupos: await leerLeyendasGrupos(casoId),
     fachada,
     siniestrosAnteriores: false,
   });
@@ -255,7 +257,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
       emitir("error", "informe", `No se pudo generar el PDF (${err instanceof Error ? err.message : "error"}): se entrega el Word`);
       return null;
     }),
-    generarAnexo({ siniestro: datos.siniestro, asegurado: datos.asegurado.nombre, liquidacion: datos.liquidacion, anio: datos.fechas.ocurrencia.slice(0, 4), fotos: todas }),
+    generarAnexo({ siniestro: datos.siniestro, asegurado: datos.asegurado.nombre, liquidacion: datos.liquidacion, anio: datos.fechas.ocurrencia.slice(0, 4), fotos: todas, pies: await leerLeyendasGrupos(casoId) }),
   ]);
 
   const pdf = pdfMotor?.pdf ?? null;
@@ -282,6 +284,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     entregables.push({ id, nombre, mime, tamano: buf.length });
   }
   await actualizarCaso(casoId, { estado: "emitido" });
+  await marcarAlDia(casoId);
 
   const faltantes: string[] = [...salida.faltantes.map((f) => f.campo)];
   if (!met) faltantes.push("captura de agrometeorologia.cl");

@@ -33,8 +33,12 @@ export function fotosDelAreaAfectada<T extends { recinto: string }>(fotos: T[], 
   });
 }
 
-/** Fotos del informe: las que el usuario marcó con ✓ (con su recorte) o, si no marcó ninguna, las del área afectada. */
+/**
+ * Fotos del informe: las del área afectada que elige el sistema, más las que el usuario añadió (✓), menos las que quitó. Así todo parte
+ * marcado por defecto y cualquier cambio del usuario vuelve a componer el informe con la nueva disposición. Conserva el orden de las fotos.
+ */
 export function seleccionarFotosInforme<T extends { recinto: string; edicion?: { incluir?: boolean; excluir?: boolean } | null }>(todas: T[], acta: ActaInspeccion): { fotos: T[]; elegidas: boolean } {
-  const elegidas = todas.filter((f) => f.edicion?.incluir === true);
-  return elegidas.length > 0 ? { fotos: elegidas, elegidas: true } : { fotos: fotosDelAreaAfectada(todas.filter((f) => f.edicion?.excluir !== true), acta), elegidas: false };
+  const auto = new Set<T>(fotosDelAreaAfectada(todas, acta));
+  const fotos = todas.filter((f) => f.edicion?.excluir !== true && (auto.has(f) || f.edicion?.incluir === true));
+  return { fotos, elegidas: todas.some((f) => f.edicion?.incluir === true || f.edicion?.excluir === true) };
 }

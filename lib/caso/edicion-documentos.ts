@@ -12,7 +12,8 @@ import type { EntradaExcel } from "../docs/excel";
 import { datosCasoSchema } from "../domain/tipos";
 import { leerPlanilla } from "../extraccion/planilla";
 import type { ActaInspeccion } from "../extraccion/acta";
-import { archivosConContenido, leerExtraccion, obtenerCaso } from "./repositorio";
+import { informeAlDia, leerLeyendasGrupos, marcarAlDia } from "./generacion";
+import { archivosConContenido, guardarExtraccion, leerExtraccion, obtenerCaso } from "./repositorio";
 
 export type VistaDocumento = { tipo: "docx"; nombre: string; bloques: BloqueVista[] } | { tipo: "xlsx"; nombre: string; hojas: HojaVista[] };
 
@@ -131,14 +132,15 @@ export async function sincronizarFotos(casoId: string, usuarioId: string): Promi
   const avisos: string[] = [];
   if (acta) {
     const { fotos: elegidas } = seleccionarFotosInforme(fotos, acta);
-    const r = await reemplazarFotos(informe.contenido, elegidas);
+    const pies = await leerLeyendasGrupos(casoId);
+    const r = await reemplazarFotos(informe.contenido, elegidas, pies);
     if (r.encontrado) await reemplazar(informe.id, r.buffer);
     else avisos.push("No se encontró la sección de fotografías del informe: vuelve a generarlo.");
   }
   const anexo = todas.find((a) => /^Anexo/i.test(a.nombre) && esDocx(a.nombre));
   if (anexo) {
     const d = caso.datos;
-    await reemplazar(anexo.id, await generarAnexo({ siniestro: d.siniestro ?? "", asegurado: d.asegurado?.nombre ?? "", liquidacion: d.liquidacion ?? "", anio: (d.fechas?.ocurrencia ?? "").slice(0, 4), fotos }));
+    await reemplazar(anexo.id, await generarAnexo({ siniestro: d.siniestro ?? "", asegurado: d.asegurado?.nombre ?? "", liquidacion: d.liquidacion ?? "", anio: (d.fechas?.ocurrencia ?? "").slice(0, 4), fotos, pies: await leerLeyendasGrupos(casoId) }));
   }
   return [...avisos, ...(await rehacerDerivados(casoId, pieDe(caso.datos)))];
 }
@@ -169,4 +171,25 @@ export async function guardarEdicion(casoId: string, usuarioId: string, aid: str
   await consulta("update casos set actualizado = now() where id = $1", [casoId]);
   const vista = (await vistaDe(casoId, aid))!;
   return { avisos, aplicados, vista };
+}
+
+/**
+ * Cambio en las fotos o en las leyendas de grupo: se aplica, el informe y el anexo se rehacen con la nueva disposición y, si el informe
+ * estaba al día antes del cambio, sigue al día (ya refleja lo que el usuario pidió); si no, el botón «Volver a generar» queda activo.
+ */
+export async function aplicarCambioFotos(casoId: string, usuarioId: string, cambio: () => Promise<unknown>): Promise<string[]> {
+  const alDia = await informeAlDia(casoId);
+  await cambio();
+  const avisos = await sincronizarFotos(casoId, usuarioId).catch((e: unknown) => [`No se pudo actualizar los documentos: ${e instanceof Error ? e.message : "error"}`]);
+  if (alDia && avisos.length === 0) await marcarAlDia(casoId);
+  return avisos;
+}
+
+/** Leyenda al pie del grupo de fotos de una estancia (vacía = sin leyenda). */
+export async function guardarLeyendaGrupo(casoId: string, recinto: string, leyenda: string): Promise<void> {
+  const actual = await leerLeyendasGrupos(casoId);
+  const limpia = leyenda.replace(/\s+/g, " ").trim();
+  if (limpia) actual[recinto] = limpia;
+  else delete actual[recinto];
+  await guardarExtraccion(casoId, "leyendas_grupos", actual);
 }

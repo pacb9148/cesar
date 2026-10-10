@@ -12,7 +12,7 @@ import type { FotoInforme } from "./word";
  * Anexo de fotografías: portada + 2×2 por recinto. Se construye sobre la misma plantilla del informe
  * para heredar cabecera con logo, pies y estilos, y se vacía el cuerpo.
  */
-export async function generarAnexo(o: { siniestro: string; asegurado: string; liquidacion: string; anio: string; fotos: FotoInforme[] }): Promise<Buffer> {
+export async function generarAnexo(o: { siniestro: string; asegurado: string; liquidacion: string; anio: string; fotos: FotoInforme[]; pies?: Record<string, string> }): Promise<Buffer> {
   const zip = new PizZip(readFileSync(join(process.cwd(), "plantillas", "informe.docx")));
   const doc: Doc = parse(zip.file("word/document.xml")!.asText());
   const body = doc.getElementsByTagNameNS(NS_W, "body")[0] as unknown as Element;
@@ -54,7 +54,7 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
   for (const rc of recintos) {
     const celdas: FotoCelda[] = [];
     for (const f of o.fotos.filter((x) => x.recinto === rc)) celdas.push({ rid: await add(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer), leyenda: f.edicion?.leyenda ?? "", id: f.id });
-    tablas.push(...tablasDeFotos(celdas, { titulo: rc }));
+    tablas.push(...tablasDeFotos(celdas, { titulo: rc, pie: o.pies?.[rc]?.trim() || undefined }));
   }
   tablas.forEach((t, i) => {
     add1(t);

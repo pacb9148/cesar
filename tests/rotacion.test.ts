@@ -17,6 +17,26 @@ class Memoria implements RegistroSalud {
 }
 const cand = (id: string, cliente: ClienteLlm, extra: Partial<Candidato> = {}): Candidato => ({ id, nombre: `P-${id}`, cliente, fallosSeguidos: 0, pausado: false, ...extra });
 
+describe("espera y reanudación ante un límite de uso", () => {
+  it("si todos fallan por cuota, espera lo que pide el proveedor y reintenta con el mismo proveedor", async () => {
+    let llamadas = 0;
+    const cuota: ClienteLlm = { generarJson: async () => { if (llamadas++ === 0) throw new ErrorHttp(429, "You exceeded your current quota. Please retry in 23.4s."); return { texto: "{}", modelo: "m" }; } };
+    const esperas: number[] = [];
+    const r = await new ClienteConRespaldo(new Memoria([cand("a", cuota)]), 2, async (ms) => void esperas.push(ms)).generarJson(entrada);
+    expect(r.modelo).toBe("P-a · m");
+    expect(esperas).toEqual([24000]);
+  });
+  it("sin esperas configuradas, o si el límite pide más de 90 s, falla de inmediato (el avance queda guardado)", async () => {
+    await expect(new ClienteConRespaldo(new Memoria([cand("a", roto(new ErrorHttp(429, "cuota", 30)))])).generarJson(entrada)).rejects.toThrow(/Ningún proveedor/);
+    const esperas: number[] = [];
+    await expect(new ClienteConRespaldo(new Memoria([cand("a", roto(new ErrorHttp(429, "cuota", 600)))]), 3, async (ms) => void esperas.push(ms)).generarJson(entrada)).rejects.toThrow(/Ningún proveedor/);
+    expect(esperas).toEqual([]);
+  });
+  it("un 429 se explica como límite de uso, no como falta de saldo", () => {
+    expect(clasificarFallo(new ErrorHttp(429, "You exceeded your current quota, check billing"), 0).error).toMatch(/Límite de uso/);
+  });
+});
+
 describe("rotación automática de proveedores", () => {
   it("si el primero no responde (503), usa el segundo en la misma petición y deja al primero en pausa", async () => {
     const reg = new Memoria([cand("a", roto(new ErrorHttp(503, "overloaded"))), cand("b", bueno("modelo-b"))]);

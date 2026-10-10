@@ -13,41 +13,34 @@ type Gen = { entregables: { id: string; nombre: string }[]; motorPdf: string; fa
 
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
 
-export default function Informe({ caso, archivos, tieneAjuste }: { caso: Caso; archivos: ArchivoMeta[]; tieneAjuste: boolean }) {
+export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyendasGrupos, alDia }: { caso: Caso; archivos: ArchivoMeta[]; tieneAjuste: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; alDia: boolean }) {
   const router = useRouter();
   const [viendo, setViendo] = useState<{ id: string; nombre: string } | null>(null);
   const gen = useFlujo<Gen>(`/api/casos/${caso.id}/generar`);
   const salidas = archivos.filter((a) => a.tipo === "salida");
   const faltantes = gen.resultado?.faltantes ?? [];
+  const hayInforme = salidas.length > 0;
+  // Con informe ya generado, el botón solo se activa si cambió algo (archivos, fotos, datos, ajuste o leyendas) desde la última generación.
+  const hayCambios = !hayInforme || !alDia;
+
+  async function generar() {
+    if (hayInforme && !window.confirm("Se rehará todo el informe con la última versión de los datos. Las ediciones que hayas hecho directamente en el Word o el Excel se descartan. ¿Continuar?")) return;
+    const r = await gen.ejecutar();
+    if (r) router.refresh();
+  }
+
   return (
     <section className="space-y-4">
       <div className="panel space-y-3 p-5">
         <h2 className="text-lg font-semibold">Informe de liquidación</h2>
         <p className="texto-suave text-sm">
           Genera el Excel de ajuste, el informe en Word y PDF (con el modelo y las imágenes de la plantilla), el anexo de fotografías y un paquete ZIP.
-          Incluye la captura de agrometeorologia.cl con la estación más cercana al riesgo; eso puede tardar un minuto.
+          Incluye la captura de agrometeorologia.cl con la estación más cercana al riesgo; eso puede tardar un minuto. El botón para generarlo está al final de esta página.
         </p>
-        <button className="btn" disabled={gen.cargando || !tieneAjuste} onClick={() => gen.ejecutar()}>
-          {gen.cargando ? "Generando documentos…" : salidas.length ? "Volver a generar" : "Generar informe"}
-        </button>
         {!tieneAjuste && <p className="aviso aviso-alerta">Primero ejecuta el ajuste (paso 3).</p>}
-        {gen.error && <p role="alert" className="aviso aviso-error">{gen.error}</p>}
-        <PanelTraza eventos={gen.eventos} cargando={gen.cargando} titulo="Qué está generando" />
-        {gen.resultado && gen.resultado.motorPdf === "html" && (
-          <p className="aviso aviso-alerta">El PDF se hizo con el conversor de respaldo (sin LibreOffice en este servidor): conserva el contenido pero no el formato exacto. El Word sí es el modelo exacto.</p>
-        )}
-        {gen.resultado && gen.resultado.motorPdf === "ninguno" && (
-          <p className="aviso aviso-alerta">Este servidor no tiene LibreOffice ni Chromium: no se generó el PDF (el Word y el Excel sí). Para tener PDF y la captura meteorológica, el administrador debe cambiar el Build Pack del proyecto a Dockerfile.</p>
-        )}
-        {faltantes.length > 0 && (
-          <div className="aviso aviso-alerta">
-            <strong>Quedan campos por completar a mano (aparecen en negrita como [FALTA DATO] en el Word):</strong>
-            <ul className="mt-1 list-disc pl-5">{faltantes.map((f, i) => (<li key={i}>{f}</li>))}</ul>
-          </div>
-        )}
       </div>
-      <FotosInforme casoId={caso.id} fotos={archivos.filter((a) => a.tipo === "foto")} />
-      {salidas.length > 0 && (
+      <FotosInforme casoId={caso.id} fotos={archivos.filter((a) => a.tipo === "foto")} enInforme={enInforme} leyendasGrupos={leyendasGrupos} />
+      {hayInforme && (
         <div className="panel p-5">
           <h3 className="mb-2 font-semibold">Descargas</h3>
           <ul className="divide-y divide-[var(--borde)]">
@@ -67,6 +60,33 @@ export default function Informe({ caso, archivos, tieneAjuste }: { caso: Caso; a
           </ul>
         </div>
       )}
+      <div className="panel space-y-3 p-5">
+        <h3 className="font-semibold">{hayInforme ? "Volver a generar el informe" : "Generar el informe"}</h3>
+        <p className="texto-suave text-sm">
+          {!hayInforme
+            ? "Aún no se ha generado el informe."
+            : alDia
+              ? "El informe está al día: no hay cambios en archivos, fotos, datos o ajuste desde la última generación."
+              : "Hubo cambios en archivos, fotos, datos, leyendas o ajuste desde la última generación: vuelve a generar para entregar la última versión."}
+        </p>
+        <button className="btn" disabled={gen.cargando || !tieneAjuste || !hayCambios} onClick={() => void generar()}>
+          {gen.cargando ? "Generando documentos…" : hayInforme ? "Volver a generar el informe" : "Generar informe"}
+        </button>
+        {gen.error && <p role="alert" className="aviso aviso-error">{gen.error}</p>}
+        <PanelTraza eventos={gen.eventos} cargando={gen.cargando} titulo="Qué está generando" />
+        {gen.resultado && gen.resultado.motorPdf === "html" && (
+          <p className="aviso aviso-alerta">El PDF se hizo con el conversor de respaldo (sin LibreOffice en este servidor): conserva el contenido pero no el formato exacto. El Word sí es el modelo exacto.</p>
+        )}
+        {gen.resultado && gen.resultado.motorPdf === "ninguno" && (
+          <p className="aviso aviso-alerta">Este servidor no tiene LibreOffice ni Chromium: no se generó el PDF (el Word y el Excel sí). Para tener PDF y la captura meteorológica, el administrador debe cambiar el Build Pack del proyecto a Dockerfile.</p>
+        )}
+        {faltantes.length > 0 && (
+          <div className="aviso aviso-alerta">
+            <strong>Quedan campos por completar a mano (aparecen en negrita como [FALTA DATO] en el Word):</strong>
+            <ul className="mt-1 list-disc pl-5">{faltantes.map((f, i) => (<li key={i}>{f}</li>))}</ul>
+          </div>
+        )}
+      </div>
       {viendo && <VistaDocumento key={viendo.id} casoId={caso.id} archivoId={viendo.id} nombre={viendo.nombre} onCerrar={() => setViendo(null)} onGuardado={() => router.refresh()} />}
     </section>
   );

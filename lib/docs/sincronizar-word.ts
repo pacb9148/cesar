@@ -4,7 +4,7 @@ import { aplicarEdicion } from "../fotos/aplicar";
 import { esEdicionNula, type EdicionFoto } from "../fotos/recorte";
 import { MARCA_CUADRO } from "./cuadro";
 import { crearEl, hijos, NS_W, parse, porTag, reemplazarEnParrafo, serializar, textoDe, type Doc } from "./docx-xml";
-import { FOTO_PX, tablasDeFotos, type FotoCelda } from "./fotos-xml";
+import { FOTO_PX, tablasPorGrupo, type FotoCelda } from "./fotos-xml";
 
 /**
  * Mantiene el Word al día cuando cambia algo de lo que depende: el cuadro de pérdida y los totales del texto (al editar el
@@ -78,7 +78,7 @@ async function fotoFinal(f: FotoParaWord): Promise<Buffer> {
  * Rehace la sección de fotografías del informe con la selección y los recortes actuales: quita las tablas de fotos anteriores
  * (conserva la imagen de fachada que tuvieran) y pone las nuevas en cuadrículas de 2 × 3.
  */
-export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[]): Promise<{ buffer: Buffer; encontrado: boolean }> {
+export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[], pies: Record<string, string> = {}): Promise<{ buffer: Buffer; encontrado: boolean }> {
   const { zip, doc, body } = cargar(docx);
   const ancla = hijos(body).find((e) => e.localName === "p" && /Las siguientes imágenes dan cuenta/.test(textoDe(e)));
   if (!ancla) return { buffer: docx, encontrado: false };
@@ -104,11 +104,11 @@ export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[]): Prom
   const rels = { texto: zip.file("word/_rels/document.xml.rels")!.asText() };
   const celdas: FotoCelda[] = [];
   let n = 0;
-  for (const f of fotos) celdas.push({ rid: agregarJpg(zip, rels, await fotoFinal(f), n++), leyenda: f.edicion?.leyenda ?? "", id: f.id });
+  for (const f of fotos) celdas.push({ rid: agregarJpg(zip, rels, await fotoFinal(f), n++), leyenda: f.edicion?.leyenda ?? "", id: f.id, grupo: f.recinto });
   for (const t of viejas) t.parentNode!.removeChild(t);
 
   let ultimo: Node = ancla;
-  for (const xml of tablasDeFotos(celdas, { fachada: ridFachada ? { rid: ridFachada, leyenda: "" } : null })) {
+  for (const xml of tablasPorGrupo(celdas, pies, ridFachada ? { rid: ridFachada, leyenda: "" } : null)) {
     const tabla = crearEl(doc, xml);
     ultimo.parentNode!.insertBefore(tabla, ultimo.nextSibling);
     const sep = crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>`);

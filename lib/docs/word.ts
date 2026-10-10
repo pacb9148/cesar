@@ -1,7 +1,7 @@
 import { aplicarEdicion } from "../fotos/aplicar";
 import { esEdicionNula } from "../fotos/recorte";
 import type { EdicionFoto } from "../fotos/recorte";
-import { FOTO_PX, FOTO_EMU, tablasDeFotos, type FotoCelda } from "./fotos-xml";
+import { FOTO_PX, FOTO_EMU, tablasPorGrupo, type FotoCelda } from "./fotos-xml";
 import PizZip from "pizzip";
 import sharp from "sharp";
 import { join } from "node:path";
@@ -44,6 +44,8 @@ export type EntradaInforme = {
   /** Cuadro de pérdida como tabla de Word (editable y actualizable al editar el Excel). */
   cuadroTabla: string[];
   fotos: FotoInforme[];
+  /** Leyenda al pie de cada grupo de fotos (por estancia), opcional. */
+  piesGrupos?: Record<string, string>;
   fachada: Buffer[];
   siniestrosAnteriores: boolean;
 };
@@ -268,10 +270,10 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     }
     // Una sola cuadrícula de 2 × 3 (varias si hay más fotos); la fachada, si existe, abre la primera como fila de cabecera.
     const celdas: FotoCelda[] = [];
-    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer, 0, { foto: true })).rid, leyenda: f.edicion?.leyenda ?? "", id: f.id });
+    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer, 0, { foto: true })).rid, leyenda: f.edicion?.leyenda ?? "", id: f.id, grupo: f.recinto });
     const fachada: FotoCelda | null = e.fachada[0] ? { rid: (await paq.imagen(e.fachada[0], 0, { foto: true })).rid, leyenda: "" } : null;
     let ancla: Node = pImgs;
-    for (const xml of tablasDeFotos(celdas, { fachada })) {
+    for (const xml of tablasPorGrupo(celdas, e.piesGrupos, fachada)) {
       const tabla = crearEl(doc, xml);
       ancla.parentNode!.insertBefore(tabla, ancla.nextSibling);
       const sep = crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>`);
