@@ -5,6 +5,7 @@ import { globSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync
 import { join, relative } from "node:path";
 import { leerPlanilla } from "../lib/extraccion/planilla";
 import { BAREMO } from "../lib/engine/baremo";
+import { conMinimo } from "../lib/engine/minimos";
 import { textoPdf } from "../lib/extraccion/pdf";
 import { parsearPresupuestoPdf, parsearPresupuestoXlsx } from "../lib/extraccion/presupuesto";
 import { CLAVES_CARACTERISTICAS, type SalidaAgente } from "../lib/domain/tipos";
@@ -101,6 +102,8 @@ const salida: SalidaAgente = {
   evidencia_observada: [{ recinto: "Cubierta", vineta: "desanclaje de cubierta y levantamiento de hojalatería.", m2_acta: 50, atribuible: true, fotos: [] }],
   lineas: p.decisiones.map((d) => {
     const b = BAREMO.find((x) => x.pu === d.pu);
+    // Regla del dueño: ninguna partida va a 0 (la planilla de referencia del perito sí dejaba ceros).
+    if (d.cantidad != null) d.cantidad = conMinimo(d.cantidad);
     const obs = d.cantidad === 0 ? ["A" as const] : d.obs.length ? d.obs.map((o) => (o === "C" ? "B" : o)) : ["B" as const];
     return { ...d, obs: obs as typeof d.obs, pu_origen: b ? `baremo:${b.id}` : "mercado:planilla de referencia", justificacion: "Ajuste según planilla de referencia" };
   }),
@@ -139,8 +142,8 @@ import PizZip from "pizzip";
 {
   const docx = new PizZip(readFileSync(join("tmp/e2e", `${(g.entregables ?? []).find((e) => /INFORME\.docx$/.test(e.nombre))?.nombre}`)));
   const xml = docx.file("word/document.xml")!.asText();
-  const fotos = (xml.match(/<wp:extent cx="2808000" cy="2340000"\/>/g) ?? []).length;
-  console.log("fotos 7,8×6,5 cm en el informe:", fotos, "(esperado 3, o 4 con fachada); leyenda editada:", xml.includes("Leyenda editada"));
+  const fotos = (xml.match(/<wp:extent cx="3117600" cy="2412000"\/>/g) ?? []).length;
+  console.log("fotos 8,66×6,70 cm en el informe:", fotos, "(esperado 3, o 4 con fachada); leyenda editada:", xml.includes("Leyenda editada"));
 }
 
 // ---- Edición completa: Excel → cuadro y totales del Word; foto → informe y anexo; formato en el Word; PDF exacto ----

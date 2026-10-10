@@ -7,7 +7,7 @@ import { docxAPdf, motorPdfDisponible } from "../docs/pdf";
 import { leyendaDeFoto, seleccionarFotosInforme } from "../docs/fotos-seleccion";
 import { actualizarTotales, reemplazarCuadro, reemplazarFotos, type FotoParaWord } from "../docs/sincronizar-word";
 import { aplicarEdiciones, docxAVista, type BloqueVista, type EdicionesWord } from "../docs/vista-docx";
-import { aplicarCeldas, cargarLibro, libroAVista, type CambioCelda, type HojaVista } from "../docs/vista-xlsx";
+import { aplicarCeldas, cargarLibro, libroAVista, type CambioCelda, type CambioFormato, type HojaVista } from "../docs/vista-xlsx";
 import type { EntradaExcel } from "../docs/excel";
 import { datosCasoSchema } from "../domain/tipos";
 import { leerPlanilla } from "../extraccion/planilla";
@@ -145,7 +145,7 @@ export async function sincronizarFotos(casoId: string, usuarioId: string): Promi
 
 export type ResultadoEdicion = { avisos: string[]; aplicados: number; vista: VistaDocumento };
 
-export async function guardarEdicion(casoId: string, usuarioId: string, aid: string, cambios: { word?: EdicionesWord; celdas?: CambioCelda[] }): Promise<ResultadoEdicion> {
+export async function guardarEdicion(casoId: string, usuarioId: string, aid: string, cambios: { word?: EdicionesWord; celdas?: CambioCelda[]; formato?: CambioFormato }): Promise<ResultadoEdicion> {
   const a = await salida(casoId, aid);
   if (!a) throw new Error("Documento no encontrado.");
   const caso = await obtenerCaso(casoId, usuarioId);
@@ -159,9 +159,9 @@ export async function guardarEdicion(casoId: string, usuarioId: string, aid: str
     aplicados = r.aplicados;
     await reemplazar(a.id, nuevo);
   } else if (esXlsx(a.nombre)) {
-    const r = await aplicarCeldas(a.contenido, cambios.celdas ?? []);
+    const r = await aplicarCeldas(a.contenido, cambios.celdas ?? [], cambios.formato ?? {});
     nuevo = r.buffer;
-    aplicados = (cambios.celdas ?? []).length;
+    aplicados = (cambios.celdas ?? []).length + (cambios.formato?.columnas?.length ?? 0) + (cambios.formato?.filas?.length ?? 0);
     await reemplazar(a.id, nuevo);
     avisos.push(...(await sincronizarWordConExcel(casoId, usuarioId, a.contenido, nuevo)));
   } else throw new Error("Solo se pueden editar los documentos Word y Excel.");

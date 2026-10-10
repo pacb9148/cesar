@@ -1,6 +1,7 @@
 import type { LetraObs } from "../domain/constantes";
 import type { DecisionLinea, LineaReclamacion } from "../domain/tipos";
 import { decisionRespetar } from "../ia/motor-ajuste";
+import { conMinimo } from "./minimos";
 
 /** Quién dejó la partida como está: nadie (se acepta lo reclamado), el sistema con IA, o el usuario a mano. */
 export type EstadoPartida = "sin_tocar" | "ia" | "usuario";
@@ -20,7 +21,7 @@ export type Cambio = { cantidad?: number; pu?: number; alternar?: LetraObs };
 export function editarDecision(rec: LineaReclamacion, actual: DecisionLinea | undefined, c: Cambio): DecisionLinea {
   const base = actual ?? decisionRespetar(rec);
   const um = base.um ?? rec.um;
-  const cantidad = c.cantidad ?? base.cantidad ?? rec.cantidad;
+  const cantidad = conMinimo(c.cantidad ?? base.cantidad ?? rec.cantidad, rec.cantidad);
   const pu = c.pu !== undefined && c.pu > 0 ? c.pu : (base.pu ?? rec.pu);
   const origenBase = base.pu_origen ?? "reclamacion";
   const pu_origen = c.pu !== undefined ? (pu === rec.pu ? "reclamacion" : "mercado:manual") : origenBase;

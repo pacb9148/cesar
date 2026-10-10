@@ -33,7 +33,7 @@ export const dimensionesGiradas = (ancho: number, alto: number, giro: EdicionFot
 
 export type Ventana = { x: number; y: number; w: number; h: number };
 
-/** Ventana de recorte (en píxeles de la imagen ya girada) con la proporción de 7,8 × 6,5 cm, ampliada por `zoom` y dentro de la imagen. */
+/** Ventana de recorte (en píxeles de la imagen ya girada) con la proporción de la foto (8,66 × 6,70 cm), ampliada por `zoom` y dentro de la imagen. */
 export function ventanaDeRecorte(anchoGirado: number, altoGirado: number, e: Pick<EdicionFoto, "zoom" | "cx" | "cy">): Ventana {
   let w: number;
   let h: number;
@@ -64,7 +64,7 @@ export const girar = (giro: EdicionFoto["giro"], sentido: 1 | -1): EdicionFoto["
 export const esEdicionNula = (e: EdicionFoto): boolean =>
   e.giro === 0 && !e.volteoH && !e.volteoV && e.zoom === 1 && e.cx === 0.5 && e.cy === 0.5 && e.brillo === 0 && e.contraste === 0 && e.saturacion === 0;
 
-/** Tamaño de la ventana de recorte sin ampliar (la mayor con la proporción 7,8 × 6,5 que cabe en la imagen). */
+/** Tamaño de la ventana de recorte sin ampliar (la mayor con la proporción de la foto que cabe en la imagen). */
 export function ventanaBase(anchoGirado: number, altoGirado: number): { w: number; h: number } {
   const v = ventanaDeRecorte(anchoGirado, altoGirado, { zoom: 1, cx: 0.5, cy: 0.5 });
   return { w: v.w, h: v.h };

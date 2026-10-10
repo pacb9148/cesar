@@ -92,49 +92,100 @@ const celdaNum = (c: ExcelJS.Cell): number | null => {
   return typeof x === "number" ? x : null;
 };
 
+type Columnas = { desc: number; um: number; cant: number; pu: number; total: number | null };
+
+/** Cada contratista nombra distinto sus columnas («Costo uni», «P. Unit.», «Valor unitario»…): se reconoce por el sentido, no por una palabra fija. */
+const ES_DESC = /PARTIDA|DESCRIP|DETALLE|ITEM|[IÍ]TEM|TRABAJO|ACTIVIDAD|CONCEPTO/;
+const ES_UM = /^(UNIDAD|UND|UN|U\/M|UM|U\.M\.?|MEDIDA)\b/;
+const ES_CANT = /CANT/;
+const ES_PU = /PREC|COSTO\s*UNI|VALOR\s*UNI|V\.?\s*UNIT|P\.?\s*UNIT|C\.?\s*UNIT|UNITARIO/;
+const ES_TOTAL = /TOTAL|SUBTOTAL|IMPORTE|MONTO/;
+
+/** Busca la fila de títulos de la tabla de partidas en una hoja; null si no parece un presupuesto. */
+function buscarCabecera(ws: ExcelJS.Worksheet): { fila: number; col: Columnas } | null {
+  let hallada: { fila: number; col: Columnas } | null = null;
+  ws.eachRow((row, r) => {
+    if (hallada || r > 60) return;
+    const col: Partial<Columnas> = {};
+    row.eachCell((c, i) => {
+      const h = celdaTxt(c).toUpperCase().replace(/\s+/g, " ").trim();
+      if (!h) return;
+      if (ES_CANT.test(h)) col.cant ??= i;
+      else if (ES_PU.test(h)) col.pu ??= i;
+      else if (ES_UM.test(h)) col.um ??= i;
+      else if (ES_TOTAL.test(h)) col.total ??= i;
+      else if (ES_DESC.test(h)) col.desc ??= i;
+    });
+    if (col.um && col.cant && col.pu) hallada = { fila: r, col: { desc: col.desc ?? Math.max(1, col.um - 1), um: col.um, cant: col.cant, pu: col.pu, total: col.total ?? null } };
+  });
+  return hallada;
+}
+
+/** Valor numérico de una fila de resumen (costo directo, GG, IVA…): la columna de totales y, si no, el último importe de la fila. */
+function importeDeResumen(row: ExcelJS.Row, col: Columnas): number | null {
+  if (col.total) {
+    const v = celdaNum(row.getCell(col.total));
+    if (v != null) return v;
+  }
+  let ultimo: number | null = null;
+  row.eachCell((c, i) => {
+    if (i <= col.pu) return;
+    const v = celdaNum(c);
+    if (v != null && Math.abs(v) >= 1) ultimo = v;
+  });
+  return ultimo;
+}
+
+const tieneNumeros = (row: ExcelJS.Row, desde: number): boolean => {
+  let hay = false;
+  row.eachCell((c, i) => {
+    if (i > desde && celdaNum(c) != null) hay = true;
+  });
+  return hay;
+};
+
 export async function parsearPresupuestoXlsx(buf: Buffer): Promise<ResultadoPresupuesto> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf as unknown as ArrayBuffer);
-  const ws = wb.worksheets[0];
   const alertas: string[] = [];
-  // Cabecera: fila que contiene UNIDAD, CANT y PREC.
-  let hdr = 0;
-  const col: Record<string, number> = {};
-  ws.eachRow((row, r) => {
-    if (hdr) return;
-    const txt = row.values as unknown[];
-    const joined = txt.map((x) => String(x ?? "").toUpperCase()).join("|");
-    if (/UNIDAD/.test(joined) && /CANT/.test(joined) && /PREC/.test(joined)) {
-      hdr = r;
-      row.eachCell((c, i) => {
-        const h = celdaTxt(c).toUpperCase();
-        if (/PARTIDA|DESCRIP/.test(h)) col.desc = i;
-        else if (/UNIDAD|U\/M/.test(h)) col.um = i;
-        else if (/CANT/.test(h)) col.cant = i;
-        else if (/PREC.*UNIT|P\.? ?UNIT/.test(h)) col.pu = i;
-      });
+  // Se prueba cada hoja: el presupuesto no siempre está en la primera.
+  let ws: ExcelJS.Worksheet | null = null;
+  let cab: { fila: number; col: Columnas } | null = null;
+  for (const h of wb.worksheets) {
+    const c = buscarCabecera(h);
+    if (c) {
+      ws = h;
+      cab = c;
+      break;
     }
-  });
-  if (!hdr || !col.desc || !col.um || !col.cant || !col.pu) {
-    return { reclamacion: { secciones: [], lineas: [], totalDirectoDeclarado: null, ggPct: 0, utilidadPct: 0, ivaPct: IVA }, alertas: ["No se reconoció la tabla de partidas del Excel (faltan columnas PARTIDA/UNIDAD/CANT/PRECIO)."] };
   }
+  if (!ws || !cab) {
+    return { reclamacion: { secciones: [], lineas: [], totalDirectoDeclarado: null, ggPct: 0, utilidadPct: 0, ivaPct: IVA }, alertas: ["No se reconoció la tabla de partidas del Excel (faltan las columnas de unidad, cantidad y precio unitario)."] };
+  }
+  const { fila: hdr, col } = cab;
   const c = new Constructor();
   const decl = { directo: null as number | null, gg: null as number | null, util: null as number | null, iva: null as number | null };
-  let subtotalNeto: number | null = null;
   ws.eachRow((row, r) => {
     if (r <= hdr) return;
     const desc = celdaTxt(row.getCell(col.desc));
     if (!desc) return;
     const um = unidadDe(celdaTxt(row.getCell(col.um)));
     const cant = celdaNum(row.getCell(col.cant));
-    const pu = celdaNum(row.getCell(col.pu));
-    if (um && cant != null && pu != null) c.linea(desc, um, cant, pu);
-    else if (/^SUBTOTAL NETO/i.test(desc)) subtotalNeto = celdaNum(row.getCell(col.pu + 3)) ?? celdaNum(row.getCell(col.pu + 2));
-    else if (/^(GGUU|GASTOS GENERALES)/i.test(desc)) decl.gg = celdaNum(row.getCell(col.pu + 3)) ?? celdaNum(row.getCell(col.pu + 2));
-    else if (/^IVA/i.test(desc)) decl.iva = celdaNum(row.getCell(col.pu + 3)) ?? celdaNum(row.getCell(col.pu + 2));
-    else if (!/^(COSTO TOTAL|SUBTOTAL|TOTAL)/i.test(desc)) c.seccion(desc);
+    let pu = celdaNum(row.getCell(col.pu));
+    // Sin precio unitario pero con el total de la línea: se deduce de ahí (el total es lo que cobra el contratista).
+    if (pu == null && cant && col.total) {
+      const t = celdaNum(row.getCell(col.total));
+      if (t != null) pu = t / cant;
+    }
+    if (um && cant != null && pu != null) return void c.linea(desc, um, cant, pu);
+    if (/^(SUB\s?TOTAL NETO|COSTO DIRECTO|TOTAL DIRECTO|TOTAL COSTO DIRECTO|NETO\b)/i.test(desc)) decl.directo = importeDeResumen(row, col);
+    else if (/^(GGUU|GG\s?(Y|&)\s?UU|GASTOS GENERALES|GG\b)/i.test(desc)) decl.gg = importeDeResumen(row, col);
+    else if (/^UTILIDAD/i.test(desc)) decl.util = importeDeResumen(row, col);
+    else if (/^I\.?V\.?A\b/i.test(desc)) decl.iva = importeDeResumen(row, col);
+    // Resúmenes y notas (valor obra, total, UF…) no son recintos; un recinto puede traer medidas (largo, ancho…) pero nunca importes en las columnas de unidad, cantidad o precio.
+    else if (/^(COSTO TOTAL|SUB\s?TOTAL|TOTAL|VALOR\b|PRECIO FINAL|OBSERVACION|NOTA)/i.test(desc) || tieneNumeros(row, Math.min(col.um, col.cant, col.pu) - 1)) return;
+    else c.seccion(desc);
   });
-  decl.directo = subtotalNeto;
   const r = cerrar(c.resultado(), decl, alertas);
   // En estos libros el costo directo no siempre trae valor en caché: si no hay, se acepta la suma.
   if (decl.directo == null) r.reclamacion.totalDirectoDeclarado = null;

@@ -141,12 +141,12 @@ describe("motor: contrasta lo presupuestado con el máximo permitido", () => {
     expect(d.accion).toBe("respetar");
     expect(d.obs).toEqual(["F"]);
   });
-  it("absorbida → cantidad 0 con E; ajena → 0 con A; preventiva → 1 con D; el precio nunca va a 0", () => {
+  it("absorbida → cantidad mínima 1 con E; ajena → 1 con A; preventiva → 1 con D; nada va a 0", () => {
     const a = decidirLinea(linea(), clas({ categoria: "absorbida" }), ctx).decision;
     const b = decidirLinea(linea(), clas({ categoria: "ajena" }), ctx).decision;
     const c = decidirLinea(linea(), clas({ categoria: "preventiva" }), ctx).decision;
-    expect([a.cantidad, a.obs]).toEqual([0, ["E"]]);
-    expect([b.cantidad, b.obs]).toEqual([0, ["A"]]);
+    expect([a.cantidad, a.obs]).toEqual([1, ["E"]]);
+    expect([b.cantidad, b.obs]).toEqual([1, ["A"]]);
     expect([c.cantidad, c.obs]).toEqual([1, ["D"]]);
     for (const d of [a, b, c]) expect(d.pu).toBeGreaterThan(0);
   });

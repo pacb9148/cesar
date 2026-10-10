@@ -2,9 +2,19 @@ import ExcelJS from "exceljs";
 import { evaluarFormula, numeroACol } from "./formulas";
 
 /** Vista editable de la planilla: valores tal como se ven, con las celdas de fórmula marcadas (no se editan: se recalculan). */
-export type CeldaVista = { r: number; c: number; txt: string; raw: string; f?: string; b?: boolean; fondo?: string; al?: "left" | "center" | "right"; fecha?: boolean };
-export type HojaVista = { nombre: string; filas: number; columnas: number; anchos: number[]; combinadas: { r1: number; c1: number; r2: number; c2: number }[]; celdas: CeldaVista[] };
+export type CeldaVista = { r: number; c: number; txt: string; raw: string; f?: string; b?: boolean; fondo?: string; al?: "left" | "center" | "right"; fecha?: boolean; aj?: boolean };
+/** `altos`: alto de cada fila en px (0 = automático); `ajusteTexto`: las celdas parten el texto en varias líneas en vez de cortarlo. */
+export type HojaVista = { nombre: string; filas: number; columnas: number; anchos: number[]; altos: number[]; ajusteTexto: boolean; combinadas: { r1: number; c1: number; r2: number; c2: number }[]; celdas: CeldaVista[] };
 export type CambioCelda = { hoja: string; r: number; c: number; valor: string };
+/** Formato de la planilla que el usuario ajusta para leerla mejor: anchos de columna y alto de fila en px de pantalla, y ajuste de texto por hoja. */
+export type CambioFormato = {
+  columnas?: { hoja: string; c: number; ancho: number }[];
+  filas?: { hoja: string; r: number; alto: number }[];
+  ajusteTexto?: { hoja: string; activo: boolean }[];
+};
+
+const PX_POR_ANCHO = 7; // un carácter de ancho de Excel ≈ 7 px
+const PT_POR_PX = 0.75; // 96 ppp → 72 pt
 
 const MAX_FILAS = 300;
 const MAX_COLS = 30;
@@ -77,6 +87,7 @@ export function libroAVista(wb: ExcelJS.Workbook): HojaVista[] {
             fondo,
             al: al === "left" || al === "center" || al === "right" ? al : undefined,
             fecha: res instanceof Date || undefined,
+            aj: cell.alignment?.wrapText || undefined,
           });
         }
       const merges = ((ws.model as { merges?: string[] }).merges ?? []).flatMap((m) => {
@@ -89,7 +100,12 @@ export function libroAVista(wb: ExcelJS.Workbook): HojaVista[] {
         nombre: ws.name,
         filas,
         columnas,
-        anchos: Array.from({ length: columnas }, (_, i) => Math.round((ws.getColumn(i + 1).width ?? 9) * 7)),
+        anchos: Array.from({ length: columnas }, (_, i) => Math.round((ws.getColumn(i + 1).width ?? 9) * PX_POR_ANCHO)),
+        altos: Array.from({ length: filas }, (_, i) => {
+          const h = ws.getRow(i + 1).height;
+          return h ? Math.round(h / PT_POR_PX) : 0;
+        }),
+        ajusteTexto: celdas.some((x) => x.aj),
         combinadas: merges.filter((m) => m.r1 <= filas && m.c1 <= columnas),
         celdas,
       };
@@ -141,8 +157,34 @@ export function recalcular(wb: ExcelJS.Workbook): number {
   return cambios;
 }
 
+/** Anchos, altos y ajuste de texto que el usuario dejó en pantalla pasan al propio archivo (así se ve igual al descargarlo). */
+export function aplicarFormato(wb: ExcelJS.Workbook, f: CambioFormato) {
+  const hoja = (n: string) => {
+    const ws = wb.getWorksheet(n);
+    if (!ws) throw new Error(`La hoja «${n}» no existe.`);
+    return ws;
+  };
+  for (const k of f.columnas ?? []) {
+    if (k.c < 1 || k.c > MAX_COLS) throw new Error(`Columna fuera de rango: ${k.c}`);
+    hoja(k.hoja).getColumn(k.c).width = Math.round((k.ancho / PX_POR_ANCHO) * 100) / 100;
+  }
+  for (const k of f.filas ?? []) {
+    if (k.r < 1 || k.r > MAX_FILAS) throw new Error(`Fila fuera de rango: ${k.r}`);
+    hoja(k.hoja).getRow(k.r).height = k.alto > 0 ? Math.round(k.alto * PT_POR_PX * 100) / 100 : (undefined as unknown as number);
+  }
+  for (const k of f.ajusteTexto ?? []) {
+    const ws = hoja(k.hoja);
+    ws.eachRow((row) =>
+      row.eachCell((cell) => {
+        if (resultadoDe(cell.value) == null || resultadoDe(cell.value) === "") return;
+        cell.alignment = { ...cell.alignment, wrapText: k.activo, vertical: cell.alignment?.vertical ?? "top" };
+      }),
+    );
+  }
+}
+
 /** Aplica las celdas editadas (nunca las de fórmula), recalcula y devuelve el nuevo archivo. */
-export async function aplicarCeldas(buf: Buffer, cambios: CambioCelda[]): Promise<{ buffer: Buffer; recalculadas: number }> {
+export async function aplicarCeldas(buf: Buffer, cambios: CambioCelda[], formato: CambioFormato = {}): Promise<{ buffer: Buffer; recalculadas: number }> {
   const wb = await cargarLibro(buf);
   for (const k of cambios) {
     const ws = wb.getWorksheet(k.hoja);
@@ -152,6 +194,7 @@ export async function aplicarCeldas(buf: Buffer, cambios: CambioCelda[]): Promis
     if (esFormula(cell.value)) throw new Error(`${k.hoja}!${numeroACol(k.c)}${k.r} es una fórmula: edita los valores de los que depende.`);
     cell.value = interpretarEntrada(k.valor, resultadoDe(cell.value) instanceof Date) as ExcelJS.CellValue;
   }
+  aplicarFormato(wb, formato);
   const recalculadas = recalcular(wb);
   wb.calcProperties.fullCalcOnLoad = true;
   return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), recalculadas };

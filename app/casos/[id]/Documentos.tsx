@@ -9,6 +9,8 @@ import PanelTraza from "@/components/PanelTraza";
 
 type Procesado = { alertas: string[]; archivosLeidos: string[]; partidas: number };
 const LOTE = 15;
+const nombreCorto = (n: string) => n.split(/[/\\]/).pop() ?? n;
+const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 export default function Documentos({ caso, archivos }: { caso: Caso; archivos: ArchivoMeta[] }) {
   const router = useRouter();
@@ -16,6 +18,9 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
   const sueltos = useRef<HTMLInputElement>(null);
   const [subiendo, setSubiendo] = useState<string | null>(null);
   const [errorSubida, setErrorSubida] = useState<string | null>(null);
+  const cambiar = useRef<HTMLInputElement>(null);
+  const reemplazando = useRef<string | null>(null);
+  const [avisoReemplazo, setAvisoReemplazo] = useState<string | null>(null);
   const proc = useFlujo<Procesado>(`/api/casos/${caso.id}/procesar`);
 
   async function subir(lista: FileList | null) {
@@ -41,8 +46,30 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
     router.refresh();
   }
 
-  async function quitar(id: string) {
-    await fetch(`/api/casos/${caso.id}/archivos/${id}`, { method: "DELETE" });
+  async function quitar(d: ArchivoMeta) {
+    if (!window.confirm(`¿Quitar «${nombreCorto(d.nombre)}» del caso?`)) return;
+    await fetch(`/api/casos/${caso.id}/archivos/${d.id}`, { method: "DELETE" });
+    router.refresh();
+  }
+
+  /** Cambia un archivo ya cargado por otro (p. ej. una versión corregida del presupuesto) sin tener que quitarlo y volver a subir todo. */
+  async function reemplazar(lista: FileList | null) {
+    const id = reemplazando.current;
+    reemplazando.current = null;
+    const f = lista?.[0];
+    if (!id || !f) return;
+    setErrorSubida(null);
+    setAvisoReemplazo(null);
+    setSubiendo(`Cargando «${f.name}»…`);
+    const fd = new FormData();
+    fd.append("archivo", f);
+    const r = await fetch(`/api/casos/${caso.id}/archivos/${id}`, { method: "PUT", body: fd });
+    setSubiendo(null);
+    if (!r.ok) {
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      return setErrorSubida(j.error ?? `Error ${r.status} al cargar`);
+    }
+    setAvisoReemplazo(`«${f.name}» reemplazó al archivo anterior. Pulsa «Leer documentos» para que se vuelva a leer.`);
     router.refresh();
   }
 
@@ -68,18 +95,24 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
         </div>
         {subiendo && <p role="status" className="aviso aviso-ok">{subiendo}</p>}
         {errorSubida && <p role="alert" className="aviso aviso-error">{errorSubida}</p>}
+        {avisoReemplazo && <p role="status" className="aviso aviso-ok">{avisoReemplazo}</p>}
       </div>
 
       {(docs.length > 0 || fotos.length > 0) && (
         <div className="panel p-5">
           <h3 className="mb-2 font-semibold">Archivos cargados</h3>
+          <input ref={cambiar} type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={(e) => { void reemplazar(e.target.files); e.target.value = ""; }} />
           <ul className="divide-y divide-[var(--borde)] text-sm">
             {docs.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-3 py-1.5">
-                <span className="min-w-0 truncate">{d.nombre}</span>
-                <span className="flex shrink-0 items-center gap-2">
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
+                <span className="min-w-0 flex-1 truncate" title={d.nombre}>
+                  {nombreCorto(d.nombre)} <span className="texto-suave text-xs">· {kb(d.tamano)}</span>
+                </span>
+                <span className="flex shrink-0 flex-wrap items-center gap-2">
                   <span className="insignia">{ETIQUETA_TIPO[d.tipo as keyof typeof ETIQUETA_TIPO] ?? d.tipo}</span>
-                  <button className="texto-suave underline" onClick={() => quitar(d.id)} aria-label={`Quitar ${d.nombre}`}>quitar</button>
+                  <a className="btn btn-sec !px-2 !py-0.5 text-xs" href={`/api/casos/${caso.id}/archivos/${d.id}`} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${nombreCorto(d.nombre)}`}>Abrir</a>
+                  <button type="button" className="btn btn-sec !px-2 !py-0.5 text-xs" disabled={!!subiendo} onClick={() => { reemplazando.current = d.id; cambiar.current?.click(); }} aria-label={`Cargar otro archivo en lugar de ${nombreCorto(d.nombre)}`}>Cargar otro</button>
+                  <button type="button" className="btn btn-sec !px-2 !py-0.5 text-xs" onClick={() => quitar(d)} aria-label={`Quitar ${nombreCorto(d.nombre)}`}>Quitar</button>
                 </span>
               </li>
             ))}

@@ -69,7 +69,7 @@ class Paquete {
   }
   async imagen(buf: Buffer, anchoIn: number, opts: { cover43?: boolean; foto?: boolean; maxPx?: number } = {}): Promise<Media> {
     let img = sharp(buf).rotate();
-    // Fotos del informe: recorte a 7,8 × 6,5 cm centrado en la zona más llamativa de la imagen (el área con el daño).
+    // Fotos del informe: recorte a 8,66 × 6,70 cm centrado en la zona más llamativa de la imagen (el área con el daño).
     if (opts.foto) img = img.resize(FOTO_PX.ancho, FOTO_PX.alto, { fit: "cover", position: sharp.strategy.attention });
     else if (opts.cover43) img = img.resize(900, 675, { fit: "cover" });
     else img = img.resize({ width: opts.maxPx ?? 1600, withoutEnlargement: true });

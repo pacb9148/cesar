@@ -19,8 +19,8 @@ Devuelves:
   • "respetar": lo reclamado está acorde a mercado y a la realidad del daño (letra F).
   • "ajustar": la partida es válida pero su precio o su cantidad pueden exceder lo permitido; el sistema bajará el precio al baremo y la cantidad a la medida que elijas.
   • "desglosar": una sola línea agrupa varias faenas (p. ej. "extracción, empaste y pintura"): el sistema la separa en recambio estructural y pintura.
-  • "absorbida": mano de obra global, leyes sociales o insumos menores (silicona, clavos, lijas) que ya van incluidos en partidas a todo costo (letra E; cantidad 0).
-  • "ajena": daño por mantenimiento, oxidación o deterioro progresivo, o preexistente, que no es del evento (letra A; cantidad 0).
+  • "absorbida": mano de obra global, leyes sociales o insumos menores (silicona, clavos, lijas) que ya van incluidos en partidas a todo costo (letra E; el sistema deja la cantidad mínima 1: ninguna partida va a 0).
+  • "ajena": daño por mantenimiento, oxidación o deterioro progresivo, o preexistente, que no es del evento (letra A; el sistema deja la cantidad mínima 1: ninguna partida va a 0).
   • "preventiva": preparación de superficie redundante o accesorio sin daño reportado (cornisas, guardapolvos, empastes de toda la pieza): se deja la cantidad mínima 1 (letra D).
 - baremo_id: el id del candidato de baremo que corresponde a la faena a todo costo (material + mano de obra). Solo ids de "baremo_candidatos" de esa partida; null si ninguno corresponde.
 - base: contra qué medida se contrasta la cantidad. "acta_m2" para reparaciones estructurales (yeso, OSB, terciado, lana): solo los m² dañados del acta o el mínimo técnico ("plancha" = 2.88 m²). "pano" (o "muro_neto", "cielo", "piso", "ml") para terminaciones estéticas (pintura, papel mural, cerámica): la superficie continua de la habitación. "reclamada" si la cantidad reclamada ya es la correcta.

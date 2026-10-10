@@ -12,7 +12,7 @@ const promedio = async (b: Buffer) => {
 };
 
 describe("recorte de fotografías", () => {
-  it("la ventana mantiene la proporción 7,8 × 6,5 y el zoom la reduce", () => {
+  it("la ventana mantiene la proporción 8,66 × 6,70 y el zoom la reduce", () => {
     const v1 = ventanaDeRecorte(2000, 1000, { zoom: 1, cx: 0.5, cy: 0.5 });
     expect(v1.w / v1.h).toBeCloseTo(PROPORCION_FOTO, 5);
     expect(v1.h).toBe(1000);

@@ -29,15 +29,16 @@ export const FRASES_PROHIBIDAS = [
   "se supone",
 ];
 
-/** Cantidad 0 solo es válida con estas letras (daño ajeno al evento o actividad absorbida). */
-export const LETRAS_CANTIDAD_CERO: readonly LetraObs[] = ["A", "D", "E"];
-
 /** Fotografías del informe y del anexo: tamaño fijo de cada imagen y cuadrícula de 2 columnas × 3 filas por tabla. */
-export const FOTO_ANCHO_CM = 7.8;
-export const FOTO_ALTO_CM = 6.5;
+export const FOTO_ANCHO_CM = 8.66;
+export const FOTO_ALTO_CM = 6.7;
+/** Ancho de la tabla de fotos: dos columnas de una imagen cada una, sin bordes ni márgenes internos (17,32 cm). */
+export const FOTOS_TABLA_ANCHO_CM = FOTO_ANCHO_CM * 2;
+/** Texto para la interfaz, siempre derivado de las medidas reales. */
+export const FOTO_TAMANO_TEXTO = `${FOTO_ANCHO_CM.toFixed(2).replace(".", ",")} × ${FOTO_ALTO_CM.toFixed(2).replace(".", ",")} cm`;
 export const FOTOS_COLUMNAS = 2;
 export const FOTOS_FILAS = 3;
 export const FOTOS_POR_TABLA = FOTOS_COLUMNAS * FOTOS_FILAS;
 /** Máximo de fotos por recinto en el informe: las más relevantes del área afectada; el anexo lleva todas. */
-export const FOTOS_MAX_POR_RECINTO_INFORME = 4;
-export const LEYENDA_FOTO_MAX = 46; // caracteres: una sola línea bajo una imagen de 7,8 cm
+export const FOTOS_MAX_POR_RECINTO_INFORME = FOTOS_COLUMNAS * FOTOS_FILAS;
+export const LEYENDA_FOTO_MAX = 52; // caracteres: una sola línea (Times New Roman 10 cursiva) bajo una imagen de 8,66 cm

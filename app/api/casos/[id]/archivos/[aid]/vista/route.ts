@@ -18,6 +18,13 @@ const cuerpo = z.object({
       quitarImagenes: z.array(z.number().int().min(0)).max(200).optional(),
     })
     .optional(),
+  formato: z
+    .object({
+      columnas: z.array(z.object({ hoja: z.string().max(60), c: z.number().int().min(1).max(30), ancho: z.number().min(20).max(900) })).max(200).optional(),
+      filas: z.array(z.object({ hoja: z.string().max(60), r: z.number().int().min(1).max(300), alto: z.number().min(0).max(900) })).max(1000).optional(),
+      ajusteTexto: z.array(z.object({ hoja: z.string().max(60), activo: z.boolean() })).max(20).optional(),
+    })
+    .optional(),
   celdas: z.array(z.object({ hoja: z.string().max(60), r: z.number().int().min(1), c: z.number().int().min(1), valor: z.string().max(500) })).max(2000).optional(),
 });
 

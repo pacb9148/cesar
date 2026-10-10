@@ -1,3 +1,4 @@
+import { conMinimo } from "./minimos";
 import type { DatosCaso, DecisionLinea, LineaAdicional, Reclamacion, Seccion, Unidad } from "../domain/tipos";
 
 export type EntradaFilas = {
@@ -47,7 +48,7 @@ export function armarFilas(e: EntradaFilas): FilaCuadro[] {
             item: `${l.item}.${k + 1}`,
             descripcion: sl.descripcion,
             rec: null,
-            aj: { um: sl.um, cantidad: sl.cantidad, pu: sl.pu },
+            aj: { um: sl.um, cantidad: conMinimo(sl.cantidad), pu: sl.pu },
             obs: sl.obs,
           }),
         );
@@ -61,7 +62,7 @@ export function armarFilas(e: EntradaFilas): FilaCuadro[] {
         rec,
         aj: respeta
           ? { um: l.um, cantidad: l.cantidad, pu: l.pu }
-          : { um: d.um ?? l.um, cantidad: d.cantidad ?? 0, pu: d.pu ?? l.pu },
+          : { um: d.um ?? l.um, cantidad: conMinimo(d.cantidad ?? 0, l.cantidad), pu: d.pu ?? l.pu },
         obs: respeta && d.obs.length === 0 ? ["F"] : d.obs,
       });
     }
@@ -73,7 +74,7 @@ export function armarFilas(e: EntradaFilas): FilaCuadro[] {
         item: `${s.numero.split(".")[0]}.${n}`,
         descripcion: a.descripcion,
         rec: null,
-        aj: { um: a.um, cantidad: a.cantidad, pu: a.pu },
+        aj: { um: a.um, cantidad: conMinimo(a.cantidad), pu: a.pu },
         obs: a.obs,
       });
     }

@@ -8,7 +8,7 @@ import { EDICION_INICIAL, esEdicionNula } from "@/lib/fotos/recorte";
 import { FOTO_ALTO_CM, FOTO_ANCHO_CM } from "@/lib/domain/constantes";
 import EditorFoto from "./EditorFoto";
 
-/** Galería de las fotos del caso: se elige cuáles van al informe y se encuadra cada una (7,8 × 6,5 cm) antes de generarlo. */
+/** Galería de las fotos del caso: se elige cuáles van al informe y se encuadra cada una (8,66 × 6,70 cm) antes de generarlo. */
 export default function FotosInforme({ casoId, fotos }: { casoId: string; fotos: ArchivoMeta[] }) {
   const router = useRouter();
   const [editando, setEditando] = useState<ArchivoMeta | null>(null);

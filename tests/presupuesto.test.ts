@@ -31,3 +31,19 @@ describe("presupuesto del contratista", () => {
     expect(r.alertas).toEqual([]);
   });
 });
+
+describe("presupuesto con otros títulos de columna (caso 1990660)", () => {
+  it("lee las 68 partidas aunque el precio se llame «Costo uni», sin tratar «Valor Obra» como recinto", async () => {
+    const r = await parsearPresupuestoXlsx(readFileSync(f("1990660*/DOCUMENTOS/Presupuesto*.xlsx")));
+    expect(r.reclamacion.lineas).toHaveLength(68);
+    expect(suma(r.reclamacion)).toBeCloseTo(6189086, 0);
+    expect(r.reclamacion.totalDirectoDeclarado).toBe(6189086);
+    expect(r.reclamacion.secciones.map((s) => s.titulo)).toEqual(["Cocina", "Dormitorio 1", "Living comedor", "Caja escala", "Dormitorio 2 segundo piso", "Dormitorio 3 segundo piso", "Otros"]);
+    expect([r.reclamacion.ggPct, r.reclamacion.utilidadPct, r.reclamacion.ivaPct]).toEqual([0.25, 0, 0.19]);
+    expect(r.alertas).toEqual([]);
+  });
+  it("conserva los recintos del caso 1 aunque traigan medidas en columnas previas a la unidad", async () => {
+    const r = await parsearPresupuestoXlsx(readFileSync(f("1981023*/DOCUMENTOS/*Presupuesto.xlsx")));
+    expect(r.reclamacion.secciones).toHaveLength(8);
+  });
+});

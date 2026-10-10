@@ -1,6 +1,7 @@
-import { FRASES_PROHIBIDAS, LETRAS_CANTIDAD_CERO, MARCADOR_FALTA_DATO } from "../domain/constantes";
+import { FRASES_PROHIBIDAS, MARCADOR_FALTA_DATO } from "../domain/constantes";
 import type { Reclamacion, SalidaAgente } from "../domain/tipos";
 import { porId } from "../engine/baremo";
+import { cantidadMinima } from "../engine/minimos";
 
 export type ResultadoValidacion = { errores: string[]; advertencias: string[] };
 
@@ -58,7 +59,7 @@ export function validarSalida(s: SalidaAgente, ctx: ContextoValidacion): Resulta
       if (l.sublineas.length < 2) errores.push(`${d}: el desglose lleva al menos 2 sub-líneas (recambio estructural y pintura).`);
       for (const [i, sl] of l.sublineas.entries()) {
         validarPrecio(sl.pu_origen, sl.pu, null, ctx, `${d} sub-línea ${i + 1}`, errores, advertencias);
-        if (sl.cantidad === 0 && !sl.obs.some((o) => LETRAS_CANTIDAD_CERO.includes(o))) errores.push(`${d} sub-línea ${i + 1}: cantidad 0 solo con A, D o E.`);
+        if (sl.cantidad < 1) errores.push(`${d} sub-línea ${i + 1}: ninguna partida va a 0, la cantidad mínima es 1.`);
       }
       continue;
     }
@@ -68,7 +69,7 @@ export function validarSalida(s: SalidaAgente, ctx: ContextoValidacion): Resulta
     }
     if (l.obs.length === 0) errores.push(`${d}: toda partida ajustada lleva al menos una letra de observación.`);
     if (l.pu <= 0) errores.push(`${d}: el precio unitario nunca va a 0.`);
-    if (l.cantidad === 0 && !l.obs.some((o) => LETRAS_CANTIDAD_CERO.includes(o))) errores.push(`${d}: cantidad 0 solo con A, D o E.`);
+    if (l.cantidad < cantidadMinima(rc?.cantidad)) errores.push(`${d}: ninguna partida va a 0, la cantidad mínima es ${cantidadMinima(rc?.cantidad)}.`);
     if (l.obs.includes("F")) {
       if (l.obs.length > 1) errores.push(`${d}: F (se respeta lo reclamado) no se combina con otras letras.`);
       if (rc && (Math.abs(l.cantidad - rc.cantidad) > 1e-9 || Math.abs(l.pu - rc.pu) > 0.5))

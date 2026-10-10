@@ -88,3 +88,13 @@ npx tsx scripts/e2e.mts 1981023
 - OCR con visión para PDF escaneados (presupuestos sin texto).
 - Panel de baremo editable y precios de mercado con fuente.
 - `exceljs` arrastra `uuid` con una vulnerabilidad moderada: revisar al actualizar la librería.
+
+## Cambios del 10/10/2026
+
+- **Lectura del presupuesto**: reconoce columnas por sentido («Costo uni», «P. Unit.», «Valor unitario»…) y busca la tabla en cualquier hoja. El caso 1990660 (68 partidas, $6.189.086) ya no cae en «pérdida determinada».
+- **Regla del dueño**: ninguna partida se ajusta a 0 (mínimo 1; si lo reclamado era menor, se respeta lo reclamado). Un precio presupuestado menor que el baremo se deja igual. El ajuste de referencia del caso 1 pasa de UF 46,73 a UF 49,28 por esta regla.
+- **Archivos cargados**: abrir, cargar otro (reemplazar) y quitar.
+- **Excel**: columnas y filas ajustables en pantalla (arrastrar, doble clic, ajustar texto) y guardadas en el archivo; anchos legibles al generar; hoja Resumen con totales vivos y reglas verificadas.
+- **Fotos**: 8,66 × 6,70 cm, tabla de 17,32 cm, máximo 6 por estancia.
+- **Panel «Cumplimiento de las reglas del ajuste»** (reglas duras de `Especificacion_Tecnica_ACAS.md`).
+- Nota sobre `docs/01-informe-analisis-y-diseno.md`: su línea «el PU nunca va a 0; si debe ir a 0 va la cantidad» queda superada por la regla anterior (la cantidad tampoco va a 0).

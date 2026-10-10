@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { CANTIDAD_PREVENTIVA, PLANCHA_M2 } from "../domain/constantes";
+import { PLANCHA_M2 } from "../domain/constantes";
 import { unidadSchema, type DecisionLinea, type LineaReclamacion, type Sublinea, type Unidad } from "../domain/tipos";
 import { candidatos, porId } from "../engine/baremo";
 import type { Cubicacion } from "../engine/cubicacion";
+import { cantidadMinima, conMinimo } from "../engine/minimos";
 
 /**
  * Motor determinista del ajuste. El modelo NO decide cifras: por cada partida solo la clasifica (qué tipo de partida es, qué
@@ -67,7 +68,7 @@ export const decisionRespetar = (l: LineaReclamacion): DecisionLinea => ({
 function sublinea(descripcion: string, um: Unidad, cantidad: number, baremoId: number, obs: Sublinea["obs"], justificacion: string): Sublinea | null {
   const b = porId(baremoId);
   if (!b) return null;
-  return { descripcion, um, cantidad: r2(cantidad), pu: b.pu, pu_origen: `baremo:${b.id}`, obs, justificacion };
+  return { descripcion, um, cantidad: r2(conMinimo(cantidad)), pu: b.pu, pu_origen: `baremo:${b.id}`, obs, justificacion };
 }
 
 /** Partida agrupada: se deja en blanco y se desglosa en recambio estructural (m² dañados del acta) y pintura (paño completo). */
@@ -105,10 +106,10 @@ export function decidirLinea(l: LineaReclamacion, c: Clasificacion, ctx: Context
   }
   const precioCambia = origen !== "reclamacion";
 
-  if (c.categoria === "absorbida") return { decision: { item: l.item, accion: "ajustar", um: l.um, cantidad: 0, pu, pu_origen: origen, obs: ["E"], justificacion: "Actividad absorbida en gastos generales o en partidas a todo costo.", sublineas: [] } };
-  if (c.categoria === "ajena") return { decision: { item: l.item, accion: "ajustar", um: l.um, cantidad: 0, pu, pu_origen: origen, obs: ["A"], justificacion: "Daño por mantenimiento o deterioro progresivo, ajeno al evento.", sublineas: [] } };
+  if (c.categoria === "absorbida") return { decision: { item: l.item, accion: "ajustar", um: l.um, cantidad: cantidadMinima(l.cantidad), pu, pu_origen: origen, obs: ["E"], justificacion: "Actividad absorbida en gastos generales o en partidas a todo costo: se deja la cantidad mínima, nunca 0.", sublineas: [] } };
+  if (c.categoria === "ajena") return { decision: { item: l.item, accion: "ajustar", um: l.um, cantidad: cantidadMinima(l.cantidad), pu, pu_origen: origen, obs: ["A"], justificacion: "Daño por mantenimiento o deterioro progresivo, ajeno al evento: se deja la cantidad mínima, nunca 0.", sublineas: [] } };
   if (c.categoria === "preventiva") {
-    const cant = Math.min(l.cantidad, CANTIDAD_PREVENTIVA);
+    const cant = cantidadMinima(l.cantidad);
     return { decision: { item: l.item, accion: "ajustar", um: l.um, cantidad: cant, pu, pu_origen: origen, obs: ["D"], justificacion: "No se registran daños en esa magnitud en el acta: se deja la cantidad mínima preventiva.", sublineas: [] } };
   }
 
@@ -118,10 +119,10 @@ export function decidirLinea(l: LineaReclamacion, c: Clasificacion, ctx: Context
   let cantidad = l.cantidad;
   let umFinal: Unidad = l.um;
   if (mismaUm) {
-    if (tope != null) cantidad = Math.min(l.cantidad, r2(tope));
+    if (tope != null) cantidad = Math.min(l.cantidad, conMinimo(r2(tope), l.cantidad));
     else if (c.base !== "reclamada") aviso = `Partida ${l.item}: no hay medición para «${c.base}»; se mantuvo la cantidad reclamada.`;
   } else if (tope != null) {
-    cantidad = r2(tope);
+    cantidad = conMinimo(r2(tope));
     umFinal = umDestino;
   } else {
     pu = l.pu;

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BotonIcono, Icono, type NombreIcono } from "@/components/Iconos";
 import VentanaModal from "@/components/VentanaModal";
-import { LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
+import { FOTO_TAMANO_TEXTO, LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
 import { EDICION_INICIAL, PROPORCION_FOTO, ZOOM_MAX, centroValido, dimensionesGiradas, encuadreDeRectangulo, girar, ventanaBase, ventanaDeRecorte, type EdicionFoto } from "@/lib/fotos/recorte";
 
@@ -317,7 +317,7 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
             </label>
           </div>
 
-          {/* Centro: el recorte tal como se insertará (7,8 × 6,5 cm) */}
+          {/* Centro: el recorte tal como se insertará (8,66 × 6,70 cm) */}
           <div className="space-y-2">
             <div
               ref={escenario}
@@ -386,7 +386,7 @@ export default function EditorFoto({ casoId, foto, onCerrar, onGuardado }: { cas
               )}
               {!img && !error && <span className="absolute inset-0 grid place-items-center text-sm text-white">Cargando fotografía…</span>}
             </div>
-            <p className="text-center text-xs text-[color:var(--suave)]">Marco de 7,8 × 6,5 cm, tal como irá en el informe. Arrastra para encuadrar; la rueda amplía; con el icono de selección dibuja un rectángulo sobre el detalle que quieres.</p>
+            <p className="text-center text-xs text-[color:var(--suave)]">Marco de {FOTO_TAMANO_TEXTO}, tal como irá en el informe. Arrastra para encuadrar; la rueda amplía; con el icono de selección dibuja un rectángulo sobre el detalle que quieres.</p>
           </div>
 
           {/* Derecha: cuadrícula de guía y mapa */}

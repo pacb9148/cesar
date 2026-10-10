@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { FOTO_PX } from "../docs/fotos-xml";
 import { ventanaDeRecorte, type EdicionFoto } from "./recorte";
 
-/** Foto final lista para el documento: exactamente FOTO_PX (proporción 7,8 × 6,5 cm), con la edición del usuario aplicada. */
+/** Foto final lista para el documento: exactamente FOTO_PX (proporción 8,66 × 6,70 cm), con la edición del usuario aplicada. */
 export async function aplicarEdicion(buffer: Buffer, e: EdicionFoto): Promise<Buffer> {
   // Se orienta por EXIF y se aplica el giro y el volteo; después se recorta sobre esa imagen, igual que en la pantalla de edición.
   let base = sharp(buffer).rotate();

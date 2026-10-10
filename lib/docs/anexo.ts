@@ -58,7 +58,8 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
   }
   tablas.forEach((t, i) => {
     add1(t);
-    if (i < tablas.length - 1) add1(`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`);
+    // Una tabla de 6 fotos de 6,70 cm casi llena la página: el salto va en un párrafo de 1 pt para que no se desborde y deje una página vacía.
+    if (i < tablas.length - 1) add1(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:br w:type="page"/></w:r></w:p>`);
   });
   zip.file("word/document.xml", serializar(doc));
   zip.file("word/_rels/document.xml.rels", rels);

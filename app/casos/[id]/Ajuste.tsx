@@ -9,6 +9,8 @@ import { CLAVES_CARACTERISTICAS, type LineaReclamacion, type Reclamacion, type S
 import { armarFilas, type FilaCuadro } from "@/lib/engine/filas";
 import { editarDecision, estadoDe, type Cambio, type EstadoPartida } from "@/lib/engine/edicion";
 import { calcularTotales } from "@/lib/engine/totales";
+import { auditarAjuste } from "@/lib/engine/auditoria";
+import { cantidadMinima } from "@/lib/engine/minimos";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
 import VistaPreviaAjuste from "./VistaPreviaAjuste";
@@ -44,7 +46,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
     const p = { ggPct: recl.ggPct, utilidadPct: recl.utilidadPct, ivaPct: recl.ivaPct, valorUF };
     const rec = calcularTotales(filas.flatMap((f) => (f.tipo === "linea" && f.rec ? [{ cantidad: f.rec.cantidad, pu: f.rec.pu }] : [])), p);
     const aj = calcularTotales(filas.flatMap((f) => (f.tipo === "linea" && f.aj ? [{ cantidad: f.aj.cantidad, pu: f.aj.pu }] : [])), p);
-    return { filas, rec, aj };
+    return { filas, rec, aj, auditoria: auditarAjuste(filas, recl) };
   }, [salida, recl, valorUF, caso.modo]);
 
   const porItem = useMemo(() => new Map((salida?.lineas ?? []).map((l) => [l.item, l])), [salida]);
@@ -63,6 +65,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
   function escribir(rl: LineaReclamacion, campo: "cantidad" | "pu", crudo: string) {
     setBorrador((d) => ({ ...d, [`${rl.item}|${campo}`]: crudo }));
     const n = crudo === "" ? rl[campo] : Number(crudo);
+    // Ninguna partida va a 0: una cantidad menor al mínimo se lleva al mínimo al aplicarla (editarDecision).
     if (Number.isFinite(n) && n >= 0 && (campo === "cantidad" || n > 0)) aplicar(rl, { [campo]: n });
   }
   const soltar = (rl: LineaReclamacion, campo: "cantidad" | "pu") =>
@@ -136,6 +139,27 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
             <Kpi t="A indemnizar" v={`UF ${uf(calc.aj.uf - (caso.datos.poliza?.deducibleUF ?? 0))}`} s={dos && calc.rec.uf > 0 ? `${Math.round((calc.aj.uf / calc.rec.uf) * 100)} % de lo reclamado` : ""} />
           </div>
 
+          <div className="panel space-y-3 p-5" aria-labelledby="cumplimiento-titulo">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 id="cumplimiento-titulo" className="font-semibold">Cumplimiento de las reglas del ajuste</h3>
+              <span className="texto-suave text-sm">{calc.auditoria.partidasReclamadas} partida(s) leída(s) del presupuesto · {calc.auditoria.partidasAjustadas} ajustada(s)</span>
+            </div>
+            <ul className="space-y-1 text-sm">
+              {calc.auditoria.verificaciones.map((v) => (
+                <li key={v.codigo}>
+                  <span className={`marca ${v.ok ? "marca-ok" : "marca-error"} !ml-0`}>{v.ok ? "Cumple" : "Revisar"}</span> <code className="text-xs">{v.codigo}</code> {v.titulo}
+                  {!v.ok && <ul className="ml-6 mt-1 list-disc text-xs">{v.detalle.map((d, i) => (<li key={i}>{d}</li>))}</ul>}
+                </li>
+              ))}
+            </ul>
+            <p className="texto-suave text-xs">
+              Partidas por observación:{" "}
+              {LETRAS_OBS.map((l) => (
+                <span key={l} className="mr-2" title={LEYENDA[l]}><strong>{l}</strong> {calc.auditoria.conteoObs[l]}</span>
+              ))}
+            </p>
+          </div>
+
           <div className="panel overflow-x-auto p-3">
             <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[color:var(--texto)]">
               <span className="font-semibold">Estado de cada partida:</span>
@@ -203,7 +227,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
                               editable && rl ? (
                                 <>
                                   <td className="text-center">{f.aj.um}</td>
-                                  <td><input aria-label={`Cantidad ${f.item}`} className="campo w-20 px-1 py-0.5 text-right" type="number" step="any" min="0" placeholder={String(rl.cantidad)} value={borrador[`${f.item}|cantidad`] ?? String(f.aj.cantidad)} onChange={(e) => escribir(rl, "cantidad", e.target.value)} onBlur={() => soltar(rl, "cantidad")} /></td>
+                                  <td><input aria-label={`Cantidad ${f.item}`} className="campo w-20 px-1 py-0.5 text-right" type="number" step="any" min={cantidadMinima(rl.cantidad)} placeholder={String(rl.cantidad)} value={borrador[`${f.item}|cantidad`] ?? String(f.aj.cantidad)} onChange={(e) => escribir(rl, "cantidad", e.target.value)} onBlur={() => soltar(rl, "cantidad")} /></td>
                                   <td><input aria-label={`Precio unitario ${f.item}`} className="campo w-24 px-1 py-0.5 text-right" type="number" step="any" min="1" placeholder={String(rl.pu)} value={borrador[`${f.item}|pu`] ?? String(f.aj.pu)} onChange={(e) => escribir(rl, "pu", e.target.value)} onBlur={() => soltar(rl, "pu")} /></td>
                                   <td className="n">{n0(f.aj.cantidad * f.aj.pu)}</td>
                                 </>
@@ -278,9 +302,13 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
 
           <div className="panel space-y-3 p-5">
             <h3 className="font-semibold">Evidencia observada</h3>
-            <ul className="list-disc space-y-1 pl-5 text-sm">
+            <ul className="space-y-2 text-sm">
               {salida.evidencia_observada.map((e, i) => (
-                <li key={i}><strong>{e.recinto}:</strong> {e.vineta}{e.m2_acta != null ? ` ${e.m2_acta} m² según acta.` : ""}{e.atribuible ? "" : " (no atribuible al siniestro)"}</li>
+                <li key={i} className="list-none">
+                  {/* Especificación ACAS: el recinto en Times New Roman 12 pt, subrayado y cursiva, y debajo el daño en texto plano. */}
+                  <span style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: "12pt" }}><u><i>{e.recinto}</i></u></span>
+                  <div>{e.vineta}{e.m2_acta != null ? ` ${e.m2_acta} m² según acta.` : ""}{e.atribuible ? "" : " (no atribuible al siniestro)"}</div>
+                </li>
               ))}
             </ul>
             <label className="etiqueta" htmlFor="texto-ajuste">Ajuste de pérdida (texto del informe)</label>

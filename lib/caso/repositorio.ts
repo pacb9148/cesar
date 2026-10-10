@@ -73,8 +73,8 @@ export const listarArchivos = (casoId: string, tipo?: string) =>
     tipo ? [casoId, tipo] : [casoId],
   );
 
-export async function contenidoArchivo(id: string, casoId: string): Promise<{ nombre: string; mime: string; contenido: Buffer } | null> {
-  return uno("select nombre, mime, contenido from archivos where id = $1 and caso_id = $2", [id, casoId]);
+export async function contenidoArchivo(id: string, casoId: string): Promise<{ nombre: string; mime: string; tipo: string; recinto: string | null; contenido: Buffer } | null> {
+  return uno("select nombre, mime, tipo, recinto, contenido from archivos where id = $1 and caso_id = $2", [id, casoId]);
 }
 
 export async function archivosConContenido(casoId: string, tipo: string) {
@@ -88,6 +88,17 @@ export async function guardarEdicionFoto(id: string, casoId: string, edicion: Ed
   const r = await uno<{ id: string }>("update archivos set edicion = $3::jsonb where id = $1 and caso_id = $2 and tipo = 'foto' returning id", [id, casoId, edicion ? JSON.stringify(edicion) : null]);
   if (r) await consulta(tocar, [casoId]);
   return !!r;
+}
+
+/** Cambia el contenido de un archivo ya cargado (misma entrada, nuevo documento). Devuelve null si no existe; lanza si el contenido ya está cargado en el caso con ese tipo. */
+export async function reemplazarArchivo(id: string, casoId: string, a: { nombre: string; tipo: TipoArchivo; mime: string; recinto: string | null; contenido: Buffer }): Promise<{ id: string } | null> {
+  const sha = createHash("sha256").update(a.contenido).digest("hex");
+  const r = await uno<{ id: string }>(
+    "update archivos set nombre = $3, tipo = $4, mime = $5, tamano = $6, sha256 = $7, recinto = $8, contenido = $9, edicion = null where id = $1 and caso_id = $2 returning id",
+    [id, casoId, a.nombre, a.tipo, a.mime, a.contenido.length, sha, a.recinto, a.contenido],
+  );
+  if (r) await consulta(tocar, [casoId]);
+  return r;
 }
 
 export async function eliminarArchivo(id: string, casoId: string) {

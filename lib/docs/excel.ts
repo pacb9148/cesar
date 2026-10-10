@@ -4,6 +4,7 @@ import { LETRAS_OBS, LEYENDA } from "../domain/constantes";
 import type { DatosCaso, DecisionLinea, LineaAdicional, Reclamacion } from "../domain/tipos";
 import type { Recinto } from "../engine/cubicacion";
 import { armarFilas } from "../engine/filas";
+import { agregarResumen } from "./resumen-excel";
 export { armarFilas };
 
 export type SiniestroAnterior = {
@@ -35,6 +36,41 @@ function aplicar(ws: ExcelJS.Worksheet, fila: number, st: EstiloFila) {
   st.forEach((s, i) => (ws.getRow(fila).getCell(i + 1).style = structuredClone(s) as ExcelJS.Style));
 }
 const f = (formula: string, result: number): ExcelJS.CellFormulaValue => ({ formula, result });
+
+/** Anchos (en caracteres de Excel) pensados para leer la planilla sin tocar nada; el usuario puede cambiarlos cuando quiera. */
+const ANCHOS: Record<number, number> = { 1: 13, 2: 54, 3: 8, 4: 10, 5: 13, 6: 15, 7: 8, 8: 10, 9: 13, 10: 15, 11: 6, 12: 6, 13: 6 };
+const ANCHO_DESCRIPCION = ANCHOS[2];
+
+const relleno = (argb: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+
+/** Especificación ACAS: encabezado gris D9D9D9 en negrita y centrado; títulos de sección (.0) en F2F2F2 y negrita. */
+function pintarEncabezado(ws: ExcelJS.Worksheet) {
+  for (const r of [10, 11])
+    for (let c = 1; c <= COLS; c++) {
+      const cell = ws.getRow(r).getCell(c);
+      cell.fill = relleno("FFD9D9D9");
+      cell.font = { ...cell.font, bold: true };
+      cell.alignment = { ...cell.alignment, horizontal: c === 2 ? "left" : "center", vertical: "middle", wrapText: true };
+    }
+}
+function pintarSeccion(ws: ExcelJS.Worksheet, r: number) {
+  for (let c = 1; c <= COLS; c++) {
+    const cell = ws.getRow(r).getCell(c);
+    cell.fill = relleno("FFF2F2F2");
+    cell.font = { ...cell.font, bold: true };
+  }
+}
+/** Cantidades a la derecha, con decimales solo si los hay; y el alto de la fila crece con las líneas de la descripción. */
+function formatearLinea(ws: ExcelJS.Worksheet, r: number, descripcion: string) {
+  for (const c of [4, 8]) {
+    const cell = ws.getCell(r, c);
+    if (typeof cell.value !== "number") continue;
+    cell.numFmt = Number.isInteger(cell.value) ? "#,##0" : "#,##0.00";
+    cell.alignment = { ...cell.alignment, horizontal: "right", vertical: "middle" };
+  }
+  const lineas = Math.max(1, Math.ceil(descripcion.length / (ANCHO_DESCRIPCION * 1.05)));
+  ws.getRow(r).height = Math.max(15, 13.5 * lineas + 1.5);
+}
 
 export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
@@ -93,6 +129,10 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
     ws.mergeCells("G10:G11");
   }
 
+  pintarEncabezado(ws);
+  for (const [c, w] of Object.entries(ANCHOS)) ws.getColumn(Number(c)).width = w;
+  ws.views = [{ state: "frozen", ySplit: 11, xSplit: 2 }];
+
   const filas = armarFilas(e);
   let r = 12;
   const primera = 12;
@@ -100,6 +140,7 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
   for (const fila of filas) {
     if (fila.tipo === "seccion") {
       aplicar(ws, r, P.seccion);
+      pintarSeccion(ws, r);
       ws.getCell(r, 1).value = fila.item;
       ws.getCell(r, 2).value = fila.titulo;
       r++;
@@ -131,6 +172,7 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
       ws.getCell(r, 7).value = fila.obs.join(", ") || null;
       ws.getCell(r, 7).style = structuredClone(P.linea[10]) as ExcelJS.Style;
     }
+    formatearLinea(ws, r, fila.descripcion);
     ultima = r;
     r++;
   }
@@ -183,9 +225,17 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
   ws.getCell(fila, 2).value = "Deducible contractual (UF)";
   ws.getCell(`${colAj}${fila}`).value = e.caso.poliza.deducibleUF;
   refs.ded = fila++;
+  const bordeTotales = (fila0: number, lado: "top" | "bottom", estilo: ExcelJS.BorderStyle) => {
+    for (let c = 2; c <= COLS; c++) {
+      const cell = ws.getCell(fila0, c);
+      cell.border = { ...cell.border, [lado]: { style: estilo } };
+    }
+  };
+  bordeTotales(refs.dir, "top", "thin");
   write("ind", "Valor a indemnizar (UF)", 7, (aj, L) =>
     L === colAj ? f(`+${colAj}${refs.uf}-${colAj}${refs.ded}`, uf(true) - e.caso.poliza.deducibleUF) : null,
   );
+  bordeTotales(fila - 1, "bottom", "double"); // doble línea bajo el valor a indemnizar
   fila++;
   const params: [string, ExcelJS.CellValue][] = [
     ["Moneda de Póliza ", "UF"],
@@ -210,6 +260,7 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
     fila++;
   }
   ws.pageSetup.printArea = `A1:M${fila}`;
+  agregarResumen(wb, { siniestro: e.caso.siniestro, reclamacion: e.reclamacion, filas, valorUF: e.valorUF, deducibleUF: e.caso.poliza.deducibleUF, dosColumnas, refs });
 
   // ---- Hojas auxiliares: se regeneran para no arrastrar datos de otro siniestro ----
   const sa = wb.getWorksheet("Siniestros anteriores");
