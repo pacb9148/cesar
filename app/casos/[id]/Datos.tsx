@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Caso } from "@/lib/caso/repositorio";
+import { useAccionesMenu } from "@/components/Shell";
 
 const FECHA = /^\d{2}\/\d{2}\/\d{4}$/;
 
@@ -49,12 +50,16 @@ export default function Datos({ caso }: { caso: Caso }) {
     router.refresh();
   }
 
+  useAccionesMenu([
+    { id: "guardar-datos", etiqueta: guardando ? "Guardando…" : "Guardar datos", icono: "guardar", primaria: true, deshabilitado: guardando || !d.asegurado, onClick: () => (document.getElementById("form-datos") as HTMLFormElement | null)?.requestSubmit() },
+  ]);
+
   if (!d.asegurado) return <p className="panel texto-suave p-5">Primero lee los documentos en el paso 1.</p>;
 
   return (
-    <form onSubmit={guardar} className="panel space-y-4 p-5">
+    <form id="form-datos" onSubmit={guardar} className="panel space-y-4 p-5">
       <p className="texto-suave text-sm">
-        Lo que sale de los PDF viene prellenado. Corrige tildes y completa lo que sólo tú sabes: el texto de la denuncia y las fechas de emisión e información a las partes.
+        Lo que sale de los PDF viene prellenado. Corrige tildes y completa (luego usa «Guardar datos» en el menú lateral) lo que sólo tú sabes: el texto de la denuncia y las fechas de emisión e información a las partes.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo n="siniestro" t="N.º de siniestro" v={d.siniestro} />
@@ -75,7 +80,6 @@ export default function Datos({ caso }: { caso: Caso }) {
         <span>Inspección: {d.fechas?.inspeccion}</span>
       </div>
       {msg && <p role={msg.tipo === "error" ? "alert" : "status"} className={`aviso ${msg.tipo === "ok" ? "aviso-ok" : "aviso-error"}`}>{msg.texto}</p>}
-      <button className="btn" disabled={guardando}>{guardando ? "Guardando…" : "Guardar datos"}</button>
     </form>
   );
 }

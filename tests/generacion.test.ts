@@ -77,3 +77,19 @@ describe("estado del informe frente a los cambios", () => {
     expect(await gen.informeAlDia(casoId)).toBe(true);
   });
 });
+
+import { reordenar, ordenarPorGrupo } from "../lib/fotos/orden";
+describe("orden de las fotos dentro de cada estancia", () => {
+  it("mueve una foto a la posición pedida (1 = izquierda) y acota los extremos", () => {
+    expect(reordenar(["a", "b", "c", "d"], "d", 1)).toEqual(["d", "a", "b", "c"]);
+    expect(reordenar(["a", "b", "c", "d"], "a", 3)).toEqual(["b", "c", "a", "d"]);
+    expect(reordenar(["a", "b", "c"], "a", 99)).toEqual(["b", "c", "a"]);
+    expect(reordenar(["a", "b", "c"], "c", -5)).toEqual(["c", "a", "b"]);
+  });
+  it("el informe respeta el índice del usuario por estancia; sin índice conserva el orden original", () => {
+    const f = (id: number, recinto: string, orden?: number) => ({ id, recinto, edicion: orden ? { orden } : null });
+    const r = seleccionarFotosInforme([f(1, "Living", 3), f(2, "Cocina"), f(3, "Living", 1), f(4, "Living", 2), f(5, "Cocina")], { danos: [{ recinto: "LIVING", descripcion: "", tipoDano: "" }, { recinto: "COCINA", descripcion: "", tipoDano: "" }] } as unknown as ActaInspeccion);
+    expect(r.fotos.map((x) => x.id)).toEqual([3, 4, 1, 2, 5]);
+    expect(ordenarPorGrupo([f(1, "A", 2), f(2, "A", 1)]).map((x) => x.id)).toEqual([2, 1]);
+  });
+});

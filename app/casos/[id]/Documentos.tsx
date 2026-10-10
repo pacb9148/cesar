@@ -6,6 +6,7 @@ import type { ArchivoMeta, Caso } from "@/lib/caso/repositorio";
 import { ETIQUETA_TIPO } from "@/lib/caso/clasificar";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
+import { useAccionesMenu } from "@/components/Shell";
 
 type Procesado = { alertas: string[]; archivosLeidos: string[]; partidas: number };
 const LOTE = 15;
@@ -79,19 +80,24 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
   for (const f of fotos) porRecinto.set(f.recinto ?? "Sin recinto", (porRecinto.get(f.recinto ?? "Sin recinto") ?? 0) + 1);
   const alertas = proc.resultado?.alertas ?? caso.datos.alertas ?? [];
 
+  // Las acciones están en el menú lateral; la pantalla central muestra el resultado y se edita desde ella.
+  useAccionesMenu([
+    { id: "carpeta", etiqueta: "Subir carpeta del caso", icono: "carpeta", deshabilitado: !!subiendo, onClick: () => carpeta.current?.click() },
+    { id: "archivos", etiqueta: "Subir archivos", icono: "subir", deshabilitado: !!subiendo, onClick: () => sueltos.current?.click() },
+    { id: "leer", etiqueta: proc.cargando ? "Leyendo…" : "Leer documentos", icono: "ejecutar", primaria: true, deshabilitado: proc.cargando || docs.length === 0, onClick: () => void proc.ejecutar() },
+  ]);
+
   return (
     <section className="space-y-4">
       <div className="panel space-y-3 p-5">
         <h2 className="text-lg font-semibold">Antecedentes del siniestro</h2>
         <p className="texto-suave text-sm">
-          Sube la carpeta completa del caso (o archivos sueltos): acta de inspección, provisión, presupuesto del contratista (Excel o PDF), mandato y fotografías por recinto.
+          Sube la carpeta completa del caso (o archivos sueltos) con las acciones «Subir carpeta del caso» y «Subir archivos» del menú lateral: acta de inspección, provisión, presupuesto del contratista (Excel o PDF), mandato y fotografías por recinto.
           Las carpetas de fotos se reconocen por su nombre (p. ej. «Living», «Dormitorio 1», «Cubierta»).
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="hidden">
           <input ref={carpeta} type="file" multiple className="hidden" onChange={(e) => subir(e.target.files)} {...({ webkitdirectory: "" } as object)} />
           <input ref={sueltos} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={(e) => subir(e.target.files)} />
-          <button className="btn" onClick={() => carpeta.current?.click()} disabled={!!subiendo}>Subir carpeta</button>
-          <button className="btn btn-sec" onClick={() => sueltos.current?.click()} disabled={!!subiendo}>Subir archivos</button>
         </div>
         {subiendo && <p role="status" className="aviso aviso-ok">{subiendo}</p>}
         {errorSubida && <p role="alert" className="aviso aviso-error">{errorSubida}</p>}
@@ -127,11 +133,8 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
       )}
 
       <div className="panel space-y-3 p-5">
-        <h3 className="font-semibold">Leer los documentos</h3>
-        <p className="texto-suave text-sm">Extrae acta, provisión y presupuesto, calcula la UF de la fecha del siniestro y deja el caso listo para ajustar. Es seguro repetirlo.</p>
-        <button className="btn" onClick={() => proc.ejecutar()} disabled={proc.cargando || docs.length === 0}>
-          {proc.cargando ? "Leyendo…" : "Leer documentos"}
-        </button>
+        <h3 className="font-semibold">Lectura de los documentos</h3>
+        <p className="texto-suave text-sm">La acción «Leer documentos» del menú lateral extrae acta, provisión y presupuesto, calcula la UF de la fecha del siniestro y deja el caso listo para ajustar. Es seguro repetirla.</p>
         {proc.error && <p role="alert" className="aviso aviso-error">{proc.error}</p>}
         <PanelTraza eventos={proc.eventos} cargando={proc.cargando} titulo="Qué está leyendo" />
         {proc.resultado && (

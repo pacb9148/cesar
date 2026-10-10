@@ -39,3 +39,18 @@ describe("formato de la planilla ajustado por el usuario", () => {
     await expect(aplicarCeldas(await libro(), [], { columnas: [{ hoja: "EDIFICIO", c: 99, ancho: 100 }] })).rejects.toThrow(/fuera de rango/);
   });
 });
+
+import { colorSobre, contraste } from "../lib/docs/contraste";
+describe("contraste del texto de las celdas", () => {
+  it("títulos oscuros llevan texto blanco y fondos claros texto oscuro, siempre con al menos 4,5:1", () => {
+    for (const fondo of ["#000080", "#002060", "#1f3864", "#0b1f4d"]) {
+      expect(colorSobre(fondo)).toBe("#ffffff");
+      expect(contraste(colorSobre(fondo), fondo)).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const fondo of ["#ffffff", "#d9d9d9", "#f2f2f2", "#dce6f1", "#fff2cc"]) {
+      expect(colorSobre(fondo)).toBe("#111827");
+      expect(contraste(colorSobre(fondo), fondo)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(colorSobre(undefined)).toBe("#111827");
+  });
+});

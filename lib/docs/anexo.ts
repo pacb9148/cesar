@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { escXml, hijos, NS_W, parse, serializar, crearEl, type Doc } from "./docx-xml";
 import { aplicarEdicion } from "../fotos/aplicar";
+import { ordenarPorGrupo } from "../fotos/orden";
 import { esEdicionNula } from "../fotos/recorte";
 import { FOTO_PX, tablasDeFotos, type FotoCelda } from "./fotos-xml";
 import type { FotoInforme } from "./word";
@@ -53,7 +54,7 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
   const tablas: string[] = [];
   for (const rc of recintos) {
     const celdas: FotoCelda[] = [];
-    for (const f of o.fotos.filter((x) => x.recinto === rc)) celdas.push({ rid: await add(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer), leyenda: f.edicion?.leyenda ?? "", id: f.id });
+    for (const f of ordenarPorGrupo(o.fotos.filter((x) => x.recinto === rc))) celdas.push({ rid: await add(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer), leyenda: f.edicion?.leyenda ?? "", id: f.id });
     tablas.push(...tablasDeFotos(celdas, { titulo: rc, pie: o.pies?.[rc]?.trim() || undefined }));
   }
   tablas.forEach((t, i) => {

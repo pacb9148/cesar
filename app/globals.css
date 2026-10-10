@@ -95,5 +95,12 @@ body {
   .marca-sin { color: var(--sin); }
   .marca-usr, .marca-ok { color: var(--ok); }
   .marca-error { color: var(--error); }
+  /* Menú lateral: expandido con etiquetas o colapsado con solo iconos. */
+  .menu-item { display: flex; width: 100%; align-items: center; gap: .65rem; border-radius: .5rem; padding: .5rem .65rem; font-size: .9rem; font-weight: 600; color: var(--texto); text-align: left; border: 1px solid transparent; cursor: pointer; }
+  .menu-item:hover:not(:disabled) { background: var(--panel-2); border-color: var(--borde); }
+  .menu-item:disabled { opacity: .5; cursor: not-allowed; }
+  .menu-item[aria-current="page"], .menu-item[aria-current="step"] { background: var(--acento); color: var(--acento-texto); }
+  .menu-item-primaria { border-color: var(--acento); }
+  .menu-titulo { padding: .75rem .65rem .25rem; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--suave); }
   .insignia { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 600; background: var(--panel-2); color: var(--texto); border: 1px solid var(--borde); }
 }

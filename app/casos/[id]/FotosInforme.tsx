@@ -6,6 +6,7 @@ import type { ArchivoMeta } from "@/lib/caso/repositorio";
 import { BotonIcono, Icono } from "@/components/Iconos";
 import { EDICION_INICIAL, esEdicionNula } from "@/lib/fotos/recorte";
 import { FOTO_TAMANO_TEXTO, FOTO_ALTO_CM, FOTO_ANCHO_CM } from "@/lib/domain/constantes";
+import { reordenar } from "@/lib/fotos/orden";
 import EditorFoto from "./EditorFoto";
 
 /**
@@ -37,8 +38,21 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos 
     router.refresh();
   }
 
+  /** Cambia la posición de una foto dentro del grupo de su estancia (1 = la primera a la izquierda). */
+  async function cambiarOrden(ids: string[], id: string, pos: number) {
+    const nuevo = reordenar(ids, id, pos);
+    if (nuevo.join() === ids.join()) return;
+    setOcupado(id);
+    setError(null);
+    const r = await fetch(`/api/casos/${casoId}/fotos-orden`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: nuevo }) });
+    setOcupado(null);
+    if (!r.ok) return setError(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo cambiar el orden");
+    router.refresh();
+  }
+
   if (fotos.length === 0) return null;
   const va = new Set(enInforme);
+  const posicion = new Map(enInforme.map((id, i) => [id, i]));
   const editadas = fotos.filter((f) => f.edicion && !esEdicionNula(f.edicion)).length;
   const porRecinto = new Map<string, ArchivoMeta[]>();
   for (const f of fotos) porRecinto.set(f.recinto ?? "Sin recinto", [...(porRecinto.get(f.recinto ?? "Sin recinto") ?? []), f]);
@@ -56,8 +70,12 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos 
       </p>
       {error && <p role="alert" className="aviso aviso-error">{error}</p>}
       {ocupado && <p role="status" className="aviso aviso-ok">Actualizando el informe, el anexo y el PDF con tus cambios… puede tardar unos segundos.</p>}
-      {[...porRecinto.entries()].map(([recinto, lista]) => {
-        const nVan = lista.filter((f) => va.has(f.id)).length;
+      {[...porRecinto.entries()].map(([recinto, listaOriginal]) => {
+        // Primero las del informe, en el orden en que salen (1, 2, 3…); después las que no van.
+        const delInforme = listaOriginal.filter((f) => va.has(f.id)).sort((a, b) => (posicion.get(a.id) ?? 0) - (posicion.get(b.id) ?? 0));
+        const lista = [...delInforme, ...listaOriginal.filter((f) => !va.has(f.id))];
+        const idsOrden = delInforme.map((f) => f.id);
+        const nVan = delInforme.length;
         const pie = pies[recinto] ?? "";
         const pieGuardado = leyendasGrupos[recinto] ?? "";
         return (
@@ -80,6 +98,7 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos 
             <ul className="grid grid-cols-2 gap-3 p-2 sm:grid-cols-3 lg:grid-cols-4">
               {lista.map((f) => {
                 const incluida = va.has(f.id);
+                const indice = idsOrden.indexOf(f.id) + 1;
                 const quitada = f.edicion?.excluir === true;
                 const editada = !!f.edicion && !esEdicionNula(f.edicion);
                 return (
@@ -87,6 +106,9 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos 
                     <div className="relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1`} alt={`${recinto}: ${f.nombre}`} loading="lazy" className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}`, opacity: incluida ? 1 : 0.55 }} />
+                      {incluida && (
+                        <span className="absolute left-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-sm font-bold" style={{ background: "var(--acento)", color: "var(--acento-texto)" }} title={`Posición ${indice} en el informe, de izquierda a derecha`}>{indice}</span>
+                      )}
                       {incluida && (
                         <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: "var(--ok)", color: "var(--ok-fondo)" }}>
                           <Icono nombre="check" tam={14} /> En el informe
@@ -99,6 +121,13 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos 
                         {editada && <span className="marca marca-sin !ml-0">Editada</span>}
                         {quitada && <span className="marca marca-error !ml-0">Quitada del informe</span>}
                       </div>
+                      {incluida && (
+                        <label className="flex items-center gap-1 text-xs text-[color:var(--texto)]">
+                          Posición
+                          <input key={`${f.id}-${indice}`} type="number" min={1} max={idsOrden.length} defaultValue={indice} aria-label={`Posición de ${f.nombre} en el informe`} className="campo w-16 px-1 py-0.5 text-right" disabled={ocupado === f.id} onBlur={(e) => void cambiarOrden(idsOrden, f.id, Number(e.target.value) || indice)} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} />
+                          de {idsOrden.length}
+                        </label>
+                      )}
                       <div className="flex gap-1">
                         <BotonIcono icono="lapiz" etiqueta={`Editar ${f.nombre}`} onClick={() => setEditando(f)} />
                         <BotonIcono icono="check" etiqueta={incluida ? `Quitar ${f.nombre} del informe` : `Poner ${f.nombre} en el informe`} activo={incluida} deshabilitado={ocupado === f.id} onClick={() => llamar(f, "PUT", { ...EDICION_INICIAL, ...(f.edicion ?? {}), incluir: !incluida, excluir: incluida })} />

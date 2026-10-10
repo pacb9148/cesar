@@ -2,7 +2,7 @@ import Link from "next/link";
 import { exigirUsuario } from "@/lib/auth";
 import { listarCasos } from "@/lib/caso/repositorio";
 import BotonNuevoCaso from "./BotonNuevoCaso";
-import Cabecera from "@/components/Cabecera";
+import Shell from "@/components/Shell";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,9 +19,7 @@ export default async function Casos() {
   const u = await exigirUsuario();
   const casos = await listarCasos(u.id);
   return (
-    <>
-      <Cabecera nombre={u.nombre} />
-      <main className="mx-auto max-w-5xl px-4 py-8">
+    <Shell nombre={u.nombre}>
         <div className="mb-6 flex items-center justify-between gap-4">
           <h1 className="text-2xl font-bold">Casos</h1>
           <BotonNuevoCaso />
@@ -46,7 +44,6 @@ export default async function Casos() {
             ))}
           </ul>
         )}
-      </main>
-    </>
+    </Shell>
   );
 }

@@ -17,7 +17,7 @@ const PX_POR_ANCHO = 7; // un carácter de ancho de Excel ≈ 7 px
 const PT_POR_PX = 0.75; // 96 ppp → 72 pt
 
 const MAX_FILAS = 300;
-const MAX_COLS = 30;
+const MAX_COLS = 60; // la vista muestra columnas vacías a la derecha, como Excel, para poder ajustar libremente
 
 type Valor = ExcelJS.CellValue;
 const esFormula = (v: Valor): v is ExcelJS.CellFormulaValue => !!v && typeof v === "object" && "formula" in v;

@@ -45,6 +45,20 @@ export const ICONOS = {
   insertar: D("M12 5v14M5 12h14"),
   papelera: D("M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"),
   filas: D("M3 3h18v18H3zM3 9h18M3 15h18"),
+  menu: D("M4 6h16M4 12h16M4 18h16"),
+  panelIzq: D("M3 3h18v18H3zM9 3v18M15 9l-3 3 3 3"),
+  panelDer: D("M3 3h18v18H3zM9 3v18M13 9l3 3-3 3"),
+  casos: D("M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"),
+  sliders: D("M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"),
+  carpeta: D("M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"),
+  subir: D("M12 16V4M7 9l5-5 5 5M4 20h16"),
+  archivo: D("M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6"),
+  datos: D("M4 5h16M4 12h16M4 19h10"),
+  actividad: D("M3 12h4l3-8 4 16 3-8h4"),
+  informe: D("M6 2h9l5 5v15H6zM14 2v6h6M9 13h6M9 17h6"),
+  ejecutar: D("M6 4l14 8-14 8z"),
+  salir: D("M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"),
+  usuario: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
 } as const;
 
 export type NombreIcono = keyof typeof ICONOS;

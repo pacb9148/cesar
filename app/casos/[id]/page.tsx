@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { exigirUsuario } from "@/lib/auth";
 import { leerExtraccion, listarArchivos, leerReclamacion, obtenerCaso, ultimoAjuste } from "@/lib/caso/repositorio";
-import Cabecera from "@/components/Cabecera";
+import Shell from "@/components/Shell";
 import { hayProveedorActivo } from "@/lib/ia/repo-proveedores";
 import { informeAlDia, leerLeyendasGrupos } from "@/lib/caso/generacion";
 import { seleccionarFotosInforme } from "@/lib/docs/fotos-seleccion";
@@ -23,9 +23,7 @@ export default async function PaginaCaso({ params }: { params: Promise<{ id: str
   const enInforme = acta ? seleccionarFotosInforme(fotos, acta).fotos.map((f) => f.id) : [];
   const [leyendasGrupos, alDia] = await Promise.all([leerLeyendasGrupos(id), informeAlDia(id)]);
   return (
-    <>
-      <Cabecera nombre={u.nombre} />
-      <main className="mx-auto max-w-5xl px-4 py-6">
+    <Shell nombre={u.nombre}>
         <PanelCaso
           caso={JSON.parse(JSON.stringify(caso))}
           archivos={JSON.parse(JSON.stringify(archivos))}
@@ -36,7 +34,6 @@ export default async function PaginaCaso({ params }: { params: Promise<{ id: str
           leyendasGrupos={leyendasGrupos}
           informeAlDia={alDia}
         />
-      </main>
-    </>
+    </Shell>
   );
 }

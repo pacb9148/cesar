@@ -2,10 +2,16 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { CambioFormato, HojaVista } from "@/lib/docs/vista-xlsx";
+import { colorSobre } from "@/lib/docs/contraste";
 
 export type CambioHoja = { col?: [number, number]; fila?: [number, number]; ajuste?: boolean };
 
 const CARACTER_PX = 6.6; // ancho medio de un carácter a 12 px
+const ANCHO_VACIO = 64; // columna sin datos (8,43 caracteres de Excel)
+const COLS_MIN = 26; // como Excel: siempre hay columnas vacías a la derecha (hasta la Z como mínimo)
+const COLS_MAX = 60;
+const FILAS_EXTRA = 20;
+const FILAS_MAX = 300;
 
 export const colLetra = (n: number) => {
   let s = "";
@@ -21,8 +27,10 @@ export const colLetra = (n: number) => {
 export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente, zoom, maximizada }: { h: HojaVista; pendiente: CambioFormato; ediciones: Map<string, string>; alEditar: (r: number, c: number, v: string, original: string) => void; alFormato: (c: CambioHoja) => void; zoom: number; maximizada: boolean }) {
   const [activa, setActiva] = useState<{ r: number; c: number } | null>(null);
   // Al volver a una hoja se parte de lo ya ajustado y todavía sin guardar, no de lo guardado en el archivo.
-  const [anchos, setAnchos] = useState(() => h.anchos.map((w, i) => Math.max(40, pendiente.columnas?.find((x) => x.hoja === h.nombre && x.c === i + 1)?.ancho ?? w)));
-  const [altos, setAltos] = useState(() => h.altos.map((a, i) => pendiente.filas?.find((x) => x.hoja === h.nombre && x.r === i + 1)?.alto ?? a));
+  const nCols = Math.min(COLS_MAX, Math.max(h.columnas + 6, COLS_MIN));
+  const nFilas = Math.min(FILAS_MAX, h.filas + FILAS_EXTRA);
+  const [anchos, setAnchos] = useState(() => Array.from({ length: nCols }, (_, i) => Math.max(40, pendiente.columnas?.find((x) => x.hoja === h.nombre && x.c === i + 1)?.ancho ?? h.anchos[i] ?? ANCHO_VACIO)));
+  const [altos, setAltos] = useState(() => Array.from({ length: nFilas }, (_, i) => pendiente.filas?.find((x) => x.hoja === h.nombre && x.r === i + 1)?.alto ?? h.altos[i] ?? 0));
   const [ajuste, setAjuste] = useState(() => pendiente.ajusteTexto?.find((x) => x.hoja === h.nombre)?.activo ?? h.ajusteTexto);
   const arrastre = useRef<{ tipo: "col" | "fila"; i: number; ini: number; tam: number; ultimo: number } | null>(null);
   const celdas = useMemo(() => new Map(h.celdas.map((c) => [`${c.r},${c.c}`, c])), [h]);
@@ -32,8 +40,10 @@ export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente
     for (const m of h.combinadas) for (let r = m.r1; r <= m.r2; r++) for (let c = m.c1; c <= m.c2; c++) if (r !== m.r1 || c !== m.c1) s.add(`${r},${c}`);
     return s;
   }, [h]);
-  const filas = Array.from({ length: h.filas }, (_, i) => i + 1);
-  const cols = Array.from({ length: h.columnas }, (_, i) => i + 1);
+  const filas = Array.from({ length: nFilas }, (_, i) => i + 1);
+  const cols = Array.from({ length: nCols }, (_, i) => i + 1);
+  // El ancho de la tabla es la suma de sus columnas: no se estira hasta el borde, así siempre queda espacio vacío para ajustar hacia ambos lados.
+  const anchoTabla = 36 + anchos.reduce((a, b) => a + b, 0);
   const th = { position: "sticky" as const, top: 0, background: "#e5e7eb", color: "#111827", border: "1px solid #cbd0d8", fontWeight: 600, fontSize: 11, padding: "1px 4px", zIndex: 1 };
 
   const iniciar = (e: React.PointerEvent<HTMLElement>, tipo: "col" | "fila", i: number) => {
@@ -67,7 +77,7 @@ export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente
   /** Ancho que muestra todo el texto de la columna (sin contar las celdas combinadas, que reparten su ancho). */
   const anchoAlContenido = (c: number) => {
     let max = 0;
-    for (const x of h.celdas) if (x.c === c && !origen.has(`${x.r},${x.c}`)) max = Math.max(max, x.txt.length);
+    for (const x of h.celdas) if (x.c === c && x.c <= h.columnas && !origen.has(`${x.r},${x.c}`)) max = Math.max(max, x.txt.length);
     return Math.min(520, Math.max(40, Math.round(max * CARACTER_PX + 14)));
   };
   const ajustarColumna = (c: number) => {
@@ -103,7 +113,7 @@ export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente
         <span>Arrastra el borde de una letra para el ancho de la columna y el de un número para el alto de la fila; doble clic ajusta solo.</span>
       </div>
       <div className={`overflow-auto ${maximizada ? "min-h-0 flex-1" : ""}`} style={{ maxHeight: maximizada ? undefined : "62vh", background: "#fff", color: "#111827", border: "1px solid #cbd0d8" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", minWidth: "100%", zoom }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", width: anchoTabla, zoom }}>
           <colgroup>
             <col style={{ width: 36 }} />
             {anchos.map((w, i) => <col key={i} style={{ width: w }} />)}
@@ -162,7 +172,7 @@ export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente
                       rowSpan={m ? m.r2 - m.r1 + 1 : 1}
                       title={esFormula ? `Fórmula: =${x!.f} (se recalcula sola)` : "Clic para editar"}
                       onClick={() => !esFormula && setActiva({ r, c })}
-                      style={{ border: "1px solid #e1e4ea", padding: enEdicion ? 0 : "1px 4px", background: editada !== undefined ? "#fde68a" : (x?.fondo ?? "#fff"), color: "#111827", fontWeight: x?.b ? 700 : 400, textAlign: x?.al ?? (x && /^-?[\d.,%]+$/.test(x.txt) ? "right" : "left"), whiteSpace: ajuste ? "pre-wrap" : "nowrap", wordBreak: ajuste ? "break-word" : undefined, verticalAlign: ajuste ? "top" : undefined, overflow: "hidden", textOverflow: ajuste ? undefined : "ellipsis", cursor: esFormula ? "default" : "text" }}
+                      style={{ border: "1px solid #e1e4ea", padding: enEdicion ? 0 : "1px 4px", background: editada !== undefined ? "#fde68a" : (x?.fondo ?? "#fff"), color: editada !== undefined ? "#111827" : colorSobre(x?.fondo), fontWeight: x?.b ? 700 : 400, textAlign: x?.al ?? (x && /^-?[\d.,%]+$/.test(x.txt) ? "right" : "left"), whiteSpace: ajuste ? "pre-wrap" : "nowrap", wordBreak: ajuste ? "break-word" : undefined, verticalAlign: ajuste ? "top" : undefined, overflow: "hidden", textOverflow: ajuste ? undefined : "ellipsis", cursor: esFormula ? "default" : "text" }}
                     >
                       {enEdicion ? (
                         <input

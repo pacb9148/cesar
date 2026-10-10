@@ -20,7 +20,7 @@ const cuerpo = z.object({
     .optional(),
   formato: z
     .object({
-      columnas: z.array(z.object({ hoja: z.string().max(60), c: z.number().int().min(1).max(30), ancho: z.number().min(20).max(900) })).max(200).optional(),
+      columnas: z.array(z.object({ hoja: z.string().max(60), c: z.number().int().min(1).max(60), ancho: z.number().min(20).max(900) })).max(200).optional(),
       filas: z.array(z.object({ hoja: z.string().max(60), r: z.number().int().min(1).max(300), alto: z.number().min(0).max(900) })).max(1000).optional(),
       ajusteTexto: z.array(z.object({ hoja: z.string().max(60), activo: z.boolean() })).max(20).optional(),
     })

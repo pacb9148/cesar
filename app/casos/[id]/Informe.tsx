@@ -6,6 +6,7 @@ import PanelTraza from "@/components/PanelTraza";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icono } from "@/components/Iconos";
+import { useAccionesMenu } from "@/components/Shell";
 import FotosInforme from "./FotosInforme";
 import VistaDocumento from "./VistaDocumento";
 
@@ -29,13 +30,18 @@ export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyend
     if (r) router.refresh();
   }
 
+  // Generar el informe es una acción del menú lateral; activa solo si hay algo nuevo que entregar.
+  useAccionesMenu([
+    { id: "generar", etiqueta: gen.cargando ? "Generando documentos…" : hayInforme ? "Volver a generar el informe" : "Generar informe", icono: "informe", primaria: true, deshabilitado: gen.cargando || !tieneAjuste || !hayCambios, onClick: () => void generar() },
+  ]);
+
   return (
     <section className="space-y-4">
       <div className="panel space-y-3 p-5">
         <h2 className="text-lg font-semibold">Informe de liquidación</h2>
         <p className="texto-suave text-sm">
           Genera el Excel de ajuste, el informe en Word y PDF (con el modelo y las imágenes de la plantilla), el anexo de fotografías y un paquete ZIP.
-          Incluye la captura de agrometeorologia.cl con la estación más cercana al riesgo; eso puede tardar un minuto. El botón para generarlo está al final de esta página.
+          Incluye la captura de agrometeorologia.cl con la estación más cercana al riesgo; eso puede tardar un minuto. Se genera con la acción «Generar informe» del menú lateral.
         </p>
         {!tieneAjuste && <p className="aviso aviso-alerta">Primero ejecuta el ajuste (paso 3).</p>}
       </div>
@@ -61,17 +67,14 @@ export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyend
         </div>
       )}
       <div className="panel space-y-3 p-5">
-        <h3 className="font-semibold">{hayInforme ? "Volver a generar el informe" : "Generar el informe"}</h3>
+        <h3 className="font-semibold">{hayInforme ? "Estado del informe" : "Generación del informe"}</h3>
         <p className="texto-suave text-sm">
           {!hayInforme
             ? "Aún no se ha generado el informe."
             : alDia
               ? "El informe está al día: no hay cambios en archivos, fotos, datos o ajuste desde la última generación."
-              : "Hubo cambios en archivos, fotos, datos, leyendas o ajuste desde la última generación: vuelve a generar para entregar la última versión."}
+              : "Hubo cambios en archivos, fotos, datos, leyendas o ajuste desde la última generación: usa «Volver a generar el informe» en el menú lateral para entregar la última versión."}
         </p>
-        <button className="btn" disabled={gen.cargando || !tieneAjuste || !hayCambios} onClick={() => void generar()}>
-          {gen.cargando ? "Generando documentos…" : hayInforme ? "Volver a generar el informe" : "Generar informe"}
-        </button>
         {gen.error && <p role="alert" className="aviso aviso-error">{gen.error}</p>}
         <PanelTraza eventos={gen.eventos} cargando={gen.cargando} titulo="Qué está generando" />
         {gen.resultado && gen.resultado.motorPdf === "html" && (

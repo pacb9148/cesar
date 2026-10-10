@@ -12,6 +12,8 @@ export const edicionFotoSchema = z.object({
   incluir: z.boolean().optional(),
   /** true = el usuario la quitó del informe (no entra ni siquiera por la selección automática). */
   excluir: z.boolean().optional(),
+  /** Posición de la foto dentro del grupo de su estancia en el informe (1, 2, 3…, de izquierda a derecha). */
+  orden: z.number().int().min(1).max(999).optional(),
   leyenda: z.string().trim().max(120).optional(),
   giro: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
   volteoH: z.boolean(),

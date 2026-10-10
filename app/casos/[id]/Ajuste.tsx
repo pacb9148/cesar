@@ -12,6 +12,7 @@ import { calcularTotales } from "@/lib/engine/totales";
 import { auditarAjuste } from "@/lib/engine/auditoria";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
+import { useAccionesMenu } from "@/components/Shell";
 import VistaPreviaAjuste from "./VistaPreviaAjuste";
 import type { AjusteGuardado } from "./PanelCaso";
 
@@ -103,17 +104,20 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
 
   const puedeAjustar = caso.estado !== "borrador" && (!!reclamacion || caso.modo === "perdida_determinada");
 
+  // Ejecutar y guardar viven en el menú lateral; aquí se revisan y editan las partidas.
+  useAccionesMenu([
+    { id: "ejecutar-ajuste", etiqueta: ia.cargando ? "Analizando con el agente…" : ajuste ? "Volver a ejecutar el agente" : "Ejecutar ajuste con IA", icono: "ejecutar", primaria: !salida, deshabilitado: ia.cargando || !puedeAjustar, onClick: () => void ia.ejecutar().then((r) => r && setTimeout(() => router.refresh(), 100)) },
+    { id: "guardar-ajuste", etiqueta: guardando ? "Guardando…" : "Guardar ajuste como nueva versión", icono: "guardar", primaria: !!salida, deshabilitado: !salida || guardando, onClick: () => void guardar() },
+  ]);
+
   return (
     <section className="space-y-4">
       <div className="panel space-y-3 p-5">
         <h2 className="text-lg font-semibold">Ajuste de pérdida</h2>
         <p className="texto-suave text-sm">
-          El agente decide cada partida con las reglas de oro; el sistema valida y calcula los totales. La reclamación del contratista no se modifica nunca.
+          El agente decide cada partida con las reglas de oro; el sistema valida y calcula los totales. La reclamación del contratista no se modifica nunca. Ejecuta el agente y guarda tus cambios desde el menú lateral; puede tardar unos minutos.
         </p>
-        <button className="btn" disabled={ia.cargando || !puedeAjustar} onClick={() => ia.ejecutar().then((r) => r && setTimeout(() => router.refresh(), 100))}>
-          {ia.cargando ? "Analizando con el agente (puede tardar unos minutos)…" : ajuste ? "Volver a ejecutar el agente" : "Ejecutar ajuste con IA"}
-        </button>
-        {!puedeAjustar && <p className="aviso aviso-alerta">Lee primero los documentos (paso 1).</p>}
+        {!puedeAjustar && <p className="aviso aviso-alerta">Lee primero los documentos (paso «Documentos» del menú).</p>}
         {!iaConfigurada && (
           <p className="aviso aviso-alerta">
             Aún no tienes ningún proveedor de IA en servicio. <Link href="/ajustes" className="underline">Ir a Ajustes de IA</Link>.
@@ -319,7 +323,6 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
               <ul className="list-disc pl-5">{aviso.textos.slice(0, 10).map((t, i) => (<li key={i}>{t}</li>))}</ul>
             </div>
           )}
-          <button className="btn" onClick={guardar} disabled={guardando}>{guardando ? "Guardando…" : "Guardar cambios como nueva versión"}</button>
         </>
       )}
     </section>
