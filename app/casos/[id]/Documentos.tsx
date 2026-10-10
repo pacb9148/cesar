@@ -7,6 +7,7 @@ import { ETIQUETA_TIPO } from "@/lib/caso/clasificar";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
 import { useAccionesMenu } from "@/components/Shell";
+import TituloAyuda from "@/components/Ayuda";
 
 type Procesado = { alertas: string[]; archivosLeidos: string[]; partidas: number };
 const LOTE = 15;
@@ -90,11 +91,12 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
   return (
     <section className="space-y-4">
       <div className="panel space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Antecedentes del siniestro</h2>
-        <p className="texto-suave text-sm">
+        <TituloAyuda titulo="Antecedentes del siniestro" nivel={2}>
+          <p>
           Sube la carpeta completa del caso (o archivos sueltos) con las acciones «Subir carpeta del caso» y «Subir archivos» del menú lateral: acta de inspección, provisión, presupuesto del contratista (Excel o PDF), mandato y fotografías por recinto.
           Las carpetas de fotos se reconocen por su nombre (p. ej. «Living», «Dormitorio 1», «Cubierta»).
         </p>
+        </TituloAyuda>
         <div className="hidden">
           <input ref={carpeta} type="file" multiple className="hidden" onChange={(e) => subir(e.target.files)} {...({ webkitdirectory: "" } as object)} />
           <input ref={sueltos} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={(e) => subir(e.target.files)} />
@@ -133,8 +135,9 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
       )}
 
       <div className="panel space-y-3 p-5">
-        <h3 className="font-semibold">Lectura de los documentos</h3>
-        <p className="texto-suave text-sm">La acción «Leer documentos» del menú lateral extrae acta, provisión y presupuesto, calcula la UF de la fecha del siniestro y deja el caso listo para ajustar. Es seguro repetirla.</p>
+        <TituloAyuda titulo="Lectura de los documentos" nivel={3}>
+          <p>La acción «Leer documentos» del menú lateral extrae acta, provisión y presupuesto, calcula la UF de la fecha del siniestro y deja el caso listo para ajustar. Es seguro repetirla.</p>
+        </TituloAyuda>
         {proc.error && <p role="alert" className="aviso aviso-error">{proc.error}</p>}
         <PanelTraza eventos={proc.eventos} cargando={proc.cargando} titulo="Qué está leyendo" />
         {proc.resultado && (

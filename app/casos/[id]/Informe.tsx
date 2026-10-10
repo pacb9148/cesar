@@ -9,6 +9,7 @@ import { Icono } from "@/components/Iconos";
 import { useAccionesMenu } from "@/components/Shell";
 import FotosInforme from "./FotosInforme";
 import VistaDocumento from "./VistaDocumento";
+import TituloAyuda from "@/components/Ayuda";
 
 type Gen = { entregables: { id: string; nombre: string }[]; motorPdf: string; faltantes: string[]; totales: { reclamacionUF: number; ajusteUF: number; indemnizacionUF: number } };
 
@@ -38,14 +39,15 @@ export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyend
   return (
     <section className="space-y-4">
       <div className="panel space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Informe de liquidación</h2>
-        <p className="texto-suave text-sm">
+        <TituloAyuda titulo="Informe de liquidación" nivel={2}>
+          <p>
           Genera el Excel de ajuste, el informe en Word y PDF (con el modelo y las imágenes de la plantilla), el anexo de fotografías y un paquete ZIP.
           Incluye la captura de agrometeorologia.cl con la estación más cercana al riesgo; eso puede tardar un minuto. Se genera con la acción «Generar informe» del menú lateral.
         </p>
+        </TituloAyuda>
         {!tieneAjuste && <p className="aviso aviso-alerta">Primero ejecuta el ajuste (paso 3).</p>}
       </div>
-      <FotosInforme casoId={caso.id} fotos={archivos.filter((a) => a.tipo === "foto")} enInforme={enInforme} leyendasGrupos={leyendasGrupos} />
+      <FotosInforme casoId={caso.id} fotos={archivos.filter((a) => a.tipo === "foto")} enInforme={enInforme} leyendasGrupos={leyendasGrupos} alDia={alDia} hayInforme={hayInforme} puedeGenerar={tieneAjuste} generando={gen.cargando} onRegenerar={generar} />
       {hayInforme && (
         <div className="panel p-5">
           <h3 className="mb-2 font-semibold">Descargas</h3>

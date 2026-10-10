@@ -15,6 +15,7 @@ import PanelTraza from "@/components/PanelTraza";
 import { useAccionesMenu } from "@/components/Shell";
 import VistaPreviaAjuste from "./VistaPreviaAjuste";
 import type { AjusteGuardado } from "./PanelCaso";
+import TituloAyuda from "@/components/Ayuda";
 
 const ETIQUETAS: Record<(typeof CLAVES_CARACTERISTICAS)[number], string> = {
   pisos: "Pisos", superficie_m2: "Superficie (m²)", antiguedad_anios: "Antigüedad (años)", dormitorios: "Dormitorios", banos: "Baños",
@@ -113,10 +114,11 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
   return (
     <section className="space-y-4">
       <div className="panel space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Ajuste de pérdida</h2>
-        <p className="texto-suave text-sm">
+        <TituloAyuda titulo="Ajuste de pérdida" nivel={2}>
+          <p>
           El agente decide cada partida con las reglas de oro; el sistema valida y calcula los totales. La reclamación del contratista no se modifica nunca. Ejecuta el agente y guarda tus cambios desde el menú lateral; puede tardar unos minutos.
         </p>
+        </TituloAyuda>
         {!puedeAjustar && <p className="aviso aviso-alerta">Lee primero los documentos (paso «Documentos» del menú).</p>}
         {!iaConfigurada && (
           <p className="aviso aviso-alerta">
@@ -278,8 +280,9 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
           </div>
 
           <div className="panel space-y-3 p-5">
-            <h3 className="font-semibold">Características del bien en riesgo</h3>
-            <p className="texto-suave text-sm">Lo vacío sale en el informe como <strong>{MARCADOR_FALTA_DATO}</strong>. Lo deducido de fotografías figura con las fotos que lo prueban.</p>
+            <TituloAyuda titulo="Características del bien en riesgo" nivel={3}>
+              <p>Lo vacío sale en el informe como <strong>{MARCADOR_FALTA_DATO}</strong>. Lo deducido de fotografías figura con las fotos que lo prueban.</p>
+            </TituloAyuda>
             <div className="grid gap-3 sm:grid-cols-3">
               {CLAVES_CARACTERISTICAS.map((k) => {
                 const d = salida.caracteristicas[k];

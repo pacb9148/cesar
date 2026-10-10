@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Caso } from "@/lib/caso/repositorio";
 import { useAccionesMenu } from "@/components/Shell";
+import TituloAyuda from "@/components/Ayuda";
 
 const FECHA = /^\d{2}\/\d{2}\/\d{4}$/;
 
@@ -58,9 +59,9 @@ export default function Datos({ caso }: { caso: Caso }) {
 
   return (
     <form id="form-datos" onSubmit={guardar} className="panel space-y-4 p-5">
-      <p className="texto-suave text-sm">
-        Lo que sale de los PDF viene prellenado. Corrige tildes y completa (luego usa «Guardar datos» en el menú lateral) lo que sólo tú sabes: el texto de la denuncia y las fechas de emisión e información a las partes.
-      </p>
+      <TituloAyuda titulo="Datos del siniestro" nivel={2}>
+        <p>Lo que sale de los PDF viene prellenado. Corrige tildes y completa (luego usa «Guardar datos» en el menú lateral) lo que sólo tú sabes: el texto de la denuncia y las fechas de emisión e información a las partes.</p>
+      </TituloAyuda>
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo n="siniestro" t="N.º de siniestro" v={d.siniestro} />
         <Campo n="liquidacion" t="N.º de liquidación" v={d.liquidacion} />
