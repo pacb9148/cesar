@@ -31,7 +31,7 @@ export function calcularTotales(lineas: LineaValorada[], p: ParametrosTotales): 
   const neto = directo + gastosGenerales + utilidades;
   const iva = neto * (p.ivaPct ?? IVA);
   const total = neto + iva;
-  return { directo, gastosGenerales, utilidades, neto, iva, total, uf: total / p.valorUF };
+  return { directo, gastosGenerales, utilidades, neto, iva, total, uf: p.valorUF > 0 ? total / p.valorUF : 0 };
 }
 
 export function totalesReclamacion(r: Reclamacion, valorUF: number): Totales {

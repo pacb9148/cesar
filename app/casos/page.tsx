@@ -2,6 +2,7 @@ import Link from "next/link";
 import { exigirUsuario } from "@/lib/auth";
 import { listarCasos } from "@/lib/caso/repositorio";
 import BotonNuevoCaso from "./BotonNuevoCaso";
+import AccionesCaso from "./AccionesCaso";
 import Shell from "@/components/Shell";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +30,8 @@ export default async function Casos() {
         ) : (
           <ul className="space-y-2">
             {casos.map((c) => (
-              <li key={c.id}>
-                <Link href={`/casos/${c.id}`} className="panel flex flex-wrap items-center justify-between gap-2 p-4 hover:border-[var(--acento)]">
+              <li key={c.id} className="panel flex flex-wrap items-center gap-2 pr-3 hover:border-[var(--acento)]">
+                <Link href={`/casos/${c.id}`} className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 p-4">
                   <span>
                     <span className="font-semibold">Siniestro {c.siniestro}</span>
                     <span className="texto-suave ml-3 text-sm">{c.datos.asegurado?.nombre ?? "sin datos aún"}</span>
@@ -40,6 +41,7 @@ export default async function Casos() {
                     <span className="insignia">{ESTADOS[c.estado] ?? c.estado}</span>
                   </span>
                 </Link>
+                <AccionesCaso id={c.id} siniestro={c.siniestro} />
               </li>
             ))}
           </ul>

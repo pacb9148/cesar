@@ -5,6 +5,7 @@ import Shell from "@/components/Shell";
 import { hayProveedorActivo } from "@/lib/ia/repo-proveedores";
 import { informeAlDia, leerLeyendasGrupos } from "@/lib/caso/generacion";
 import { seleccionarFotosInforme } from "@/lib/docs/fotos-seleccion";
+import { salidaBase } from "@/lib/caso/ajuste-base";
 import type { ActaInspeccion } from "@/lib/extraccion/acta";
 import PanelCaso from "./PanelCaso";
 
@@ -22,6 +23,8 @@ export default async function PaginaCaso({ params }: { params: Promise<{ id: str
   const fotos = archivos.filter((a) => a.tipo === "foto").map((a) => ({ ...a, recinto: a.recinto ?? "General" }));
   const enInforme = acta ? seleccionarFotosInforme(fotos, acta).fotos.map((f) => f.id) : [];
   const [leyendasGrupos, alDia] = await Promise.all([leerLeyendasGrupos(id), informeAlDia(id)]);
+  // Con presupuesto pero sin ajuste guardado, el paso Ajuste parte de «sin ajustar»: todas las partidas tal como se reclamaron, editables a mano.
+  const ajusteBase = recl && !ajuste && caso.modo === "reclamacion" ? salidaBase(acta) : null;
   return (
     <Shell nombre={u.nombre}>
         <PanelCaso
@@ -29,6 +32,7 @@ export default async function PaginaCaso({ params }: { params: Promise<{ id: str
           archivos={JSON.parse(JSON.stringify(archivos))}
           reclamacion={recl ? JSON.parse(JSON.stringify(recl.datos)) : null}
           ajuste={ajuste ? JSON.parse(JSON.stringify(ajuste)) : null}
+          ajusteBase={ajusteBase}
           iaConfigurada={ia}
           enInforme={enInforme}
           leyendasGrupos={leyendasGrupos}

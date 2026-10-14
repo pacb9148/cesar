@@ -24,7 +24,7 @@ export const colLetra = (n: number) => {
  * (ancho) o del número (alto), el doble clic lo ajusta solo, y «Ajustar texto» parte el texto largo dentro de la celda.
  * Los cambios se informan hacia arriba y se guardan en el propio archivo.
  */
-export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente, zoom, maximizada }: { h: HojaVista; pendiente: CambioFormato; ediciones: Map<string, string>; alEditar: (r: number, c: number, v: string, original: string) => void; alFormato: (c: CambioHoja) => void; zoom: number; maximizada: boolean }) {
+export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente, zoom, maximizada, soloLectura = false }: { soloLectura?: boolean; h: HojaVista; pendiente: CambioFormato; ediciones: Map<string, string>; alEditar: (r: number, c: number, v: string, original: string) => void; alFormato: (c: CambioHoja) => void; zoom: number; maximizada: boolean }) {
   const [activa, setActiva] = useState<{ r: number; c: number } | null>(null);
   // Al volver a una hoja se parte de lo ya ajustado y todavía sin guardar, no de lo guardado en el archivo.
   const nCols = Math.min(COLS_MAX, Math.max(h.columnas + 6, COLS_MIN));
@@ -170,9 +170,9 @@ export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente
                       key={c}
                       colSpan={m ? m.c2 - m.c1 + 1 : 1}
                       rowSpan={m ? m.r2 - m.r1 + 1 : 1}
-                      title={esFormula ? `Fórmula: =${x!.f} (se recalcula sola)` : "Clic para editar"}
-                      onClick={() => !esFormula && setActiva({ r, c })}
-                      style={{ border: "1px solid #e1e4ea", padding: enEdicion ? 0 : "1px 4px", background: editada !== undefined ? "#fde68a" : (x?.fondo ?? "#fff"), color: editada !== undefined ? "#111827" : colorSobre(x?.fondo), fontWeight: x?.b ? 700 : 400, textAlign: x?.al ?? (x && /^-?[\d.,%]+$/.test(x.txt) ? "right" : "left"), whiteSpace: ajuste ? "pre-wrap" : "nowrap", wordBreak: ajuste ? "break-word" : undefined, verticalAlign: ajuste ? "top" : undefined, overflow: "hidden", textOverflow: ajuste ? undefined : "ellipsis", cursor: esFormula ? "default" : "text" }}
+                      title={esFormula ? `Fórmula: =${x!.f} (se recalcula sola)` : soloLectura ? "Vista previa: solo lectura" : "Clic para editar"}
+                      onClick={() => !esFormula && !soloLectura && setActiva({ r, c })}
+                      style={{ border: "1px solid #e1e4ea", padding: enEdicion ? 0 : "1px 4px", background: editada !== undefined ? "#fde68a" : (x?.fondo ?? "#fff"), color: editada !== undefined ? "#111827" : colorSobre(x?.fondo), fontWeight: x?.b ? 700 : 400, textAlign: x?.al ?? (x && /^-?[\d.,%]+$/.test(x.txt) ? "right" : "left"), whiteSpace: ajuste ? "pre-wrap" : "nowrap", wordBreak: ajuste ? "break-word" : undefined, verticalAlign: ajuste ? "top" : undefined, overflow: "hidden", textOverflow: ajuste ? undefined : "ellipsis", cursor: esFormula || soloLectura ? "default" : "text" }}
                     >
                       {enEdicion ? (
                         <input

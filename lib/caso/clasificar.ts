@@ -1,6 +1,7 @@
 export type TipoArchivo =
   | "acta"
   | "provision"
+  | "borrador"
   | "presupuesto_xlsx"
   | "presupuesto_pdf"
   | "mandato"
@@ -12,6 +13,7 @@ export type TipoArchivo =
 export const ETIQUETA_TIPO: Record<TipoArchivo | "salida", string> = {
   acta: "Acta de inspección",
   provision: "Provisión de pérdida",
+  borrador: "Borrador del informe",
   presupuesto_xlsx: "Presupuesto (Excel)",
   presupuesto_pdf: "Presupuesto (PDF)",
   mandato: "Mandato",
@@ -43,6 +45,8 @@ export function clasificarArchivo(nombre: string, rutaRelativa: string | null, m
   }
   if (/insp/.test(n) && n.endsWith(".pdf")) return { tipo: "acta", recinto: null };
   if (/provision/.test(n) && n.endsWith(".pdf")) return { tipo: "provision", recinto: null };
+  // El borrador del informe (Word) trae los datos de portada: póliza, vigencia, fechas, partes y denuncia.
+  if (/borrador/.test(n) && /\.docx?$/.test(n)) return { tipo: "borrador", recinto: null };
   if (/mandato/.test(n)) return { tipo: "mandato", recinto: null };
   if (partes.includes("correspondencia") || /solicitud de antecedentes/.test(n)) return { tipo: "correspondencia", recinto: null };
   if (/informe.?tecnico/.test(n) && n.endsWith(".docx")) return { tipo: "informe_tecnico", recinto: null };

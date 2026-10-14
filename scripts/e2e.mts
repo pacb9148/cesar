@@ -112,6 +112,8 @@ const salida: SalidaAgente = {
   resumen_ajuste: ["Cantidades recortadas al acta (C).", "Precios llevados a baremo a todo costo (B).", "Faenas absorbidas en gastos generales (E)."],
   faltantes: [],
 };
+// mindicador.cl a veces no responde: la UF de la planilla de referencia deja la prueba independiente de ese servicio.
+if (p.valorUF) await api(`/api/casos/${id}/datos`, { method: "PATCH", json: { valor_uf: p.valorUF } });
 const put = await api(`/api/casos/${id}/ajuste`, { method: "PUT", json: salida });
 console.log("ajuste manual:", put.status, put.status === 200 ? "" : await put.text());
 

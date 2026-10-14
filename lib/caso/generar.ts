@@ -22,6 +22,10 @@ import { ClienteConRespaldo } from "../ia/rotacion";
 import { evidenciaMeteorologica } from "../meteo/inia";
 import { consulta } from "../db";
 import { leerLeyendasGrupos, marcarAlDia } from "./generacion";
+import { salidaBase } from "./ajuste-base";
+import type { VistaDocumento } from "./edicion-documentos";
+import { docxAVista } from "../docs/vista-docx";
+import { cargarLibro, libroAVista } from "../docs/vista-xlsx";
 import {
   actualizarCaso,
   archivosConContenido,
@@ -214,12 +218,18 @@ export function entradaExcelDe(datos: DatosCaso, acta: ActaInspeccion, recl: Rec
 
 export async function generarSalidas(casoId: string, usuarioId: string): Promise<ResultadoGeneracion> {
   const { caso, acta, datos, valorUF, recl } = await cargar(casoId, usuarioId);
-  const aj = await ultimoAjuste(casoId);
-  if (!aj) throw new Error("Aún no hay un ajuste: ejecútalo primero.");
-  const salida = aj.salida;
+  let aj = await ultimoAjuste(casoId);
+  if (!aj) {
+    // Sin ajuste guardado (ni de la IA ni manual) pero con presupuesto: se parte de «sin ajustar», así el informe no depende de la IA.
+    if (!recl) throw new Error("Aún no hay un ajuste: ejecútalo primero.");
+    await guardarAjuste(casoId, salidaBase(acta), "manual");
+    emitir("info", "informe", "No había ajuste guardado: se usa el presupuesto tal como se reclamó («sin ajustar»)");
+    aj = await ultimoAjuste(casoId);
+  }
+  const salida = aj!.salida;
   const entrada = entradaExcelDe(datos, acta, recl, salida, valorUF);
   const res = resumenCuadro(entrada);
-  emitir("info", "informe", `Ajuste v${aj.version ?? "?"} cargado: UF reclamada ${res.recUF.toFixed(2)}, ajustada ${res.ajUF.toFixed(2)}, a indemnizar ${res.indemnizacionUF.toFixed(2)}`);
+  emitir("info", "informe", `Ajuste v${aj!.version ?? "?"} cargado: UF reclamada ${res.recUF.toFixed(2)}, ajustada ${res.ajUF.toFixed(2)}, a indemnizar ${res.indemnizacionUF.toFixed(2)}`);
   emitir("info", "informe", "Generando Excel, captura meteorológica, fachada y fotos en paralelo (la captura de agrometeorologia.cl puede tardar)");
 
   const [xlsx, met, fachada, fotosDb] = await Promise.all([
@@ -294,4 +304,49 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
   if (!datos.fechas.informadoPartes) faltantes.push("fecha en que se informó a las partes");
   void caso;
   return { entregables, motorPdf: motor, totales: { reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF }, faltantes };
+}
+
+/** Ajuste con el que se previsualiza: el que llega sin guardar (lo que el usuario está editando), el último guardado o «sin ajustar». */
+async function salidaParaPrevia(casoId: string, acta: ActaInspeccion, recl: Reclamacion | null, propia?: SalidaAgente): Promise<SalidaAgente> {
+  if (propia) return propia;
+  const aj = await ultimoAjuste(casoId);
+  if (aj) return aj.salida;
+  if (!recl) throw new Error("Aún no hay un ajuste: ejecútalo primero.");
+  return salidaBase(acta);
+}
+
+/** Vista previa del Excel de ajuste con los valores actuales, sin guardar nada ni generar el informe. */
+export async function previaExcel(casoId: string, usuarioId: string, propia?: SalidaAgente): Promise<VistaDocumento> {
+  const { acta, datos, valorUF, recl } = await cargar(casoId, usuarioId);
+  const salida = await salidaParaPrevia(casoId, acta, recl, propia);
+  const xlsx = await generarExcel(entradaExcelDe(datos, acta, recl, salida, valorUF));
+  return { tipo: "xlsx", nombre: `${datos.siniestro} Ajuste.xlsx (vista previa)`, hojas: libroAVista(await cargarLibro(xlsx)) };
+}
+
+/**
+ * Vista previa del informe Word con los datos, el ajuste, las fotos elegidas (con su orden y recorte) y las leyendas actuales.
+ * No se guarda nada; la captura meteorológica se incluye solo al generar el informe.
+ */
+export async function previaInforme(casoId: string, usuarioId: string): Promise<VistaDocumento> {
+  const { acta, datos, valorUF, recl } = await cargar(casoId, usuarioId);
+  const salida = await salidaParaPrevia(casoId, acta, recl);
+  const entrada = entradaExcelDe(datos, acta, recl, salida, valorUF);
+  const res = resumenCuadro(entrada);
+  const [fachada, fotosDb] = await Promise.all([fachadaDelActa(casoId), archivosConContenido(casoId, "foto")]);
+  const todas: FotoInforme[] = fotosDb.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: "", edicion: f.edicion }));
+  const docx = await generarInforme({
+    caso: datos,
+    valorUF,
+    caracteristicas: salida.caracteristicas,
+    evidencia: salida.evidencia_observada,
+    ajusteTexto: salida.ajuste_de_perdida_texto,
+    totales: { reclamacionPesos: res.recTotalPesos, reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF },
+    meteo: null,
+    cuadroTabla: cuadroTablaXml(entrada),
+    fotos: seleccionarFotosInforme(todas, acta).fotos,
+    piesGrupos: await leerLeyendasGrupos(casoId),
+    fachada,
+    siniestrosAnteriores: false,
+  });
+  return { tipo: "docx", nombre: `${datos.siniestro} INFORME.docx (vista previa)`, bloques: docxAVista(docx).bloques };
 }

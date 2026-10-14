@@ -19,12 +19,14 @@ function runHtml(r: RunVista): string {
 }
 
 /** Lo que el Word necesita saber de cada párrafo tocado: su elemento (de él se leen el texto y el formato al guardar). */
-type Contexto = {
+export type Contexto = {
   alCambiar: (i: number, el: HTMLElement | null) => void;
   alFoco: (i: number) => void;
   alClicFoto: (fotoId: string) => void;
   alClicImagen: (el: HTMLImageElement) => void;
   eliminados: Set<number>;
+  /** Vista previa: se ve el documento pero no se edita. */
+  soloLectura?: boolean;
 };
 
 /** Párrafo editable. Su contenido se pinta una sola vez (innerHTML fijo): lo que el usuario escribe no lo pisa React. */
@@ -41,7 +43,7 @@ function Parrafo({ p, c }: { p: ParrafoVista; c: Contexto }) {
   return (
     <p
       data-i={p.i}
-      contentEditable={p.editable && !borrado}
+      contentEditable={p.editable && !borrado && !c.soloLectura}
       suppressContentEditableWarning
       spellCheck
       onFocus={() => c.alFoco(p.i)}
@@ -69,7 +71,7 @@ function Parrafo({ p, c }: { p: ParrafoVista; c: Contexto }) {
   );
 }
 
-function Bloques({ bloques, c }: { bloques: BloqueVista[]; c: Contexto }) {
+export function Bloques({ bloques, c }: { bloques: BloqueVista[]; c: Contexto }) {
   return (
     <>
       {bloques.map((b, k) =>

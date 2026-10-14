@@ -9,6 +9,7 @@ import { Icono } from "@/components/Iconos";
 import { useAccionesMenu } from "@/components/Shell";
 import FotosInforme from "./FotosInforme";
 import VistaDocumento from "./VistaDocumento";
+import Previa from "./Previa";
 import TituloAyuda from "@/components/Ayuda";
 
 type Gen = { entregables: { id: string; nombre: string }[]; motorPdf: string; faltantes: string[]; totales: { reclamacionUF: number; ajusteUF: number; indemnizacionUF: number } };
@@ -18,6 +19,7 @@ const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB
 export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyendasGrupos, alDia }: { caso: Caso; archivos: ArchivoMeta[]; tieneAjuste: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; alDia: boolean }) {
   const router = useRouter();
   const [viendo, setViendo] = useState<{ id: string; nombre: string } | null>(null);
+  const [previa, setPrevia] = useState<{ tipo: "informe" } | null>(null);
   const gen = useFlujo<Gen>(`/api/casos/${caso.id}/generar`);
   const salidas = archivos.filter((a) => a.tipo === "salida");
   const faltantes = gen.resultado?.faltantes ?? [];
@@ -33,6 +35,7 @@ export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyend
 
   // Generar el informe es una acción del menú lateral; activa solo si hay algo nuevo que entregar.
   useAccionesMenu([
+    { id: "previa-informe", etiqueta: "Previsualizar informe", icono: "ojo", deshabilitado: !tieneAjuste, onClick: () => setPrevia({ tipo: "informe" }) },
     { id: "generar", etiqueta: gen.cargando ? "Generando documentos…" : hayInforme ? "Volver a generar el informe" : "Generar informe", icono: "informe", primaria: true, deshabilitado: gen.cargando || !tieneAjuste || !hayCambios, onClick: () => void generar() },
   ]);
 
@@ -92,6 +95,7 @@ export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyend
           </div>
         )}
       </div>
+      {previa && <Previa casoId={caso.id} cuerpo={previa} titulo="Informe (vista previa)" onCerrar={() => setPrevia(null)} />}
       {viendo && <VistaDocumento key={viendo.id} casoId={caso.id} archivoId={viendo.id} nombre={viendo.nombre} onCerrar={() => setViendo(null)} onGuardado={() => router.refresh()} />}
     </section>
   );

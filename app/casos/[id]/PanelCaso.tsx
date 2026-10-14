@@ -19,7 +19,7 @@ const PESTANAS = [
   ["informe", "4 · Informe", "informe"],
 ] as const satisfies readonly (readonly [string, string, NombreIcono])[];
 
-export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; iaConfigurada: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; informeAlDia: boolean }) {
+export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; ajusteBase: SalidaAgente | null; iaConfigurada: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; informeAlDia: boolean }) {
   const [tab, setTab] = useState<(typeof PESTANAS)[number][0]>("documentos");
   const alertas = p.caso.datos.alertas ?? [];
   // Los pasos viven en el menú lateral; aquí solo se trabaja el contenido del paso elegido.
@@ -40,8 +40,8 @@ export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; recl
       )}
       {tab === "documentos" && <Documentos {...p} />}
       {tab === "datos" && <Datos caso={p.caso} />}
-      {tab === "ajuste" && <Ajuste caso={p.caso} reclamacion={p.reclamacion} ajuste={p.ajuste} iaConfigurada={p.iaConfigurada} />}
-      {tab === "informe" && <Informe caso={p.caso} archivos={p.archivos} tieneAjuste={!!p.ajuste} enInforme={p.enInforme} leyendasGrupos={p.leyendasGrupos} alDia={p.informeAlDia} />}
+      {tab === "ajuste" && <Ajuste caso={p.caso} reclamacion={p.reclamacion} ajuste={p.ajuste} ajusteBase={p.ajusteBase} iaConfigurada={p.iaConfigurada} />}
+      {tab === "informe" && <Informe caso={p.caso} archivos={p.archivos} tieneAjuste={!!p.ajuste || !!p.ajusteBase} enInforme={p.enInforme} leyendasGrupos={p.leyendasGrupos} alDia={p.informeAlDia} />}
     </div>
   );
 }

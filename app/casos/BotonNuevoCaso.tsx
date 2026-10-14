@@ -9,7 +9,8 @@ export default function BotonNuevoCaso() {
   async function crear() {
     setCargando(true);
     const r = await fetch("/api/casos", { method: "POST" });
-    const j = (await r.json()) as { id?: string };
+    const j = (await r.json().catch(() => ({}))) as { id?: string; reutilizado?: boolean };
+    // Si ya hay un caso en blanco se abre ese en vez de crear otro.
     if (j.id) router.push(`/casos/${j.id}`);
     else setCargando(false);
   }

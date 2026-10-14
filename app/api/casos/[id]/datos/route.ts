@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { conUsuario, fallo, json } from "@/lib/api";
-import { actualizarCaso, auditar, obtenerCaso } from "@/lib/caso/repositorio";
+import { actualizarCaso, auditar, casoConSiniestro, obtenerCaso } from "@/lib/caso/repositorio";
 
 const fecha = z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/, "Usa el formato dd/mm/aaaa");
 
@@ -32,6 +32,10 @@ export const PATCH = conUsuario<{ id: string }>(async (req, u, { id }) => {
     fechas: { ...d.fechas, ...resto.fechas },
     poliza: { ...d.poliza, ...resto.poliza },
   } as typeof d;
+  if (resto.siniestro) {
+    const otro = await casoConSiniestro(u.id, resto.siniestro, id);
+    if (otro) return fallo(`Ya existe otro caso con el siniestro ${resto.siniestro}.`, 409);
+  }
   await actualizarCaso(id, { datos: nuevo, ...(valor_uf ? { valor_uf } : {}), ...(resto.siniestro ? { siniestro: resto.siniestro } : {}) });
   await auditar(u.id, id, "caso.editar_datos", { campos: Object.keys(p.data) });
   return json({ ok: true });

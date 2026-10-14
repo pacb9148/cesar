@@ -4,12 +4,15 @@ import { hashReclamacion } from "../engine/hash";
 import { parsearActa, type ActaInspeccion } from "../extraccion/acta";
 import { esEscaneado, textoPdf } from "../extraccion/pdf";
 import { parsearPresupuestoPdf, parsearPresupuestoXlsx, type ResultadoPresupuesto } from "../extraccion/presupuesto";
+import mammoth from "mammoth";
+import { parsearBorrador, type DatosBorrador } from "../extraccion/borrador";
 import { parsearProvision, type Provision } from "../extraccion/provision";
 import {
   actualizarCaso,
   archivosConContenido,
   guardarExtraccion,
   guardarReclamacion,
+  casoConSiniestro,
   obtenerCaso,
   type Caso,
 } from "./repositorio";
@@ -17,18 +20,27 @@ import {
 const dmy = (s: string | null | undefined) => (s ? s.replace(/-/g, "/") : "");
 const iso = (s: string | null | undefined) => (s ? s.replace(/\//g, "-").split("-").reverse().join("-") : "");
 
-/** UF del día del siniestro (API pública mindicador.cl). Si no responde, el caso queda con alerta, nunca con un valor inventado. */
-export async function valorUF(fechaIso: string): Promise<number | null> {
+/**
+ * UF del día del siniestro (API pública mindicador.cl). Ese servicio es lento y a veces no responde: se reintenta con tiempos largos
+ * (una respuesta tardó 14 s). Si no responde, el caso queda con alerta, nunca con un valor inventado.
+ */
+export async function valorUF(fechaIso: string, intentos = 3, esperaMs = 30_000): Promise<number | null> {
   const [a, m, d] = fechaIso.split("-");
   const base = process.env.UF_API_URL ?? "https://mindicador.cl/api/uf";
-  try {
-    const r = await fetch(`${base}/${d}-${m}-${a}`, { signal: AbortSignal.timeout(15000) });
-    if (!r.ok) return null;
-    const j = (await r.json()) as { serie?: { valor: number }[] };
-    return j.serie?.[0]?.valor ?? null;
-  } catch {
-    return null;
+  for (let i = 1; i <= intentos; i++) {
+    try {
+      const r = await fetch(`${base}/${d}-${m}-${a}`, { signal: AbortSignal.timeout(esperaMs) });
+      if (r.ok) {
+        const j = (await r.json()) as { serie?: { valor: number }[] };
+        const v = j.serie?.[0]?.valor;
+        if (typeof v === "number" && v > 0) return v;
+      }
+    } catch {
+      /* se reintenta */
+    }
+    if (i < intentos) emitir("info", "uf", `mindicador.cl no respondió (intento ${i} de ${intentos}); se reintenta`);
   }
+  return null;
 }
 
 export const SOSPECHA_TILDES = /\b(Munoz|Nunez|Perez|Gonzalez|Hernandez|Martinez|Cardenas|Andres|Elias|Jose|Maria|Concepcion|Huerfanos|Nunoa|Ibanez|Sepulveda)\b/;
@@ -38,12 +50,11 @@ export function construirDatosCaso(
   prov: Provision | null,
   previos: Caso["datos"],
   hayPresupuesto: boolean,
+  borr: DatosBorrador | null = null,
 ): { datos: DatosCaso; alertas: string[] } {
   const alertas: string[] = [];
-  const falta = (campo: string, v: string | null | undefined) => {
-    if (!v) alertas.push(`Falta ${campo}: complétalo en la pestaña «Datos».`);
-    return v ?? "";
-  };
+  // Con solo acta, borrador y presupuesto, lo que no aparezca no se exige: el informe lo marca como [FALTA DATO] y se completa en «Datos» si hace falta.
+  const falta = (_campo: string, v: string | null | undefined) => v ?? "";
   const ocurrencia = iso(acta?.fechaSiniestro) || iso(prov?.fechaOcurrencia);
   const direccion = acta?.direccionRiesgo ?? prov?.asegurado.direccion ?? "";
   const ubicacion = [direccion, acta?.comuna, acta?.region].filter(Boolean).join(", ");
@@ -79,18 +90,16 @@ export function construirDatosCaso(
     comuna: acta?.comuna ?? "",
     region: acta?.region ?? "",
     fechas: {
-      inspeccion: dmy(acta?.fechaInspeccion),
+      inspeccion: dmy(acta?.fechaInspeccion) || (borr?.fechaInspeccion ?? ""),
       asignacion: prov?.fechaAsignacion ?? "",
       denuncia: prov?.fechaDenuncia ?? "",
       ocurrencia: falta("fecha de ocurrencia", ocurrencia),
-      emision: previos.fechas?.emision ?? null,
+      emision: previos.fechas?.emision ?? borr?.fechaEmision ?? null,
       informadoPartes: previos.fechas?.informadoPartes ?? null,
     },
-    denunciaTexto: previos.denunciaTexto ?? null,
+    denunciaTexto: previos.denunciaTexto ?? borr?.denunciaTexto ?? null,
     modo: hayPresupuesto ? "reclamacion" : "perdida_determinada",
   });
-  if (!prov?.sumaAseguradaUF) alertas.push("No se leyó la suma asegurada de la Provisión.");
-  if (!datos.fechas.asignacion || !datos.fechas.denuncia) alertas.push("Faltan las fechas de asignación o denuncia (vienen de la Provisión).");
   return { datos, alertas };
 }
 
@@ -124,7 +133,17 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
     prov = parsearProvision(await textoPdf(provs[0].contenido));
     emitir("ok", "provision", `Provisión leída: liquidación ${prov.liquidacion ?? "?"}, siniestro ${prov.siniestro ?? "?"}`);
     leidos.push(provs[0].nombre);
-  } else alertas.push("Falta la Provisión de pérdida (datos de póliza, vigencia y suma asegurada).");
+  }
+
+  // Los datos de portada salen del borrador del informe (Word); la Provisión, si alguien la sube, tiene prioridad pero ya no se exige.
+  let borr: DatosBorrador | null = null;
+  const borradores = await archivosConContenido(casoId, "borrador");
+  if (borradores[0]) {
+    borr = parsearBorrador((await mammoth.extractRawText({ buffer: borradores[0].contenido })).value);
+    leidos.push(borradores[0].nombre);
+    emitir("ok", "borrador", `Borrador leído: póliza ${borr.polizaNumero ?? "?"}, vigencia ${borr.vigenciaDesde ?? "?"} a ${borr.vigenciaHasta ?? "?"}, suma asegurada UF ${borr.sumaAseguradaUF ?? "?"}, ocurrencia ${borr.fechaOcurrencia ?? "?"}`);
+    await guardarExtraccion(casoId, "borrador", borr);
+  } else if (!prov) alertas.push("Falta el borrador del informe (Word): de ahí salen la póliza, la vigencia, la suma asegurada y las fechas.");
 
   let presupuesto: ResultadoPresupuesto | null = null;
   const xl = await archivosConContenido(casoId, "presupuesto_xlsx");
@@ -148,14 +167,16 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
     else presupuesto = null;
   }
 
-  const { datos, alertas: aDatos } = construirDatosCaso(acta, prov, caso.datos, presupuesto != null);
+  const { datos, alertas: aDatos } = construirDatosCaso(acta, prov ?? borr, caso.datos, presupuesto != null, borr);
   alertas.push(...aDatos);
+  const repetido = datos.siniestro ? await casoConSiniestro(usuarioId, datos.siniestro, casoId) : null;
+  if (repetido) alertas.push(`Ya existe otro caso con el siniestro ${datos.siniestro}: revisa si es el mismo y elimina el duplicado desde la lista de casos.`);
   if (acta) await guardarExtraccion(casoId, "acta", acta);
   if (prov) await guardarExtraccion(casoId, "provision", prov);
 
   emitir("info", "uf", `Consultando el valor de la UF del ${datos.fechas.ocurrencia || "(fecha sin definir)"} en mindicador.cl`);
   const uf = datos.fechas.ocurrencia ? await valorUF(datos.fechas.ocurrencia) : null;
-  if (uf == null) alertas.push("No se pudo obtener la UF de la fecha del siniestro: ingrésala a mano en «Datos».");
+  if (uf == null && !caso.valor_uf) alertas.push("No se pudo obtener la UF de la fecha del siniestro (el servicio mindicador.cl no respondió): vuelve a leer los documentos o ingrésala a mano en «Datos».");
 
   emitir(uf == null ? "error" : "ok", "uf", uf == null ? "No se obtuvo la UF" : `UF de la fecha: ${uf}`);
   emitir("ok", "documentos", `Lectura terminada: ${leidos.length} documento(s) leído(s), ${alertas.length} aviso(s)`);

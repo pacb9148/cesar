@@ -14,6 +14,7 @@ import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
 import { useAccionesMenu } from "@/components/Shell";
 import VistaPreviaAjuste from "./VistaPreviaAjuste";
+import Previa from "./Previa";
 import type { AjusteGuardado } from "./PanelCaso";
 import TituloAyuda from "@/components/Ayuda";
 
@@ -29,20 +30,22 @@ const reclamacionVacia: Reclamacion = { secciones: [], lineas: [], totalDirectoD
 
 type Resp = { version: number; intentos: number; errores: string[]; advertencias: string[] };
 
-export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { caso: Caso; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; iaConfigurada: boolean }) {
+export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfigurada }: { caso: Caso; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; ajusteBase: SalidaAgente | null; iaConfigurada: boolean }) {
   const router = useRouter();
   const ia = useFlujo<Resp>(`/api/casos/${caso.id}/ajustar`);
-  const [salida, setSalida] = useState<SalidaAgente | null>(ajuste?.salida ?? null);
+  const [salida, setSalida] = useState<SalidaAgente | null>(ajuste?.salida ?? ajusteBase ?? null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; textos: string[] } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [borrador, setBorrador] = useState<Record<string, string>>({});
   const [cerradas, setCerradas] = useState<string[]>([]);
+  const [previa, setPrevia] = useState<{ tipo: "excel"; salida: SalidaAgente } | null>(null);
   const recl = reclamacion ?? reclamacionVacia;
   const valorUF = Number(caso.valor_uf ?? 0);
+  const ufTxt = (n: number) => (valorUF > 0 ? `UF ${uf(n)}` : "UF —");
   const dos = caso.modo === "reclamacion";
 
   const calc = useMemo(() => {
-    if (!salida || !valorUF) return null;
+    if (!salida) return null;
     const filas = armarFilas({ caso: { modo: caso.modo }, reclamacion: recl, decisiones: salida.lineas, adicionales: salida.lineas_adicionales });
     const p = { ggPct: recl.ggPct, utilidadPct: recl.utilidadPct, ivaPct: recl.ivaPct, valorUF };
     const rec = calcularTotales(filas.flatMap((f) => (f.tipo === "linea" && f.rec ? [{ cantidad: f.rec.cantidad, pu: f.rec.pu }] : [])), p);
@@ -108,6 +111,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
   // Ejecutar y guardar viven en el menú lateral; aquí se revisan y editan las partidas.
   useAccionesMenu([
     { id: "ejecutar-ajuste", etiqueta: ia.cargando ? "Analizando con el agente…" : ajuste ? "Volver a ejecutar el agente" : "Ejecutar ajuste con IA", icono: "ejecutar", primaria: !salida, deshabilitado: ia.cargando || !puedeAjustar, onClick: () => void ia.ejecutar().then((r) => r && setTimeout(() => router.refresh(), 100)) },
+    { id: "previa-excel", etiqueta: "Previsualizar Excel del ajuste", icono: "ojo", deshabilitado: !salida || !valorUF, onClick: () => salida && setPrevia({ tipo: "excel", salida }) },
     { id: "guardar-ajuste", etiqueta: guardando ? "Guardando…" : "Guardar ajuste como nueva versión", icono: "guardar", primaria: !!salida, deshabilitado: !salida || guardando, onClick: () => void guardar() },
   ]);
 
@@ -138,10 +142,12 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
 
       {salida && calc && (
         <>
+          {!valorUF && <p className="aviso aviso-alerta">Falta el valor de la UF de la fecha del siniestro: los importes en pesos ya se ven, pero la UF y el informe la necesitan. Ingrésala en el paso «Datos».</p>}
+          {!ajuste && <p className="aviso aviso-ok">Partida a partida el presupuesto está <strong>sin ajustar</strong> (tal como lo reclamó el contratista). Ajusta a mano lo que corresponda, o ejecuta el ajuste con IA desde el menú; luego guarda para fijar esta versión.</p>}
           <div className="grid gap-3 sm:grid-cols-3">
-            <Kpi t="Reclamado" v={dos ? `UF ${uf(calc.rec.uf)}` : "—"} s={dos ? `$${n0(calc.rec.total)}` : "sin presupuesto"} />
-            <Kpi t="Ajustado" v={`UF ${uf(calc.aj.uf)}`} s={`$${n0(calc.aj.total)}`} />
-            <Kpi t="A indemnizar" v={`UF ${uf(calc.aj.uf - (caso.datos.poliza?.deducibleUF ?? 0))}`} s={dos && calc.rec.uf > 0 ? `${Math.round((calc.aj.uf / calc.rec.uf) * 100)} % de lo reclamado` : ""} />
+            <Kpi t="Reclamado" v={dos ? ufTxt(calc.rec.uf) : "—"} s={dos ? `$${n0(calc.rec.total)}` : "sin presupuesto"} />
+            <Kpi t="Ajustado" v={ufTxt(calc.aj.uf)} s={`$${n0(calc.aj.total)}`} />
+            <Kpi t="A indemnizar" v={ufTxt(calc.aj.uf - (caso.datos.poliza?.deducibleUF ?? 0))} s={dos && calc.rec.uf > 0 ? `${Math.round((calc.aj.uf / calc.rec.uf) * 100)} % de lo reclamado` : ""} />
           </div>
 
           <div className="panel space-y-3 p-5" aria-labelledby="cumplimiento-titulo">
@@ -328,6 +334,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, iaConfigurada }: { c
           )}
         </>
       )}
+      {previa && <Previa casoId={caso.id} cuerpo={previa} titulo="Excel del ajuste (vista previa)" onCerrar={() => setPrevia(null)} />}
     </section>
   );
 }

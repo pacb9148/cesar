@@ -36,6 +36,45 @@ export async function crearCaso(usuarioId: string, siniestro: string): Promise<C
   return c!;
 }
 
+export const SIN_NUMERO = "sin número";
+
+/**
+ * Crea un caso solo si hace falta: si el usuario ya tiene uno vacío (sin número y sin archivos) lo reutiliza, para que pulsar
+ * «Nuevo caso» varias veces no llene la base de casos en blanco.
+ */
+export async function crearOReutilizarCasoVacio(usuarioId: string): Promise<{ caso: Caso; reutilizado: boolean }> {
+  const vacio = await uno<Caso>(
+    "select c.* from casos c where c.usuario_id = $1 and c.siniestro = $2 and not exists (select 1 from archivos a where a.caso_id = c.id) order by c.creado limit 1",
+    [usuarioId, SIN_NUMERO],
+  );
+  if (vacio) return { caso: vacio, reutilizado: true };
+  return { caso: await crearCaso(usuarioId, SIN_NUMERO), reutilizado: false };
+}
+
+/** Otro caso del mismo usuario con ese número de siniestro (los números reales no se repiten). */
+export const casoConSiniestro = (usuarioId: string, siniestro: string, exceptoId?: string) =>
+  uno<Caso>("select * from casos where usuario_id = $1 and siniestro = $2 and siniestro <> $4 and ($3::uuid is null or id <> $3::uuid) limit 1", [usuarioId, siniestro, exceptoId ?? null, SIN_NUMERO]);
+
+/** Cambia el número de siniestro (también en los datos, que son los que salen en el informe). */
+export async function renombrarCaso(id: string, siniestro: string) {
+  await consulta("update casos set siniestro = $2, datos = jsonb_set(datos, '{siniestro}', to_jsonb($2::text)), actualizado = now() where id = $1", [id, siniestro]);
+}
+
+/**
+ * Elimina el caso y todo lo suyo: archivos, extracciones, reclamación, ajustes y análisis salen por cascada; el registro de llamadas
+ * a la IA y la auditoría no tienen cascada y se borran aquí para no dejar filas huérfanas.
+ */
+export async function eliminarCaso(id: string, usuarioId: string): Promise<boolean> {
+  return transaccion(async (q) => {
+    const c = await q<{ id: string }>("select id from casos where id = $1 and usuario_id = $2", [id, usuarioId]);
+    if (c.length === 0) return false;
+    await q("delete from llm_runs where caso_id = $1", [id]);
+    await q("delete from auditoria where caso_id = $1", [id]);
+    await q("delete from casos where id = $1", [id]);
+    return true;
+  });
+}
+
 export const listarCasos = (usuarioId: string) =>
   consulta<Caso>("select * from casos where usuario_id = $1 order by actualizado desc", [usuarioId]);
 
@@ -125,10 +164,14 @@ export async function guardarReclamacion(casoId: string, r: Reclamacion, hash: s
 }
 export const leerReclamacion = (casoId: string) => uno<{ datos: Reclamacion; hash: string }>("select datos, hash from reclamaciones where caso_id = $1", [casoId]);
 
+/** Versiones del ajuste que se conservan por caso: las más viejas se borran al guardar una nueva para no acumular basura. */
+export const VERSIONES_AJUSTE_MAX = 10;
+
 export async function guardarAjuste(casoId: string, salida: SalidaAgente, origen: "agente" | "manual", modelo?: string, promptVersion?: string) {
   return transaccion(async (q) => {
     const v = ((await q<{ v: number }>("select coalesce(max(version),0)+1 as v from ajustes where caso_id = $1", [casoId]))[0].v) as number;
     await q("insert into ajustes(caso_id, version, salida, origen, modelo, prompt_version) values ($1,$2,$3::jsonb,$4,$5,$6)", [casoId, v, JSON.stringify(salida), origen, modelo ?? null, promptVersion ?? null]);
+    await q("delete from ajustes where caso_id = $1 and version <= $2", [casoId, v - VERSIONES_AJUSTE_MAX]);
     await q(tocar, [casoId]);
     return v;
   });
