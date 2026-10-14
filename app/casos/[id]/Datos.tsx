@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Caso } from "@/lib/caso/repositorio";
 import { useAccionesMenu } from "@/components/Shell";
 import TituloAyuda from "@/components/Ayuda";
+import { generoPorNombre, numeroFlexible, tratamiento } from "@/lib/domain/genero";
 
 const FECHA = /^\d{2}\/\d{2}\/\d{4}$/;
 
@@ -28,7 +29,7 @@ export default function Datos({ caso }: { caso: Caso }) {
     const t = (k: string) => String(f.get(k) ?? "").trim();
     const fecha = (k: string) => (t(k) === "" ? null : t(k));
     for (const k of ["emision", "informadoPartes"]) if (fecha(k) && !FECHA.test(fecha(k)!)) return setMsg({ tipo: "error", texto: "Las fechas van como dd/mm/aaaa" });
-    const uf = Number(t("valor_uf").replace(/\./g, "").replace(",", "."));
+    const uf = numeroFlexible(t("valor_uf"));
     setGuardando(true);
     const r = await fetch(`/api/casos/${caso.id}/datos`, {
       method: "PATCH",
@@ -36,11 +37,11 @@ export default function Datos({ caso }: { caso: Caso }) {
       body: JSON.stringify({
         siniestro: t("siniestro"),
         liquidacion: t("liquidacion"),
-        asegurado: { nombre: t("nombre"), rut: t("rut") },
+        asegurado: { nombre: t("nombre"), rut: t("rut"), genero: t("genero") === "" ? null : (t("genero") as "m" | "f") },
         ubicacion: t("ubicacion"),
         denunciaTexto: t("denuncia") || null,
         fechas: { emision: fecha("emision"), informadoPartes: fecha("informadoPartes") },
-        poliza: { sumaAseguradaUF: Number(t("suma").replace(/\./g, "").replace(",", ".")) || 0 },
+        poliza: { sumaAseguradaUF: numeroFlexible(t("suma")) || 0 },
         ...(uf > 0 ? { valor_uf: uf } : {}),
       }),
     });
@@ -67,9 +68,18 @@ export default function Datos({ caso }: { caso: Caso }) {
         <Campo n="liquidacion" t="N.º de liquidación" v={d.liquidacion} />
         <Campo n="nombre" t="Asegurado" v={d.asegurado.nombre} ayuda="Con tildes y ñ: los PDF fuente no las traen." />
         <Campo n="rut" t="RUT del asegurado" v={d.asegurado.rut} />
+        <div>
+          <label className="etiqueta" htmlFor="genero">Tratamiento del asegurado en el informe</label>
+          <select id="genero" name="genero" className="campo" defaultValue={d.asegurado.genero ?? ""}>
+            <option value="">Automático según el nombre ({tratamiento(generoPorNombre(d.asegurado.nombre) ?? "m")})</option>
+            <option value="m">el Sr. (hombre)</option>
+            <option value="f">la Sra. (mujer)</option>
+          </select>
+          <p className="texto-suave mt-1 text-xs">Sale en frases como «{tratamiento(d.asegurado.genero ?? generoPorNombre(d.asegurado.nombre) ?? "m")} {d.asegurado.nombre}».</p>
+        </div>
         <Campo n="ubicacion" t="Ubicación del riesgo" v={d.ubicacion} />
-        <Campo n="suma" t="Suma asegurada (UF)" v={d.poliza?.sumaAseguradaUF} />
-        <Campo n="valor_uf" t="UF a la fecha del siniestro ($)" v={caso.valor_uf ?? ""} ayuda="Se obtiene sola desde mindicador.cl; edítala solo si no se pudo." />
+        <Campo n="suma" t="Suma asegurada (UF)" v={d.poliza?.sumaAseguradaUF != null ? String(d.poliza.sumaAseguradaUF).replace(".", ",") : ""} ayuda="Sale del borrador del informe; con coma decimal (1294,50)." />
+        <Campo n="valor_uf" t="UF a la fecha del siniestro ($)" v={caso.valor_uf != null ? String(caso.valor_uf).replace(".", ",") : ""} ayuda="Se obtiene sola desde mindicador.cl; edítala solo si no se pudo. Con coma decimal (40844,79)." />
         <Campo n="emision" t="Fecha de emisión del informe" v={d.fechas?.emision} ayuda="dd/mm/aaaa" />
         <Campo n="informadoPartes" t="Fecha en que se informó a las partes" v={d.fechas?.informadoPartes} ayuda="dd/mm/aaaa" />
       </div>

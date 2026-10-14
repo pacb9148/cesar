@@ -12,7 +12,7 @@ import type { EntradaExcel } from "../docs/excel";
 import { datosCasoSchema } from "../domain/tipos";
 import { leerPlanilla } from "../extraccion/planilla";
 import type { ActaInspeccion } from "../extraccion/acta";
-import { informeAlDia, leerLeyendasGrupos, marcarAlDia } from "./generacion";
+import { leerLeyendasGrupos } from "./generacion";
 import { archivosConContenido, guardarExtraccion, leerExtraccion, obtenerCaso } from "./repositorio";
 
 export type VistaDocumento = { tipo: "docx"; nombre: string; bloques: BloqueVista[] } | { tipo: "xlsx"; nombre: string; hojas: HojaVista[] };
@@ -174,15 +174,12 @@ export async function guardarEdicion(casoId: string, usuarioId: string, aid: str
 }
 
 /**
- * Cambio en las fotos o en las leyendas de grupo: se aplica, el informe y el anexo se rehacen con la nueva disposición y, si el informe
- * estaba al día antes del cambio, sigue al día (ya refleja lo que el usuario pidió); si no, el botón «Volver a generar» queda activo.
+ * Cambio en las fotos o en las leyendas de grupo: se aplica y el informe y el anexo se rehacen con la nueva disposición. El informe NO queda
+ * «al día»: cualquier cambio activa «Volver a generar el informe», que es el paso que entrega la última versión completa de todo.
  */
 export async function aplicarCambioFotos(casoId: string, usuarioId: string, cambio: () => Promise<unknown>): Promise<string[]> {
-  const alDia = await informeAlDia(casoId);
   await cambio();
-  const avisos = await sincronizarFotos(casoId, usuarioId).catch((e: unknown) => [`No se pudo actualizar los documentos: ${e instanceof Error ? e.message : "error"}`]);
-  if (alDia && avisos.length === 0) await marcarAlDia(casoId);
-  return avisos;
+  return sincronizarFotos(casoId, usuarioId).catch((e: unknown) => [`No se pudo actualizar los documentos: ${e instanceof Error ? e.message : "error"}`]);
 }
 
 /** Leyenda al pie del grupo de fotos de una estancia (vacía = sin leyenda). */

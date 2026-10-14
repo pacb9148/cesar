@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { MARCADOR_FALTA_DATO } from "../domain/constantes";
+import { tratamientoDe } from "../domain/genero";
 import type { Dato, DatosCaso, EvidenciaRecinto, SalidaAgente } from "../domain/tipos";
 import {
   crearEl,
@@ -38,6 +39,8 @@ export type EntradaInforme = {
   valorUF: number;
   caracteristicas: SalidaAgente["caracteristicas"];
   evidencia: EvidenciaRecinto[];
+  /** Evidencia redactada como párrafo: reemplaza a la lista de viñetas por recinto. */
+  evidenciaTexto?: string;
   ajusteTexto: string;
   totales: { reclamacionPesos: number; reclamacionUF: number; ajusteUF: number; indemnizacionUF: number };
   meteo: Meteo | null;
@@ -135,6 +138,8 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
 
   // ---------- 1. Marcadores simples (cuerpo, cabeceras y pies) ----------
   const tokens: Record<string, string> = {
+    // Con el tratamiento por género («el Sr.» / «la Sra.»); va antes que {{asegurado}} para que lo reemplace primero.
+    "el Sr. {{asegurado}}": `${tratamientoDe(c.asegurado.nombre, c.asegurado.genero)} ${c.asegurado.nombre}`,
     "{{liquidacion}}": c.liquidacion,
     "{{anio}}": anio,
     "{{siniestro}}": c.siniestro,
@@ -235,7 +240,9 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     const rprXml = rprModelo ? new (await import("@xmldom/xmldom")).XMLSerializer().serializeToString(rprModelo as never) : "";
     const base = rprXml.replace(/^<w:rPr[^>]*>|<\/w:rPr>$/g, "").replace(/<w:(b|i|u)\b[^>]*\/>/g, "");
     const rpr = (extra: string) => `<w:rPr>${base}${extra}</w:rPr>`;
-    for (const ev of e.evidencia) {
+    if (e.evidenciaTexto?.trim())
+      pXxx.parentNode!.insertBefore(crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="120"/><w:jc w:val="both"/></w:pPr><w:r>${rpr("")}<w:t xml:space="preserve">${escXml(e.evidenciaTexto.trim())}</w:t></w:r></w:p>`), pXxx);
+    else for (const ev of e.evidencia) {
       const m2 = ev.m2_acta != null ? ` ${nf(ev.m2_acta, ev.m2_acta % 1 ? 2 : 0)} m² según acta.` : "";
       const pXml =
         `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="90"/></w:numPr><w:spacing w:before="0" w:after="0"/><w:ind w:left="720" w:hanging="360"/><w:jc w:val="both"/></w:pPr>` +

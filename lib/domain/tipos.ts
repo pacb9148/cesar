@@ -110,6 +110,8 @@ export const salidaAgenteSchema = z.object({
     >,
   ),
   evidencia_observada: z.array(evidenciaRecintoSchema),
+  /** Evidencia observada redactada como un párrafo (botón «Generar párrafo»); si existe, el informe la usa en lugar de la lista por recinto. */
+  evidencia_texto: z.string().max(4000).optional(),
   lineas: z.array(decisionLineaSchema),
   lineas_adicionales: z.array(lineaAdicionalSchema),
   ajuste_de_perdida_texto: z.string(),
@@ -123,7 +125,7 @@ export const datosCasoSchema = z.object({
   siniestro: z.string(),
   liquidacion: z.string(),
   aseguradora: z.string(),
-  asegurado: z.object({ nombre: z.string(), rut: z.string(), direccion: z.string() }),
+  asegurado: z.object({ nombre: z.string(), rut: z.string(), direccion: z.string(), /** «el Sr.» (m) o «la Sra.» (f); sin valor se deduce del nombre. */ genero: z.enum(["m", "f"]).optional() }),
   beneficiario: z.object({ nombre: z.string(), rut: z.string(), direccion: z.string() }),
   poliza: z.object({
     tipo: z.string(),

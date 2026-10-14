@@ -9,12 +9,13 @@ const cuerpo = z
   .object({
     siniestro: z.string().min(1).max(30),
     liquidacion: z.string().min(1).max(30),
-    asegurado: z.object({ nombre: z.string().min(2).max(120), rut: z.string().max(20), direccion: z.string().max(200) }).partial(),
+    asegurado: z.object({ nombre: z.string().min(2).max(120), rut: z.string().max(20), direccion: z.string().max(200), genero: z.enum(["m", "f"]).nullable() }).partial(),
     ubicacion: z.string().max(240),
     denunciaTexto: z.string().max(4000).nullable(),
     fechas: z.object({ emision: fecha.nullable(), informadoPartes: fecha.nullable() }).partial(),
     poliza: z.object({ sumaAseguradaUF: z.number().nonnegative(), deducibleUF: z.number().nonnegative() }).partial(),
-    valor_uf: z.number().positive(),
+    // La UF ronda los 40.000 pesos: un valor fuera de rango es un error de tipeo (p. ej. 4.084.479 por borrar el decimal).
+    valor_uf: z.number().min(1000, "La UF parece demasiado baja").max(200000, "La UF parece demasiado alta: revisa el punto y la coma decimal"),
   })
   .partial();
 
@@ -28,7 +29,7 @@ export const PATCH = conUsuario<{ id: string }>(async (req, u, { id }) => {
   const nuevo = {
     ...d,
     ...resto,
-    asegurado: { ...d.asegurado, ...resto.asegurado },
+    asegurado: { ...d.asegurado, ...resto.asegurado, ...(resto.asegurado?.genero === null ? { genero: undefined } : {}) },
     fechas: { ...d.fechas, ...resto.fechas },
     poliza: { ...d.poliza, ...resto.poliza },
   } as typeof d;

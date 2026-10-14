@@ -81,6 +81,12 @@ export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyend
               : "Hubo cambios en archivos, fotos, datos, leyendas o ajuste desde la última generación: usa «Volver a generar el informe» en el menú lateral para entregar la última versión."}
         </p>
         {gen.error && <p role="alert" className="aviso aviso-error">{gen.error}</p>}
+        {gen.resultado && !gen.cargando && (
+          <p role="status" className="aviso aviso-ok">
+            Informe regenerado con todos los cambios.
+            {salidas.find((a) => /Paquete completo\.zip$/i.test(a.nombre)) && <> Descarga la última versión: <a className="underline" href={`/api/casos/${caso.id}/archivos/${salidas.find((a) => /Paquete completo\.zip$/i.test(a.nombre))!.id}?descargar=1`}>Paquete completo (ZIP)</a>.</>}
+          </p>
+        )}
         <PanelTraza eventos={gen.eventos} cargando={gen.cargando} titulo="Qué está generando" />
         {gen.resultado && gen.resultado.motorPdf === "html" && (
           <p className="aviso aviso-alerta">El PDF se hizo con el conversor de respaldo (sin LibreOffice en este servidor): conserva el contenido pero no el formato exacto. El Word sí es el modelo exacto.</p>

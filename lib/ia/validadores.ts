@@ -17,6 +17,7 @@ const textos = (s: SalidaAgente): string[] => [
   s.ajuste_de_perdida_texto,
   ...s.resumen_ajuste,
   ...s.evidencia_observada.map((e) => e.vineta),
+  ...(s.evidencia_texto ? [s.evidencia_texto] : []),
   ...s.lineas.flatMap((l) => [l.justificacion, ...l.sublineas.map((x) => x.justificacion)]),
   ...s.lineas_adicionales.map((l) => l.justificacion),
 ];

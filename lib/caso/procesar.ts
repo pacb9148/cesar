@@ -5,6 +5,8 @@ import { parsearActa, type ActaInspeccion } from "../extraccion/acta";
 import { esEscaneado, textoPdf } from "../extraccion/pdf";
 import { parsearPresupuestoPdf, parsearPresupuestoXlsx, type ResultadoPresupuesto } from "../extraccion/presupuesto";
 import mammoth from "mammoth";
+import { consulta } from "../db";
+import { clasificarArchivo } from "./clasificar";
 import { parsearBorrador, type DatosBorrador } from "../extraccion/borrador";
 import { parsearProvision, type Provision } from "../extraccion/provision";
 import {
@@ -53,6 +55,8 @@ export function construirDatosCaso(
   borr: DatosBorrador | null = null,
 ): { datos: DatosCaso; alertas: string[] } {
   const alertas: string[] = [];
+  // Sin fecha en el borrador, el informe se emite y se informa a las partes hoy (el usuario puede corregirlas en «Datos»).
+  const hoy = new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/-/g, "/");
   // Con solo acta, borrador y presupuesto, lo que no aparezca no se exige: el informe lo marca como [FALTA DATO] y se completa en «Datos» si hace falta.
   const falta = (_campo: string, v: string | null | undefined) => v ?? "";
   const ocurrencia = iso(acta?.fechaSiniestro) || iso(prov?.fechaOcurrencia);
@@ -94,8 +98,8 @@ export function construirDatosCaso(
       asignacion: prov?.fechaAsignacion ?? "",
       denuncia: prov?.fechaDenuncia ?? "",
       ocurrencia: falta("fecha de ocurrencia", ocurrencia),
-      emision: previos.fechas?.emision ?? borr?.fechaEmision ?? null,
-      informadoPartes: previos.fechas?.informadoPartes ?? null,
+      emision: previos.fechas?.emision ?? borr?.fechaEmision ?? hoy,
+      informadoPartes: previos.fechas?.informadoPartes ?? previos.fechas?.emision ?? borr?.fechaEmision ?? hoy,
     },
     denunciaTexto: previos.denunciaTexto ?? borr?.denunciaTexto ?? null,
     modo: hayPresupuesto ? "reclamacion" : "perdida_determinada",
@@ -137,13 +141,20 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
 
   // Los datos de portada salen del borrador del informe (Word); la Provisión, si alguien la sube, tiene prioridad pero ya no se exige.
   let borr: DatosBorrador | null = null;
+  // Un archivo subido antes de que se reconociera su nombre quedó como «otro»: se reclasifica ahora; y un Word suelto cuyo texto es un informe
+  // de liquidación (sea cual sea su nombre) también es el borrador.
+  for (const a of await archivosConContenido(casoId, "otro")) {
+    const t = clasificarArchivo(a.nombre, null, a.mime).tipo;
+    if (t !== "otro") await consulta("update archivos set tipo = $2 where id = $1", [a.id, t]);
+    else if (/.docx$/i.test(a.nombre) && /INFORME DE LIQUIDACI/i.test((await mammoth.extractRawText({ buffer: a.contenido }).catch(() => ({ value: "" }))).value)) await consulta("update archivos set tipo = 'borrador' where id = $1", [a.id]);
+  }
   const borradores = await archivosConContenido(casoId, "borrador");
   if (borradores[0]) {
     borr = parsearBorrador((await mammoth.extractRawText({ buffer: borradores[0].contenido })).value);
     leidos.push(borradores[0].nombre);
     emitir("ok", "borrador", `Borrador leído: póliza ${borr.polizaNumero ?? "?"}, vigencia ${borr.vigenciaDesde ?? "?"} a ${borr.vigenciaHasta ?? "?"}, suma asegurada UF ${borr.sumaAseguradaUF ?? "?"}, ocurrencia ${borr.fechaOcurrencia ?? "?"}`);
     await guardarExtraccion(casoId, "borrador", borr);
-  } else if (!prov) alertas.push("Falta el borrador del informe (Word): de ahí salen la póliza, la vigencia, la suma asegurada y las fechas.");
+  }
 
   let presupuesto: ResultadoPresupuesto | null = null;
   const xl = await archivosConContenido(casoId, "presupuesto_xlsx");

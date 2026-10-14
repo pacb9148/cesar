@@ -15,6 +15,7 @@ import PanelTraza from "@/components/PanelTraza";
 import { useAccionesMenu } from "@/components/Shell";
 import VistaPreviaAjuste from "./VistaPreviaAjuste";
 import Previa from "./Previa";
+import { redactarEvidencia } from "@/lib/caso/evidencia-parrafo";
 import type { AjusteGuardado } from "./PanelCaso";
 import TituloAyuda from "@/components/Ayuda";
 
@@ -313,7 +314,10 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
           </div>
 
           <div className="panel space-y-3 p-5">
-            <h3 className="font-semibold">Evidencia observada</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-semibold">Evidencia observada</h3>
+              <button type="button" className="btn btn-sec !px-3 !py-1 text-sm" disabled={!salida.evidencia_observada.length} onClick={() => setSalida((s) => (s ? { ...s, evidencia_texto: redactarEvidencia(s.evidencia_observada) } : s))} title="Convierte las viñetas por recinto en un solo párrafo coherente y profesional para el informe">Generar párrafo</button>
+            </div>
             <ul className="space-y-2 text-sm">
               {salida.evidencia_observada.map((e, i) => (
                 <li key={i} className="list-none">
@@ -323,6 +327,13 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
                 </li>
               ))}
             </ul>
+            {salida.evidencia_texto !== undefined && (
+              <div className="space-y-1">
+                <label className="etiqueta" htmlFor="texto-evidencia">Párrafo de evidencia observada (el informe usa este párrafo en lugar de la lista)</label>
+                <textarea id="texto-evidencia" rows={5} className="campo" value={salida.evidencia_texto} onChange={(e) => setSalida((s) => (s ? { ...s, evidencia_texto: e.target.value } : s))} />
+                <button type="button" className="btn btn-sec !px-3 !py-1 text-sm" onClick={() => setSalida((s) => { if (!s) return s; const { evidencia_texto: _t, ...resto } = s; void _t; return resto; })}>Volver a la lista por recinto</button>
+              </div>
+            )}
             <label className="etiqueta" htmlFor="texto-ajuste">Ajuste de pérdida (texto del informe)</label>
             <textarea id="texto-ajuste" rows={5} className="campo" value={salida.ajuste_de_perdida_texto} onChange={(e) => setSalida((s) => (s ? { ...s, ajuste_de_perdida_texto: e.target.value } : s))} />
           </div>
