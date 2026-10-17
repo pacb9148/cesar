@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { tablasPorGrupo } from "../lib/docs/fotos-xml";
+import { bloquesPorGrupo, tablasPorGrupo } from "../lib/docs/fotos-xml";
 import { seleccionarFotosInforme } from "../lib/docs/fotos-seleccion";
 import type { ActaInspeccion } from "../lib/extraccion/acta";
 
@@ -7,19 +7,22 @@ const acta = { danos: [{ recinto: "LIVING", descripcion: "x", tipoDano: "y" }] }
 const celdas = (g: string, n: number) => Array.from({ length: n }, (_, i) => ({ rid: `${g}${i}`, leyenda: "", grupo: g }));
 
 describe("fotos por grupo", () => {
-  it("cada estancia lleva su nombre arriba y, si el usuario la escribió, su leyenda al pie de la última tabla", () => {
-    const t = tablasPorGrupo([...celdas("Living", 7), ...celdas("Cocina", 2)], { Living: "Cielo con humedad", Cocina: "  " });
-    expect(t).toHaveLength(3); // Living: 6 + 1 fotos = 2 tablas; Cocina: 1 tabla
-    expect(t[0]).toContain(">Living<");
-    expect(t[1]).toContain("Living (continuación)");
-    expect(t[0]).not.toContain("Cielo con humedad");
-    expect(t[1]).toContain("Cielo con humedad");
-    expect(t[2]).toContain(">Cocina<");
-    expect(t[2]).not.toMatch(/<w:i\/><w:sz w:val="20"\/>/); // sin leyenda de grupo no hay fila de pie
+  it("cada estancia lleva su nombre arriba y, si el usuario la escribió, su leyenda al final del grupo, ambos fuera de las tablas", () => {
+    const t = bloquesPorGrupo([...celdas("Living", 7), ...celdas("Cocina", 2)], { Living: "Cielo con humedad", Cocina: "  " });
+    expect(t).toHaveLength(2);
+    // Living: título, tabla (6), título (continuación), tabla (1) y leyenda; Cocina: título y tabla, sin leyenda
+    expect(t[0]).toHaveLength(5);
+    expect(t[0][0]).toContain(">Living<");
+    expect(t[0][2]).toContain("Living (continuación)");
+    expect(t[0][4]).toContain("Cielo con humedad");
+    expect(t[0][4]).toMatch(/<w:b[/]><w:sz w:val="20"[/]>/);
+    expect(t[0][1]).not.toContain("Cielo con humedad");
+    expect(t[1]).toHaveLength(2);
+    expect(t[1][0]).toContain(">Cocina<");
   });
   it("la fachada va sola y primero, centrada", () => {
     const t = tablasPorGrupo(celdas("Living", 1), {}, { rid: "F", leyenda: "" });
-    expect(t).toHaveLength(2);
+    expect(t).toHaveLength(3); // fachada, título del grupo y tabla
     expect(t[0]).toContain("fachada");
     expect(t[0]).not.toContain("Living");
   });

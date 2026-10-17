@@ -5,7 +5,7 @@ import { BotonIcono, Icono, type NombreIcono } from "@/components/Iconos";
 import VentanaModal from "@/components/VentanaModal";
 import { FOTO_TAMANO_TEXTO, LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
-import { EDICION_INICIAL, PROPORCION_FOTO, ZOOM_MAX, centroValido, dimensionesGiradas, encuadreDeRectangulo, girar, ventanaBase, ventanaDeRecorte, type EdicionFoto } from "@/lib/fotos/recorte";
+import { ANGULO_MAX, EDICION_INICIAL, PROPORCION_FOTO, ZOOM_MAX, centroValido, dimensionesGiradas, encuadreDeRectangulo, girar, lienzoRotado, ventanaBase, ventanaDeRecorte, type EdicionFoto } from "@/lib/fotos/recorte";
 
 type ColorCuadricula = "negro" | "blanco" | "gris";
 type Cuadricula = { visible: boolean; cols: number; filas: number; cuadradas: boolean; diagonales: boolean; etiquetas: boolean; color: ColorCuadricula; opacidad: number; grosor: 0.5 | 1; ox: number; oy: number };
@@ -25,7 +25,7 @@ const leerPrefs = (): Cuadricula => {
 };
 
 /** Imagen ya girada y volteada (en el mismo orden que el servidor), a resolución de trabajo. El recorte se calcula sobre ella. */
-function prepararLienzo(img: HTMLImageElement, e: EdicionFoto): HTMLCanvasElement {
+function prepararLienzo(img: HTMLImageElement, e: EdicionFoto): { lienzo: HTMLCanvasElement; base: { ancho: number; alto: number } } {
   const k = Math.min(1, MAX_LADO / Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.round(img.naturalWidth * k);
   const h = Math.round(img.naturalHeight * k);
@@ -37,15 +37,29 @@ function prepararLienzo(img: HTMLImageElement, e: EdicionFoto): HTMLCanvasElemen
   ca.translate(d.ancho / 2, d.alto / 2);
   ca.rotate((e.giro * Math.PI) / 180);
   ca.drawImage(img, -w / 2, -h / 2, w, h);
-  if (!e.volteoH && !e.volteoV) return a;
-  const b = document.createElement("canvas");
-  b.width = d.ancho;
-  b.height = d.alto;
-  const cb = b.getContext("2d")!;
-  cb.translate(e.volteoH ? d.ancho : 0, e.volteoV ? d.alto : 0);
-  cb.scale(e.volteoH ? -1 : 1, e.volteoV ? -1 : 1);
-  cb.drawImage(a, 0, 0);
-  return b;
+  let pre = a;
+  if (e.volteoH || e.volteoV) {
+    const b = document.createElement("canvas");
+    b.width = d.ancho;
+    b.height = d.alto;
+    const cb = b.getContext("2d")!;
+    cb.translate(e.volteoH ? d.ancho : 0, e.volteoV ? d.alto : 0);
+    cb.scale(e.volteoH ? -1 : 1, e.volteoV ? -1 : 1);
+    cb.drawImage(a, 0, 0);
+    pre = b;
+  }
+  const base = { ancho: d.ancho, alto: d.alto };
+  if (!e.angulo) return { lienzo: pre, base };
+  // Giro fino: la imagen se gira sobre un lienzo mayor (las esquinas quedan vacías, pero el marco nunca las alcanza).
+  const l = lienzoRotado(d.ancho, d.alto, e.angulo);
+  const r = document.createElement("canvas");
+  r.width = Math.round(l.ancho);
+  r.height = Math.round(l.alto);
+  const cr = r.getContext("2d")!;
+  cr.translate(r.width / 2, r.height / 2);
+  cr.rotate((e.angulo * Math.PI) / 180);
+  cr.drawImage(pre, -d.ancho / 2, -d.alto / 2);
+  return { lienzo: r, base };
 }
 
 const limitar = (v: number, mn: number, mx: number) => Math.min(mx, Math.max(mn, v));
@@ -101,22 +115,25 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
     i.src = `/api/casos/${casoId}/archivos/${foto.id}`;
   }, [casoId, foto.id]);
 
-  const prep = useMemo(() => (img ? prepararLienzo(img, ed) : null), [img, ed.giro, ed.volteoH, ed.volteoV]); // eslint-disable-line react-hooks/exhaustive-deps
+  const preparado = useMemo(() => (img ? prepararLienzo(img, ed) : null), [img, ed.giro, ed.volteoH, ed.volteoV, ed.angulo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const prep = preparado?.lienzo ?? null;
+  // Tamaño de la imagen con sus giros de 90°, sin el giro fino: de él salen el tamaño y la posición permitidos del marco.
+  const base0 = preparado?.base ?? { ancho: 1, alto: 1 };
 
   const cambiar = useCallback(
     (p: Partial<EdicionFoto>) =>
       setEd((e) => {
         const n = { ...e, ...p };
-        if (!prep) return n;
-        return { ...n, ...centroValido(prep.width, prep.height, n) };
+        if (!preparado) return n;
+        return { ...n, ...centroValido(preparado.base.ancho, preparado.base.alto, n) };
       }),
-    [prep],
+    [preparado],
   );
 
   // Dibujo del recorte (lo mismo que se insertará) y del mapa de ubicación.
   useEffect(() => {
     if (!prep || !lienzo.current) return;
-    const v = ventanaDeRecorte(prep.width, prep.height, ed);
+    const v = ventanaDeRecorte(base0.ancho, base0.alto, ed);
     const c = lienzo.current;
     c.getContext("2d")!.drawImage(prep, v.x, v.y, v.w, v.h, 0, 0, c.width, c.height);
     const m = mini.current;
@@ -140,7 +157,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
         cm.strokeRect(hx * k - 5, hy * k - 5, 10, 10);
       }
     }
-  }, [prep, ed]);
+  }, [prep, ed, base0.ancho, base0.alto]);
 
   const zoomPor = useCallback((f: number) => cambiar({ zoom: limitar(ed.zoom * f, 1, ZOOM_MAX) }), [cambiar, ed.zoom]);
 
@@ -172,7 +189,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
       setGr((g) => ({ ...g, ox: (g.ox + dx / ancho + 1) % 1, oy: (g.oy + dy / alto + 1) % 1 }));
       return;
     }
-    const v = ventanaDeRecorte(prep.width, prep.height, ed);
+    const v = ventanaDeRecorte(base0.ancho, base0.alto, ed);
     cambiar({ cx: ed.cx - (dx * (v.w / ancho)) / prep.width, cy: ed.cy - (dy * (v.h / alto)) / prep.height });
   }
 
@@ -187,7 +204,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
     if (!prep) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const { px, py, k } = enMapa(e);
-    const v = ventanaDeRecorte(prep.width, prep.height, ed);
+    const v = ventanaDeRecorte(base0.ancho, base0.alto, ed);
     const radio = 12 / k;
     const esquinas: [number, number, 1 | -1, 1 | -1][] = [
       [v.x, v.y, -1, -1],
@@ -212,7 +229,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
     const a = mapaArrastre.current;
     if (!a) {
       // Cursor según lo que hay bajo el puntero.
-      const v = ventanaDeRecorte(prep.width, prep.height, ed);
+      const v = ventanaDeRecorte(base0.ancho, base0.alto, ed);
       const { k } = enMapa(e);
       const cerca = [[v.x, v.y], [v.x + v.w, v.y + v.h], [v.x + v.w, v.y], [v.x, v.y + v.h]].some(([x, y]) => Math.hypot(px - x, py - y) <= 12 / k);
       e.currentTarget.style.cursor = cerca ? "nwse-resize" : px >= v.x && px <= v.x + v.w && py >= v.y && py <= v.y + v.h ? "move" : "crosshair";
@@ -222,7 +239,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
       cambiar({ cx: (px - a.dx) / prep.width, cy: (py - a.dy) / prep.height });
       return;
     }
-    const base = ventanaBase(prep.width, prep.height);
+    const base = ventanaBase(base0.ancho, base0.alto, ed.angulo ?? 0);
     const w = limitar(Math.max(Math.abs(px - a.ax), Math.abs(py - a.ay) * PROPORCION_FOTO), base.w / ZOOM_MAX, base.w);
     const h = w / PROPORCION_FOTO;
     cambiar({ zoom: base.w / w, cx: (a.ax + (a.sx * w) / 2) / prep.width, cy: (a.ay + (a.sy * h) / 2) / prep.height });
@@ -293,6 +310,12 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
               <BotonIcono icono="ajustar" etiqueta="Ajustar al marco" onClick={() => cambiar({ zoom: 1, cx: 0.5, cy: 0.5 })} />
               <BotonIcono icono="rotarIzq" etiqueta="Girar a la izquierda" onClick={() => cambiar({ giro: girar(ed.giro, -1), cx: 0.5, cy: 0.5 })} />
               <BotonIcono icono="rotarDer" etiqueta="Girar a la derecha" onClick={() => cambiar({ giro: girar(ed.giro, 1), cx: 0.5, cy: 0.5 })} />
+              <span className="flex w-full items-center gap-2" role="group" aria-label="Giro fino">
+                <BotonIcono icono="rotarIzq" etiqueta="Girar un grado a la izquierda" onClick={() => cambiar({ angulo: limitar(Math.round(((ed.angulo ?? 0) - 1) * 10) / 10, -ANGULO_MAX, ANGULO_MAX), cx: 0.5, cy: 0.5 })} deshabilitado={(ed.angulo ?? 0) <= -ANGULO_MAX} />
+                <input type="range" aria-label="Giro fino en grados" className="w-full accent-[color:var(--acento)]" min={-ANGULO_MAX} max={ANGULO_MAX} step={0.5} value={ed.angulo ?? 0} onChange={(e) => cambiar({ angulo: Number(e.target.value), cx: 0.5, cy: 0.5 })} onDoubleClick={() => cambiar({ angulo: 0, cx: 0.5, cy: 0.5 })} />
+                <BotonIcono icono="rotarDer" etiqueta="Girar un grado a la derecha" onClick={() => cambiar({ angulo: limitar(Math.round(((ed.angulo ?? 0) + 1) * 10) / 10, -ANGULO_MAX, ANGULO_MAX), cx: 0.5, cy: 0.5 })} deshabilitado={(ed.angulo ?? 0) >= ANGULO_MAX} />
+                <span className="w-14 shrink-0 text-right text-xs tabular-nums text-[color:var(--texto)]" title="Doble clic en el deslizador: volver a 0°">{(ed.angulo ?? 0).toFixed(1)}°</span>
+              </span>
               <BotonIcono icono="volteoH" etiqueta="Voltear izquierda/derecha" activo={ed.volteoH} onClick={() => cambiar({ volteoH: !ed.volteoH })} />
               <BotonIcono icono="volteoV" etiqueta="Voltear arriba/abajo" activo={ed.volteoV} onClick={() => cambiar({ volteoV: !ed.volteoV })} />
             </div>
@@ -352,14 +375,14 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
                 // El rectángulo dibujado pasa a ser el nuevo encuadre (ampliado a la proporción del marco).
                 const W = escenario.current.clientWidth;
                 const H = escenario.current.clientHeight;
-                const v = ventanaDeRecorte(prep.width, prep.height, ed);
+                const v = ventanaDeRecorte(base0.ancho, base0.alto, ed);
                 const x = Math.min(banda.x0, banda.x1);
                 const y = Math.min(banda.y0, banda.y1);
                 const w = Math.abs(banda.x1 - banda.x0);
                 const h = Math.abs(banda.y1 - banda.y0);
                 setBanda(null);
                 if (w < 8 || h < 8) return;
-                cambiar(encuadreDeRectangulo(prep.width, prep.height, { x: v.x + (x / W) * v.w, y: v.y + (y / H) * v.h, w: (w / W) * v.w, h: (h / H) * v.h }));
+                cambiar(encuadreDeRectangulo(base0.ancho, base0.alto, { x: v.x + (x / W) * v.w, y: v.y + (y / H) * v.h, w: (w / W) * v.w, h: (h / H) * v.h }, ed.angulo ?? 0));
               }}
               onPointerCancel={() => {
                 arrastre.current = null;

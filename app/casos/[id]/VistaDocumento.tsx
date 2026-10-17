@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BotonIcono } from "@/components/Iconos";
 import type { VistaDocumento as Vista } from "@/lib/caso/edicion-documentos";
-import type { BloqueVista, ParrafoVista, RunEdicion, RunVista } from "@/lib/docs/vista-docx";
+import type { Alineacion, BloqueVista, ParrafoVista, RunEdicion, RunVista } from "@/lib/docs/vista-docx";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
 import VentanaModal from "@/components/VentanaModal";
 import EditorFoto from "./EditorFoto";
 import type { CambioFormato } from "@/lib/docs/vista-xlsx";
 import HojaExcel, { type CambioHoja } from "./HojaExcel";
 
+const FUENTES = ["Times New Roman", "Arial", "Calibri", "Cambria", "Georgia", "Verdana", "Tahoma", "Courier New"];
+const TAMANOS = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28];
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 function runHtml(r: RunVista): string {
@@ -99,18 +101,37 @@ export function Bloques({ bloques, c }: { bloques: BloqueVista[]; c: Contexto })
 }
 
 /** Lee el contenido con formato de un párrafo editado: tramos con negrita, cursiva y subrayado. */
+type EstadoRun = { b: boolean; i: boolean; u: boolean; font?: string; sz?: number; color?: string };
+
+/** «rgb(12, 34, 56)» o «#abc123» → «0C2238» (hexadecimal sin #), o undefined si no es un color. */
+function colorAHex(c: string): string | undefined {
+  const m = /^rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/.exec(c.trim());
+  if (m) return [m[1], m[2], m[3]].map((x) => Number(x).toString(16).padStart(2, "0")).join("").toUpperCase();
+  const h = /^#([0-9a-f]{6})$/i.exec(c.trim());
+  return h ? h[1].toUpperCase() : undefined;
+}
+/** Tamaño CSS → puntos (px × 0,75); los tamaños relativos no se leen. */
+function tamanoAPt(s: string): number | undefined {
+  const m = /^([0-9.]+)(px|pt)$/.exec(s.trim());
+  if (!m) return undefined;
+  const v = Number(m[1]);
+  const pt = m[2] === "px" ? v * 0.75 : v;
+  return pt >= 1 && pt <= 200 ? Math.round(pt * 2) / 2 : undefined;
+}
+
 function leerRuns(el: HTMLElement): RunEdicion[] {
   const out: RunEdicion[] = [];
-  const recorrer = (n: Node, f: { b: boolean; i: boolean; u: boolean }) => {
+  const extras = (f: EstadoRun) => ({ ...(f.font ? { font: f.font } : {}), ...(f.sz ? { sz: f.sz } : {}), ...(f.color ? { color: f.color } : {}) });
+  const recorrer = (n: Node, f: EstadoRun) => {
     if (n.nodeType === Node.TEXT_NODE) {
       const t = (n.textContent ?? "").replace(/\u00a0/g, " ");
-      if (t) out.push({ t, ...(f.b ? { b: true } : {}), ...(f.i ? { i: true } : {}), ...(f.u ? { u: true } : {}) });
+      if (t) out.push({ t, ...(f.b ? { b: true } : {}), ...(f.i ? { i: true } : {}), ...(f.u ? { u: true } : {}), ...extras(f) });
       return;
     }
     if (!(n instanceof HTMLElement)) return;
     if (n.tagName === "IMG") return;
     if (n.tagName === "BR") {
-      out.push({ t: "\n", ...(f.b ? { b: true } : {}) });
+      out.push({ t: "\n", ...(f.b ? { b: true } : {}), ...extras(f) });
       return;
     }
     const st = n.style;
@@ -119,6 +140,9 @@ function leerRuns(el: HTMLElement): RunEdicion[] {
       b: f.b || n.tagName === "B" || n.tagName === "STRONG" || peso === "bold" || Number(peso) >= 600,
       i: f.i || n.tagName === "I" || n.tagName === "EM" || st.fontStyle === "italic",
       u: f.u || n.tagName === "U" || st.textDecorationLine.includes("underline") || st.textDecoration.includes("underline"),
+      font: (st.fontFamily ? st.fontFamily.split(",")[0].replace(/["']/g, "").trim() : n.tagName === "FONT" ? n.getAttribute("face") ?? "" : "") || f.font,
+      sz: (st.fontSize ? tamanoAPt(st.fontSize) : undefined) ?? f.sz,
+      color: (st.color ? colorAHex(st.color) : n.tagName === "FONT" && n.getAttribute("color") ? colorAHex(n.getAttribute("color")!) : undefined) ?? f.color,
     };
     n.childNodes.forEach((h) => recorrer(h, nf));
   };
@@ -153,6 +177,10 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
   const [imgCambios, setImgCambios] = useState<Map<number, { w: number; h: number }>>(new Map()); // tamaño en px de pantalla
   const [imgQuitar, setImgQuitar] = useState<Set<number>>(new Set());
   const [proporcion, setProporcion] = useState(true);
+  const [alineados, setAlineados] = useState<Map<number, Alineacion>>(new Map());
+  const rango = useRef<Range | null>(null); // última selección dentro del documento: los selectores de fuente y tamaño la pierden al abrirse
+  const [fuenteSel, setFuenteSel] = useState("");
+  const [tamanoSel, setTamanoSel] = useState("");
 
   const aplicarVista = (j: Vista) => {
     setVista(j);
@@ -165,6 +193,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
     setImgSel(null);
     setImgCambios(new Map());
     setImgQuitar(new Set());
+    setAlineados(new Map());
     setVersion((v) => v + 1);
   };
   const traer = async () => {
@@ -199,7 +228,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
   }, [onCerrar, foto]);
 
   const nFormato = (formatoHoja.columnas?.length ?? 0) + (formatoHoja.filas?.length ?? 0) + (formatoHoja.ajusteTexto?.length ?? 0);
-  const cambios = vista?.tipo === "xlsx" ? celdas.size + nFormato : nTextos + eliminados.size + nuevos.length + imgCambios.size + imgQuitar.size;
+  const cambios = vista?.tipo === "xlsx" ? celdas.size + nFormato : nTextos + eliminados.size + nuevos.length + imgCambios.size + imgQuitar.size + alineados.size;
 
   async function guardar(): Promise<boolean> {
     if (!vista || cambios === 0) return true;
@@ -215,6 +244,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
               eliminar: [...eliminados],
               imagenes: [...imgCambios].map(([idx, v]) => ({ idx, cx: Math.round(v.w * 9525), cy: Math.round(v.h * 9525) })),
               quitarImagenes: [...imgQuitar],
+              alinear: Object.fromEntries([...alineados].map(([i, jc]) => [String(i), jc])),
             },
           }
         : { celdas: [...celdas].map(([k, valor]) => { const [h, rc] = k.split("|"); const [r, c] = rc.split(",").map(Number); return { hoja: h, r, c, valor }; }), formato: formatoHoja };
@@ -237,6 +267,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
     setImgSel(null);
     setImgCambios(new Map());
     setImgQuitar(new Set());
+    setAlineados(new Map());
     setVersion((v) => v + 1);
     setPdf({ cargando: false });
     onGuardado();
@@ -312,7 +343,60 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
     });
   };
 
-  const formato = (cmd: "bold" | "italic" | "underline") => document.execCommand(cmd);
+  useEffect(() => {
+    const guardarRango = () => {
+      const s = window.getSelection();
+      if (!s || s.rangeCount === 0) return;
+      const r = s.getRangeAt(0);
+      const host = (r.commonAncestorContainer instanceof Element ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement)?.closest(".doc-ed p[contenteditable='true']");
+      if (host) rango.current = r.cloneRange();
+    };
+    document.addEventListener("selectionchange", guardarRango);
+    return () => document.removeEventListener("selectionchange", guardarRango);
+  }, []);
+
+  /** Ejecuta un comando de formato sobre la selección guardada (recupera la selección si el control la quitó) y avisa al párrafo para que cuente como cambiado. */
+  const conSeleccion = (fn: () => void) => {
+    const r = rango.current;
+    if (!r) return setError("Selecciona primero el texto al que quieres dar formato.");
+    const s = window.getSelection();
+    setError(null);
+    s?.removeAllRanges();
+    s?.addRange(r);
+    document.execCommand("styleWithCSS", false, "true");
+    fn();
+    const nodo = window.getSelection()?.anchorNode;
+    const p = (nodo instanceof Element ? nodo : nodo?.parentElement)?.closest("p[contenteditable='true']");
+    p?.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const formato = (cmd: "bold" | "italic" | "underline") => conSeleccion(() => document.execCommand(cmd));
+  const cambiarFuente = (f: string) => {
+    setFuenteSel(f);
+    if (f) conSeleccion(() => document.execCommand("fontName", false, f));
+  };
+  const cambiarTamano = (pt: string) => {
+    setTamanoSel(pt);
+    if (!pt) return;
+    conSeleccion(() => {
+      // execCommand solo conoce 7 tamaños relativos: se aplica el mayor y se sustituye por el tamaño exacto elegido.
+      document.execCommand("fontSize", false, "7");
+      document.querySelectorAll<HTMLElement>(".doc-ed font[size='7'], .doc-ed span").forEach((n) => {
+        if (n.getAttribute("size") === "7" || n.style.fontSize === "xxx-large" || n.style.fontSize === "-webkit-xxx-large") {
+          n.removeAttribute("size");
+          n.style.fontSize = `${(Number(pt) * 4) / 3}px`;
+        }
+      });
+    });
+  };
+  const cambiarColor = (hex: string) => conSeleccion(() => document.execCommand("foreColor", false, hex));
+  const alinear = (jc: Alineacion) => {
+    const i = foco.current;
+    if (i == null) return setError("Haz clic primero en el párrafo que quieres alinear.");
+    const el = document.querySelector<HTMLElement>(`.doc-ed p[data-i="${i}"]`);
+    setError(null);
+    if (el) el.style.textAlign = jc === "both" ? "justify" : jc;
+    setAlineados((m) => new Map(m).set(i, jc));
+  };
   const insertarDebajo = () => {
     if (foco.current == null) return setError("Haz clic primero en el párrafo debajo del cual quieres insertar uno nuevo.");
     setNuevos((n) => [...n, { despuesDe: foco.current!, texto: "" }]);
@@ -388,10 +472,23 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
               <button type="button" className={`btn ${pestana === "pdf" ? "" : "btn-sec"} !px-3 !py-1 text-sm`} onClick={() => void verPdf()}>Vista exacta (PDF)</button>
               {pestana === "editar" && <span className="ml-auto">{controlesZoom}</span>}
               {pestana === "editar" && (
-                <span className="flex items-center gap-2" role="toolbar" aria-label="Formato del texto">
+                <span className="flex w-full flex-wrap items-center gap-2" role="toolbar" aria-label="Formato del texto">
                   <BotonIcono icono="negrita" etiqueta="Negrita (Ctrl+B)" onClick={() => formato("bold")} />
                   <BotonIcono icono="cursiva" etiqueta="Cursiva (Ctrl+I)" onClick={() => formato("italic")} />
                   <BotonIcono icono="subrayado" etiqueta="Subrayado (Ctrl+U)" onClick={() => formato("underline")} />
+                  <select aria-label="Fuente" title="Fuente" className="campo !w-auto !px-2 !py-1 text-sm" value={fuenteSel} onChange={(e) => cambiarFuente(e.target.value)}>
+                    <option value="">Fuente</option>
+                    {FUENTES.map((f) => (<option key={f} value={f} style={{ fontFamily: f }}>{f}</option>))}
+                  </select>
+                  <select aria-label="Tamaño de texto (puntos)" title="Tamaño de texto (puntos)" className="campo !w-auto !px-2 !py-1 text-sm" value={tamanoSel} onChange={(e) => cambiarTamano(e.target.value)}>
+                    <option value="">Tamaño</option>
+                    {TAMANOS.map((t) => (<option key={t} value={t}>{t} pt</option>))}
+                  </select>
+                  <input type="color" aria-label="Color del texto" title="Color del texto" className="h-8 w-8 cursor-pointer rounded border border-[color:var(--borde)] bg-transparent p-0.5" defaultValue="#000000" onChange={(e) => cambiarColor(e.target.value)} />
+                  <BotonIcono icono="alinIzq" etiqueta="Alinear a la izquierda" onClick={() => alinear("left")} />
+                  <BotonIcono icono="alinCentro" etiqueta="Centrar" onClick={() => alinear("center")} />
+                  <BotonIcono icono="alinDer" etiqueta="Alinear a la derecha" onClick={() => alinear("right")} />
+                  <BotonIcono icono="alinJust" etiqueta="Justificar" onClick={() => alinear("both")} />
                   <BotonIcono icono="insertar" etiqueta="Insertar párrafo debajo del seleccionado" onClick={insertarDebajo} />
                   <BotonIcono icono="papelera" etiqueta="Quitar o restaurar el párrafo seleccionado" onClick={quitar} />
                 </span>

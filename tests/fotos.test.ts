@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tablasDeFotos, FOTO_EMU, leyendaCorta } from "../lib/docs/fotos-xml";
+import { tablasDeFotos, piezasDeGrupo, FOTO_EMU, leyendaCorta } from "../lib/docs/fotos-xml";
 import { fotosDelAreaAfectada, leyendaDeFoto, seleccionarFotosInforme } from "../lib/docs/fotos-seleccion";
 import type { ActaInspeccion } from "../lib/extraccion/acta";
 
@@ -26,8 +26,8 @@ describe("fotos del informe: 8,66 × 6,70 cm en cuadrícula de 2 × 3", () => {
     const [, t2] = tablasDeFotos(celdas(8), { fachada: { rid: "rIdF", leyenda: "Fachada" } });
     expect(t2).not.toContain("rIdF");
   });
-  it("la tabla mide 17,32 cm (2 × 8,66), sin bordes ni márgenes, con título sin espacio y leyenda Times New Roman 10 cursiva centrada", () => {
-    const [t] = tablasDeFotos(celdas(6), { titulo: "Living" });
+  it("la tabla mide 17,32 cm (2 × 8,66), sin bordes ni márgenes, con título y leyenda del grupo fuera de la tabla y leyenda Times New Roman 10 cursiva centrada", () => {
+    const [t] = tablasDeFotos(celdas(6));
     const ancho = Number(/<w:tblW w:w="(\d+)"/.exec(t)![1]);
     expect((ancho / 1440) * 2.54).toBeCloseTo(17.32, 1);
     expect(t).toContain('<w:left w:w="0"');
@@ -36,6 +36,19 @@ describe("fotos del informe: 8,66 × 6,70 cm en cuadrícula de 2 × 3", () => {
     expect(t).toContain('<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>');
     expect(cuenta(t, /<w:tcMar><w:top w:w="0" w:type="dxa"[/]><w:left w:w="0" w:type="dxa"[/]><w:bottom w:w="0" w:type="dxa"[/]><w:right w:w="0" w:type="dxa"[/]><[/]w:tcMar>/g)).toBe(cuenta(t, /<w:tc>/g));
     expect(t).toMatch(/<w:i\/><w:noProof\/><w:sz w:val="20"\/>/);
+  });
+  it("el título y la leyenda del grupo van en párrafos FUERA de la tabla: título Times 12 negrita cursiva, leyenda Times 10 negrita centrada", () => {
+    const p = piezasDeGrupo(celdas(7), { titulo: "Living", pie: "Humedad en cielo y muro" });
+    expect(p.map((x) => (x.startsWith("<w:tbl>") ? "tabla" : x.includes("CesarFotoTitulo") ? "titulo" : "pie"))).toEqual(["titulo", "tabla", "titulo", "tabla", "pie"]);
+    expect(p[0]).toMatch(/<w:b[/]><w:i[/]><w:sz w:val="24"[/]>/);
+    expect(p[2]).toContain("Living (continuación)");
+    expect(p[4]).toMatch(/<w:jc w:val="center"[/]>/);
+    expect(p[4]).toMatch(/<w:b[/]><w:sz w:val="20"[/]>/);
+    // ni el título ni la leyenda del grupo están dentro de ninguna tabla
+    for (const t of [p[1], p[3]]) {
+      expect(t).not.toContain("Living");
+      expect(t).not.toContain("Humedad en cielo y muro");
+    }
   });
   it("la leyenda es opcional: sin texto no sale ninguna, con texto sale una línea", () => {
     const [sin] = tablasDeFotos([{ rid: "a", leyenda: "" }, { rid: "b", leyenda: "  " }]);
@@ -68,5 +81,20 @@ describe("selección del área afectada", () => {
   it("leyenda corta con el daño del acta", () => {
     expect(leyendaDeFoto("LIVING", acta)).toBe("Living: cielo de madera con filtración");
     expect(leyendaDeFoto("Patio", acta)).toBe("Patio");
+  });
+});
+
+describe("orden de las estancias según el presupuesto", () => {
+  it("sigue el orden de las secciones del presupuesto, sin importar mayúsculas ni tildes; lo que no coincide va al final", async () => {
+    const { ordenarGruposPorPresupuesto } = await import("../lib/fotos/orden");
+    const f = (id: number, recinto: string) => ({ id, recinto });
+    const fotos = [f(1, "Baño 1"), f(2, "Cocina"), f(3, "dormitorio 1"), f(4, "Terraza"), f(5, "Dormitorio 1"), f(6, "Living")];
+    const r = ordenarGruposPorPresupuesto(fotos, ["DORMITORIO 1", "LIVING COMEDOR", "COCINA", "BAÑO 1"]);
+    expect(r.map((x) => x.id)).toEqual([3, 5, 6, 2, 1, 4]);
+  });
+  it("sin presupuesto deja el orden como está", async () => {
+    const { ordenarGruposPorPresupuesto } = await import("../lib/fotos/orden");
+    const fotos = [{ recinto: "B" }, { recinto: "A" }];
+    expect(ordenarGruposPorPresupuesto(fotos, [])).toBe(fotos);
   });
 });

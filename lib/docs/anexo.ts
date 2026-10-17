@@ -5,7 +5,7 @@ import { escXml, hijos, NS_W, parse, serializar, crearEl, type Doc } from "./doc
 import { fotoFinal } from "../fotos/procesar";
 import type { Calidad } from "../fotos/calidad";
 import { ordenarPorGrupo } from "../fotos/orden";
-import { tablasDeFotos, type FotoCelda } from "./fotos-xml";
+import { ESTILO_PIE_FOTOS, ESTILO_TITULO_FOTOS, piezasDeGrupo, type FotoCelda } from "./fotos-xml";
 import type { FotoInforme } from "./word";
 
 /** Márgenes del anexo compacto en twips: 1,5 cm arriba/abajo, 1,84 cm izquierda/derecha. */
@@ -58,7 +58,8 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
 
   // Todas las fotos del caso, por recinto, en cuadrículas de 2 × 3 con el mismo tamaño y leyenda que el informe.
   const recintos = [...new Set(o.fotos.map((f) => f.recinto))];
-  const tablas: string[] = [];
+  // Un bloque por estancia (título, tabla(s) y leyenda del grupo, todo fuera de las tablas); el orden de las estancias es el de las fotos recibidas.
+  const piezas: string[] = [];
   for (const rc of recintos) {
     const celdas: FotoCelda[] = [];
     for (const f of ordenarPorGrupo(o.fotos.filter((x) => x.recinto === rc))) {
@@ -69,13 +70,17 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
       }
       celdas.push({ rid: add(final), leyenda: f.edicion?.leyenda ?? "", id: f.id });
     }
-    tablas.push(...tablasDeFotos(celdas, { titulo: rc, pie: o.pies?.[rc]?.trim() || undefined }));
+    piezas.push(...piezasDeGrupo(celdas, { titulo: rc, pie: o.pies?.[rc]?.trim() || undefined }));
   }
-  tablas.forEach((t, i) => {
-    add1(t);
-    // Una tabla de 6 fotos de 6,70 cm casi llena la página: el salto va en un párrafo de 1 pt para que no se desborde y deje una página vacía.
-    if (i < tablas.length - 1 && o.compacto) add1(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr></w:p>`);
-    else if (i < tablas.length - 1) add1(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:br w:type="page"/></w:r></w:p>`);
+  // Cada tabla de 6 fotos casi llena la página: el salto va antes de cada título (o de una tabla que sigue a otra) y en un párrafo de 1 pt para no desbordar.
+  const salto = o.compacto ? "" : `<w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:br w:type="page"/></w:r>`;
+  const separador = `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr>${salto}</w:p>`;
+  piezas.forEach((x, i) => {
+    const esTabla = x.startsWith("<w:tbl>");
+    const previaTabla = i > 0 && (piezas[i - 1].startsWith("<w:tbl>") || piezas[i - 1].includes(ESTILO_PIE_FOTOS));
+    const esTitulo = x.includes(ESTILO_TITULO_FOTOS);
+    if (i > 0 && (esTitulo || (esTabla && previaTabla))) add1(separador);
+    add1(x);
   });
   zip.file("word/document.xml", serializar(doc));
   zip.file("word/_rels/document.xml.rels", rels);

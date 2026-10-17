@@ -14,3 +14,41 @@ export function ordenarPorGrupo<T extends { recinto: string; edicion?: { orden?:
   fotos.forEach((f, i) => grupos.set(f.recinto, [...(grupos.get(f.recinto) ?? []), { f, i }]));
   return [...grupos.values()].flatMap((g) => g.sort((a, b) => (a.f.edicion?.orden ?? Infinity) - (b.f.edicion?.orden ?? Infinity) || a.i - b.i).map((x) => x.f));
 }
+
+const normaliza = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/** Posición de la sección del presupuesto que corresponde a la estancia: igual (2) o una contiene a la otra (1); -1 si ninguna. */
+function posicionEnPresupuesto(recinto: string, secciones: string[]): number {
+  const r = normaliza(recinto);
+  if (!r) return -1;
+  const igual = secciones.findIndex((s) => normaliza(s) === r);
+  if (igual >= 0) return igual;
+  return secciones.findIndex((s) => {
+    const n = normaliza(s);
+    return n !== "" && (n.includes(r) || r.includes(n));
+  });
+}
+
+/**
+ * Pone las estancias de las fotos en el mismo orden que las secciones del presupuesto. Las que no corresponden a ninguna sección
+ * van al final, en su orden original; dentro de cada estancia las fotos conservan su orden.
+ */
+export function ordenarGruposPorPresupuesto<T extends { recinto: string }>(fotos: T[], secciones: string[]): T[] {
+  if (secciones.length === 0) return fotos;
+  const recintos = [...new Set(fotos.map((f) => f.recinto))];
+  const clave = new Map(recintos.map((r, i) => [r, { pos: posicionEnPresupuesto(r, secciones), i }]));
+  const orden = [...recintos].sort((a, b) => {
+    const pa = clave.get(a)!;
+    const pb = clave.get(b)!;
+    const ka = pa.pos >= 0 ? pa.pos : Infinity;
+    const kb = pb.pos >= 0 ? pb.pos : Infinity;
+    return ka - kb || pa.i - pb.i;
+  });
+  return orden.flatMap((r) => fotos.filter((f) => f.recinto === r));
+}

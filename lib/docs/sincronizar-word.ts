@@ -3,7 +3,7 @@ import { fotoFinal, type FotoOrigen } from "../fotos/procesar";
 import { CALIDAD_POR_DEFECTO, type Calidad } from "../fotos/calidad";
 import { MARCA_CUADRO } from "./cuadro";
 import { crearEl, hijos, NS_W, parse, porTag, reemplazarEnParrafo, serializar, textoDe, type Doc } from "./docx-xml";
-import { tablasPorGrupo, type FotoCelda } from "./fotos-xml";
+import { bloquesPorGrupo, ESTILO_PIE_FOTOS, ESTILO_TITULO_FOTOS, type FotoCelda } from "./fotos-xml";
 
 /**
  * Mantiene el Word al día cuando cambia algo de lo que depende: el cuadro de pérdida y los totales del texto (al editar el
@@ -68,6 +68,12 @@ function agregarJpg(zip: PizZip, rels: { texto: string }, jpg: Buffer, n: number
   return rid;
 }
 
+/** Título o leyenda de grupo que puso este sistema (se reconocen por su estilo-marca) y que se rehacen junto con las tablas. */
+const esMarcaDeFotos = (p: Element): boolean => {
+  const v = p.getElementsByTagNameNS(NS_W, "pStyle")[0]?.getAttributeNS(NS_W, "val") ?? p.getElementsByTagNameNS(NS_W, "pStyle")[0]?.getAttribute("w:val");
+  return v === ESTILO_TITULO_FOTOS || v === ESTILO_PIE_FOTOS;
+};
+
 /**
  * Rehace la sección de fotografías del informe con la selección y los recortes actuales: quita las tablas de fotos anteriores
  * (conserva la imagen de fachada que tuvieran) y pone las nuevas en cuadrículas de 2 × 3.
@@ -83,6 +89,7 @@ export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[], pies:
     if (s.nodeType !== 1) continue;
     const el = s as Element;
     if (el.localName === "tbl" && nombreDeDibujo(el).some((n) => /^(foto|fachada)/.test(n))) viejas.push(el);
+    else if (el.localName === "p" && esMarcaDeFotos(el)) viejas.push(el);
     else if (el.localName === "p" && textoDe(el).trim() === "" && !el.getElementsByTagNameNS(NS_W, "drawing").length) viejas.push(el);
     else break;
   }
@@ -109,11 +116,14 @@ export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[], pies:
   for (const t of viejas) t.parentNode!.removeChild(t);
 
   let ultimo: Node = ancla;
-  for (const xml of tablasPorGrupo(celdas, pies, ridFachada ? { rid: ridFachada, leyenda: "" } : null)) {
-    const tabla = crearEl(doc, xml);
-    ultimo.parentNode!.insertBefore(tabla, ultimo.nextSibling);
+  for (const bloque of bloquesPorGrupo(celdas, pies, ridFachada ? { rid: ridFachada, leyenda: "" } : null)) {
+    for (const xml of bloque) {
+      const pieza = crearEl(doc, xml);
+      ultimo.parentNode!.insertBefore(pieza, ultimo.nextSibling);
+      ultimo = pieza;
+    }
     const sep = crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>`);
-    ultimo.parentNode!.insertBefore(sep, tabla.nextSibling);
+    ultimo.parentNode!.insertBefore(sep, ultimo.nextSibling);
     ultimo = sep;
   }
 

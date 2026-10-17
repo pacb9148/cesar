@@ -104,3 +104,9 @@ npx tsx scripts/e2e.mts 1981023
 - **Presupuesto original intacto**: la parte azul (Reclamación) no se modifica ni por el agente ni a mano; el Excel generado se relee y contrasta con el original antes de entregarlo. Los ajustes van solo en «Valor ajustado».
 - **Subida de ZIP**, **revisión de fotos** (duplicadas, borrosas, cantidad impar) y **vista/edición/descarga de todos los documentos** (Word, Excel, anexo, PDF, resumen de texto y ZIP).
 - Sin cambios de variables de entorno ni de migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Rediseño del 17/10/2026 (2.ª tanda)
+- Tres cargas (Inspección, Presupuesto, Fotos) en cualquier formato; lectura directa o con IA con visión si no se reconoce. Sin proveedor de IA, las imágenes y escaneos dejan una alerta (los PDF y Excel con formato conocido siguen sin IA).
+- Menú lateral desplegable con el orden Documentos, Datos, Fotos, Informe, Ajustes, Editar y descargar.
+- Informe: párrafo del inmueble y evidencia con ✓ desde la inspección; fotos por estancia en el orden del presupuesto, con título y leyenda fuera de las tablas; editor con fuente, tamaño, color y alineación; giro fino de fotos; miniaturas con la edición aplicada.
+- Sin cambios de variables de entorno ni de migraciones. El push a `main` dispara el despliegue automático en Coolify.

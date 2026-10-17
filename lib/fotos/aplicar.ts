@@ -11,11 +11,13 @@ export async function aplicarEdicion(buffer: Buffer, e: EdicionFoto, px: { ancho
   if (e.volteoH) base = base.flop();
   const girada = await base.toBuffer({ resolveWithObject: true });
   const v = ventanaDeRecorte(girada.info.width, girada.info.height, e);
-  let img = sharp(girada.data).extract({
-    left: Math.round(v.x),
-    top: Math.round(v.y),
-    width: Math.max(1, Math.min(girada.info.width - Math.round(v.x), Math.round(v.w))),
-    height: Math.max(1, Math.min(girada.info.height - Math.round(v.y), Math.round(v.h))),
+  // Giro fino: la ventana ya está calculada dentro de la imagen girada, así que las esquinas vacías del lienzo nunca entran en el recorte.
+  const lienzo = e.angulo ? await sharp(girada.data).rotate(e.angulo, { background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer({ resolveWithObject: true }) : girada;
+  let img = sharp(lienzo.data).extract({
+    left: Math.max(0, Math.round(v.x)),
+    top: Math.max(0, Math.round(v.y)),
+    width: Math.max(1, Math.min(lienzo.info.width - Math.round(v.x), Math.round(v.w))),
+    height: Math.max(1, Math.min(lienzo.info.height - Math.round(v.y), Math.round(v.h))),
   });
   img = img.resize(px.ancho, px.alto, { fit: "fill", kernel: "lanczos3" });
   if (e.brillo !== 0 || e.saturacion !== 0) img = img.modulate({ brightness: 1 + e.brillo / 100, saturation: 1 + e.saturacion / 100 });

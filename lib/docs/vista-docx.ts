@@ -174,7 +174,9 @@ export function docxAVista(buf: Buffer): { bloques: BloqueVista[]; parrafos: num
   return { bloques: bloquesDe(body), parrafos: indice.size };
 }
 
-export type RunEdicion = { t: string; b?: boolean; i?: boolean; u?: boolean };
+/** Tramo de texto editado: formato de carácter (negrita, cursiva, subrayado, fuente, tamaño en puntos y color hexadecimal sin #). */
+export type RunEdicion = { t: string; b?: boolean; i?: boolean; u?: boolean; font?: string; sz?: number; color?: string };
+export type Alineacion = "left" | "center" | "right" | "both";
 export type EdicionesWord = {
   /** Contenido nuevo de párrafos existentes, por índice, con su formato (negrita, cursiva, subrayado). */
   parrafos?: Record<string, RunEdicion[]>;
@@ -186,8 +188,38 @@ export type EdicionesWord = {
   imagenes?: { idx: number; cx: number; cy: number }[];
   /** Imágenes a quitar del documento (por `idx`). */
   quitarImagenes?: number[];
+  /** Alineación nueva de párrafos existentes, por índice. */
+  alinear?: Record<string, Alineacion>;
 };
 
+
+const FUENTE_VALIDA = /^[A-Za-z0-9 ._-]{1,60}$/;
+const COLOR_VALIDO = /^[0-9A-Fa-f]{6}$/;
+/** Orden de los hijos de w:rPr que exige el esquema de Word. */
+const ORDEN_RPR = ["rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow", "emboss", "imprint", "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing", "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect", "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath"];
+function ordenarRpr(rpr: Element) {
+  const hs = hijos(rpr);
+  const idx = (e: Element) => {
+    const i = ORDEN_RPR.indexOf(e.localName ?? "");
+    return i < 0 ? ORDEN_RPR.length : i;
+  };
+  const ordenados = hs.map((e, k) => ({ e, k })).sort((a, b) => idx(a.e) - idx(b.e) || a.k - b.k);
+  for (const { e } of ordenados) rpr.appendChild(e);
+}
+
+/** Antes de estos hijos de w:pPr va la alineación (w:jc). */
+const DESPUES_DE_JC = ["textDirection", "textAlignment", "textboxTightWrap", "outlineLvl", "divId", "cnfStyle", "rPr", "sectPr", "pPrChange"];
+function ponerAlineacion(doc: Doc, p: Element, jc: Alineacion) {
+  let ppr = hijos(p).find((c) => c.localName === "pPr");
+  if (!ppr) {
+    ppr = doc.createElementNS(NS_W, "w:pPr");
+    p.insertBefore(ppr, p.firstChild);
+  }
+  for (const c of hijos(ppr).filter((x) => x.localName === "jc")) ppr.removeChild(c);
+  const el = doc.createElementNS(NS_W, "w:jc");
+  el.setAttributeNS(NS_W, "w:val", jc);
+  ppr.insertBefore(el, hijos(ppr).find((c) => DESPUES_DE_JC.includes(c.localName ?? "")) ?? null);
+}
 
 function construirRuns(doc: Doc, base: Element | undefined, runs: RunEdicion[], sinAdornos = false): Element[] {
   return runs
@@ -204,6 +236,20 @@ function construirRuns(doc: Doc, base: Element | undefined, runs: RunEdicion[], 
       if (r.b) rpr.insertBefore(doc.createElementNS(NS_W, "w:b"), rpr.firstChild);
       const u = hijos(rpr).find((c) => c.localName === "u");
       if (u) u.setAttributeNS(NS_W, "w:val", "single");
+      // Fuente, tamaño y color elegidos por el usuario: sustituyen a los del párrafo vecino.
+      const poner = (tag: string, attrs: Record<string, string>) => {
+        for (const c of hijos(rpr).filter((x) => x.localName === tag)) rpr.removeChild(c);
+        const el = doc.createElementNS(NS_W, `w:${tag}`);
+        for (const [k, v] of Object.entries(attrs)) el.setAttributeNS(NS_W, `w:${k}`, v);
+        rpr.appendChild(el);
+      };
+      if (r.font && FUENTE_VALIDA.test(r.font)) poner("rFonts", { ascii: r.font, hAnsi: r.font, cs: r.font });
+      if (r.sz && r.sz >= 1 && r.sz <= 200) {
+        poner("sz", { val: String(Math.round(r.sz * 2)) });
+        poner("szCs", { val: String(Math.round(r.sz * 2)) });
+      }
+      if (r.color && COLOR_VALIDO.test(r.color)) poner("color", { val: r.color.toUpperCase() });
+      ordenarRpr(rpr);
       if (hijos(rpr).length) run.appendChild(rpr);
       r.t.replace(/\r/g, "").split("\n").forEach((linea, n) => {
         if (n > 0) run.appendChild(crearEl(doc, `<w:br/>`));
@@ -252,6 +298,11 @@ export function aplicarEdiciones(buf: Buffer, e: EdicionesWord): { buffer: Buffe
     for (const r of objetos) for (const c of hijos(r)) if (["t", "tab", "br", "noBreakHyphen", "softHyphen"].includes(c.localName ?? "")) r.removeChild(c);
     for (const r of hijos(p).filter((c) => c.localName === "r" && !esRunConObjeto(c))) p.removeChild(r);
     for (const r of construirRuns(doc, rpr, runs)) p.insertBefore(r, objetos[0] ?? null);
+    aplicados++;
+  }
+  for (const [k, jc] of Object.entries(e.alinear ?? {})) {
+    if (!["left", "center", "right", "both"].includes(jc)) throw new Error(`Alineación no válida: ${jc}`);
+    ponerAlineacion(doc, de(k), jc);
     aplicados++;
   }
   // Imágenes: tamaño nuevo y quitadas, resueltas contra los índices originales.

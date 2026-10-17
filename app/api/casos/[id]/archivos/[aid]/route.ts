@@ -1,7 +1,9 @@
 import sharp from "sharp";
 import { conUsuario, fallo, json } from "@/lib/api";
 import { clasificarArchivo, FORMATOS_DOCUMENTO, type TipoArchivo } from "@/lib/caso/clasificar";
-import { auditar, contenidoArchivo, eliminarArchivo, obtenerCaso, reemplazarArchivo } from "@/lib/caso/repositorio";
+import { aplicarEdicion } from "@/lib/fotos/aplicar";
+import { esEdicionNula, PROPORCION_FOTO } from "@/lib/fotos/recorte";
+import { auditar, contenidoArchivo, edicionDeFoto, eliminarArchivo, obtenerCaso, reemplazarArchivo } from "@/lib/caso/repositorio";
 
 export const GET = conUsuario<{ id: string; aid: string }>(async (req, u, { id, aid }) => {
   if (!(await obtenerCaso(id, u.id))) return fallo("Caso no encontrado", 404);
@@ -11,7 +13,12 @@ export const GET = conUsuario<{ id: string; aid: string }>(async (req, u, { id, 
   const descargar = q.get("descargar") === "1";
   // Miniatura para las galerías: evita descargar la foto completa solo para mostrar un cuadro pequeño.
   if (q.get("miniatura") === "1" && a.mime.startsWith("image/")) {
-    const mini = await sharp(a.contenido).rotate().resize({ width: 360, withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
+    // Si el usuario editó la foto (giro, recorte, ajustes), la miniatura es la foto tal como irá en el informe, no el original.
+    const edicion = await edicionDeFoto(aid, id);
+    const mini =
+      edicion && !esEdicionNula(edicion)
+        ? await aplicarEdicion(a.contenido, edicion, { ancho: 360, alto: Math.round(360 / PROPORCION_FOTO) }, 72)
+        : await sharp(a.contenido).rotate().resize({ width: 360, withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
     return new Response(new Uint8Array(mini), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff" } });
   }
   return new Response(new Uint8Array(a.contenido), {

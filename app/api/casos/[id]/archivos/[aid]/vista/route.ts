@@ -6,7 +6,15 @@ import { guardarEdicion, pdfDe, vistaDe } from "@/lib/caso/edicion-documentos";
 export const maxDuration = 180;
 export const runtime = "nodejs";
 
-const run = z.object({ t: z.string().max(5000), b: z.boolean().optional(), i: z.boolean().optional(), u: z.boolean().optional() });
+const run = z.object({
+  t: z.string().max(5000),
+  b: z.boolean().optional(),
+  i: z.boolean().optional(),
+  u: z.boolean().optional(),
+  font: z.string().regex(/^[A-Za-z0-9 ._-]{1,60}$/).optional(),
+  sz: z.number().min(1).max(200).optional(),
+  color: z.string().regex(/^[0-9A-Fa-f]{6}$/).optional(),
+});
 const runs = z.array(run).max(300);
 const cuerpo = z.object({
   word: z
@@ -16,6 +24,7 @@ const cuerpo = z.object({
       eliminar: z.array(z.number().int().min(0)).max(500).optional(),
       imagenes: z.array(z.object({ idx: z.number().int().min(0), cx: z.number().int().min(36000).max(10800000), cy: z.number().int().min(36000).max(10800000) })).max(200).optional(),
       quitarImagenes: z.array(z.number().int().min(0)).max(200).optional(),
+      alinear: z.record(z.string().regex(/^[0-9]+$/), z.enum(["left", "center", "right", "both"])).optional(),
     })
     .optional(),
   formato: z

@@ -27,6 +27,14 @@ type Props = {
  * trabajan en un borrador: «Actualizar» lo aplica al informe y al anexo; si el usuario sale sin actualizar, se descarta. Recortar una foto o
  * escribir la leyenda del grupo se guarda al momento. Con cambios pendientes cada bloque ofrece Actualizar y Volver a generar el informe.
  */
+/** Cambia cuando cambia la edición de la foto: así el navegador no muestra una miniatura vieja. */
+const versionDe = (e: unknown): string => {
+  const s = JSON.stringify(e ?? null);
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+};
+
 export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos, alDia, hayInforme, puedeGenerar, generando, onRegenerar }: Props) {
   const router = useRouter();
   const [editando, setEditando] = useState<ArchivoMeta | null>(null);
@@ -184,7 +192,7 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
                   <li key={f.id} className={`overflow-hidden rounded-lg bg-[color:var(--panel-2)] ${incluida ? "border-2 border-[color:var(--ok)]" : "border border-[color:var(--borde)]"}`}>
                     <div className="relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1`} alt={`${recinto}: ${f.nombre}`} loading="lazy" className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}`, opacity: incluida ? 1 : 0.55 }} />
+                      <img src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1&v=${versionDe(f.edicion)}`} alt={`${recinto}: ${f.nombre}`} loading="lazy" className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}`, opacity: incluida ? 1 : 0.55 }} />
                       {incluida && (
                         <span className="absolute left-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-sm font-bold" style={{ background: "var(--acento)", color: "var(--acento-texto)" }} title={`Posición ${indice} de ${ids.length} en el informe, de izquierda a derecha`}>{indice}</span>
                       )}

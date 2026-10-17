@@ -1,3 +1,4 @@
+import { ordenarGruposPorPresupuesto } from "../fotos/orden";
 import { createHash } from "node:crypto";
 import { consulta, transaccion, uno } from "../db";
 import type { DatosCaso, Reclamacion, SalidaAgente } from "../domain/tipos";
@@ -129,12 +130,18 @@ export async function fotosPerezosas(casoId: string) {
     "select id, recinto, edicion from archivos where caso_id = $1 and tipo = 'foto' order by recinto nulls first, orden, nombre",
     [casoId],
   );
-  return filas.map((f) => ({
+  // Las estancias salen en el orden de las secciones del presupuesto, como pide el informe.
+  const secciones = ((await leerReclamacion(casoId))?.datos.secciones ?? []).map((s) => s.titulo);
+  return ordenarGruposPorPresupuesto(filas.map((f) => ({ ...f, recinto: f.recinto ?? "General" })), secciones).map((f) => ({
     id: f.id,
-    recinto: f.recinto ?? "General",
+    recinto: f.recinto,
     edicion: f.edicion,
     cargar: async () => (await uno<{ contenido: Buffer }>("select contenido from archivos where id = $1 and caso_id = $2", [f.id, casoId]))!.contenido,
   }));
+}
+
+export async function edicionDeFoto(id: string, casoId: string): Promise<EdicionFoto | null> {
+  return (await uno<{ edicion: EdicionFoto | null }>("select edicion from archivos where id = $1 and caso_id = $2", [id, casoId]))?.edicion ?? null;
 }
 
 export async function guardarEdicionFoto(id: string, casoId: string, edicion: EdicionFoto | null): Promise<boolean> {

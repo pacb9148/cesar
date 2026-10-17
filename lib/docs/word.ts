@@ -1,6 +1,6 @@
 import { fotoFinal, type FotoOrigen } from "../fotos/procesar";
 import { pxDeCalidad, type Calidad } from "../fotos/calidad";
-import { FOTO_EMU, tablasPorGrupo, type FotoCelda } from "./fotos-xml";
+import { FOTO_EMU, bloquesPorGrupo, type FotoCelda } from "./fotos-xml";
 import PizZip from "pizzip";
 import sharp from "sharp";
 import { join } from "node:path";
@@ -298,11 +298,14 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     }
     const fachada: FotoCelda | null = e.fachada[0] ? { rid: (await paq.imagen(e.fachada[0], 0, { foto: true })).rid, leyenda: "" } : null;
     let ancla: Node = pImgs;
-    for (const xml of tablasPorGrupo(celdas, e.piesGrupos, fachada)) {
-      const tabla = crearEl(doc, xml);
-      ancla.parentNode!.insertBefore(tabla, ancla.nextSibling);
+    for (const bloque of bloquesPorGrupo(celdas, e.piesGrupos, fachada)) {
+      for (const xml of bloque) {
+        const pieza = crearEl(doc, xml);
+        ancla.parentNode!.insertBefore(pieza, ancla.nextSibling);
+        ancla = pieza;
+      }
       const sep = crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>`);
-      ancla.parentNode!.insertBefore(sep, tabla.nextSibling);
+      ancla.parentNode!.insertBefore(sep, ancla.nextSibling);
       ancla = sep;
     }
   }

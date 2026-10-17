@@ -18,19 +18,18 @@ const ACEPTA_DOC = ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp,.
 const ACEPTA_FOTOS = ".jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff,.zip";
 
 const TIPOS_RANURA: Record<Ranura, string[]> = {
-  inspeccion: ["acta", "provision", "borrador", "mandato", "informe_tecnico", "correspondencia", "otro"],
+  inspeccion: ["acta"],
   presupuesto: ["presupuesto_xlsx", "presupuesto_pdf", "presupuesto_otro"],
   fotos: ["foto"],
 };
 
 export default function Documentos({ caso, archivos }: { caso: Caso; archivos: ArchivoMeta[] }) {
   const router = useRouter();
-  const entradas = {
-    inspeccion: useRef<HTMLInputElement>(null),
-    presupuesto: useRef<HTMLInputElement>(null),
-    fotos: useRef<HTMLInputElement>(null),
-    carpeta: useRef<HTMLInputElement>(null),
-  };
+  const refInspeccion = useRef<HTMLInputElement>(null);
+  const refPresupuesto = useRef<HTMLInputElement>(null);
+  const refFotos = useRef<HTMLInputElement>(null);
+  const refCarpeta = useRef<HTMLInputElement>(null);
+  const entradas = { inspeccion: refInspeccion, presupuesto: refPresupuesto, fotos: refFotos, carpeta: refCarpeta };
   const [subiendo, setSubiendo] = useState<string | null>(null);
   const [errorSubida, setErrorSubida] = useState<string | null>(null);
   const cambiar = useRef<HTMLInputElement>(null);
@@ -98,6 +97,8 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
   const inspeccion = deRanura("inspeccion");
   const presupuesto = deRanura("presupuesto");
   const fotos = deRanura("fotos");
+  // Documentos de versiones anteriores del flujo (provisión, mandato, borrador…): ya no se piden, pero si están cargados se muestran y se pueden quitar.
+  const otros = archivos.filter((a) => a.tipo !== "salida" && a.tipo !== "meteo_png" && ![...TIPOS_RANURA.inspeccion, ...TIPOS_RANURA.presupuesto, ...TIPOS_RANURA.fotos].includes(a.tipo));
   const porRecinto = new Map<string, number>();
   for (const f of fotos) porRecinto.set(f.recinto ?? "Sin recinto", (porRecinto.get(f.recinto ?? "Sin recinto") ?? 0) + 1);
   const alertas = proc.resultado?.alertas ?? caso.datos.alertas ?? [];
@@ -148,10 +149,10 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
   return (
     <section className="space-y-4">
       <div className="hidden">
-        <input ref={entradas.inspeccion} type="file" multiple className="hidden" accept={ACEPTA_DOC} onChange={(e) => { void subir("inspeccion", e.target.files); e.target.value = ""; }} />
-        <input ref={entradas.presupuesto} type="file" multiple className="hidden" accept={ACEPTA_DOC} onChange={(e) => { void subir("presupuesto", e.target.files); e.target.value = ""; }} />
-        <input ref={entradas.fotos} type="file" multiple className="hidden" accept={ACEPTA_FOTOS} onChange={(e) => { void subir("fotos", e.target.files); e.target.value = ""; }} />
-        <input ref={entradas.carpeta} type="file" multiple className="hidden" onChange={(e) => { void subir("fotos", e.target.files); e.target.value = ""; }} {...({ webkitdirectory: "" } as object)} />
+        <input ref={refInspeccion} type="file" multiple className="hidden" accept={ACEPTA_DOC} onChange={(e) => { void subir("inspeccion", e.target.files); e.target.value = ""; }} />
+        <input ref={refPresupuesto} type="file" multiple className="hidden" accept={ACEPTA_DOC} onChange={(e) => { void subir("presupuesto", e.target.files); e.target.value = ""; }} />
+        <input ref={refFotos} type="file" multiple className="hidden" accept={ACEPTA_FOTOS} onChange={(e) => { void subir("fotos", e.target.files); e.target.value = ""; }} />
+        <input ref={refCarpeta} type="file" multiple className="hidden" onChange={(e) => { void subir("fotos", e.target.files); e.target.value = ""; }} {...({ webkitdirectory: "" } as object)} />
         <input ref={cambiar} type="file" className="hidden" accept={`${ACEPTA_DOC},.zip`} onChange={(e) => { void reemplazar(e.target.files); e.target.value = ""; }} />
       </div>
       {subiendo && <p role="status" className="aviso aviso-ok">{subiendo}</p>}
@@ -184,6 +185,14 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
           </p>
         )}
       </div>
+
+      {otros.length > 0 && (
+        <details className="panel p-5">
+          <summary className="cursor-pointer font-semibold">Otros documentos cargados ({otros.length})</summary>
+          <p className="texto-suave my-2 text-sm">No hacen falta: el caso se procesa con la inspección, el presupuesto y las fotos. Si el borrador del informe está aquí, aún se usa para completar los datos de la póliza.</p>
+          {lista(otros)}
+        </details>
+      )}
 
       <div className="panel space-y-3 p-5">
         {proc.error && <p role="alert" className="aviso aviso-error">{proc.error}</p>}

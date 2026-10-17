@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import sharp from "sharp";
-import { EDICION_INICIAL, ZOOM_MAX, centroValido, edicionFotoSchema, encuadreDeRectangulo, girar, ventanaBase, ventanaDeRecorte, PROPORCION_FOTO } from "../lib/fotos/recorte";
+import { EDICION_INICIAL, ZOOM_MAX, esEdicionNula, lienzoRotado, centroValido, edicionFotoSchema, encuadreDeRectangulo, girar, ventanaBase, ventanaDeRecorte, PROPORCION_FOTO } from "../lib/fotos/recorte";
 import { aplicarEdicion } from "../lib/fotos/aplicar";
 import { FOTO_PX } from "../lib/docs/fotos-xml";
 
@@ -88,5 +88,52 @@ describe("aplicarEdicion (lo que se inserta en el informe)", () => {
     const base = await promedio(await aplicarEdicion(png, { ...EDICION_INICIAL, zoom: 3, cx: 0.1 }));
     const oscura = await promedio(await aplicarEdicion(png, { ...EDICION_INICIAL, zoom: 3, cx: 0.1, brillo: -60 }));
     expect(oscura.r).toBeLessThan(base.r);
+  });
+});
+
+describe("giro fino (progresivo)", () => {
+  it("con giro fino la ventana siempre cae dentro de la imagen girada: sus cuatro esquinas están dentro del rectángulo original", () => {
+    const W = 2000;
+    const H = 1500;
+    for (const angulo of [-40, -15, -3, 0.5, 7, 22, 45]) {
+      for (const [cx, cy, zoom] of [[0.5, 0.5, 1], [0, 0, 3], [1, 1, 2], [0.2, 0.9, 6]] as const) {
+        const e = { zoom, cx, cy, angulo };
+        const v = ventanaDeRecorte(W, H, e);
+        const l = lienzoRotado(W, H, angulo);
+        expect(v.w / v.h).toBeCloseTo(PROPORCION_FOTO, 6);
+        const rad = (angulo * Math.PI) / 180;
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+          // esquina del marco en el lienzo → coordenadas de la imagen sin girar
+          const px = v.x + dx * v.w - l.ancho / 2;
+          const py = v.y + dy * v.h - l.alto / 2;
+          const qx = Math.cos(rad) * px + Math.sin(rad) * py;
+          const qy = -Math.sin(rad) * px + Math.cos(rad) * py;
+          expect(Math.abs(qx)).toBeLessThanOrEqual(W / 2 + 1e-6);
+          expect(Math.abs(qy)).toBeLessThanOrEqual(H / 2 + 1e-6);
+        }
+      }
+    }
+  });
+  it("sin giro fino todo da igual que antes y una edición con solo giro fino ya no es «nula»", () => {
+    expect(ventanaDeRecorte(2000, 1000, { zoom: 2, cx: 0.5, cy: 0.5, angulo: 0 })).toEqual(ventanaDeRecorte(2000, 1000, { zoom: 2, cx: 0.5, cy: 0.5 }));
+    expect(esEdicionNula(EDICION_INICIAL)).toBe(true);
+    expect(esEdicionNula({ ...EDICION_INICIAL, angulo: 2 })).toBe(false);
+    expect(edicionFotoSchema.safeParse({ ...EDICION_INICIAL, angulo: 46 }).success).toBe(false);
+    expect(edicionFotoSchema.safeParse({ ...EDICION_INICIAL, angulo: -12.5 }).success).toBe(true);
+  });
+  it("el servidor aplica el giro fino y entrega la foto final del tamaño pedido, sin esquinas vacías", async () => {
+    const sharp = (await import("sharp")).default;
+    const { aplicarEdicion } = await import("../lib/fotos/aplicar");
+    // imagen toda blanca: si entrara una esquina vacía (transparente → negra al pasar a JPEG), habría píxeles oscuros
+    const blanca = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
+    for (const angulo of [-30, 12, 45]) {
+      const out = await aplicarEdicion(blanca, { ...EDICION_INICIAL, angulo }, { ancho: 400, alto: 310 });
+      const m = await sharp(out).metadata();
+      expect([m.width, m.height]).toEqual([400, 310]);
+      const { data } = await sharp(out).raw().toBuffer({ resolveWithObject: true });
+      let oscuros = 0;
+      for (let i = 0; i < data.length; i += 3) if (data[i] < 200) oscuros++;
+      expect(oscuros / (data.length / 3)).toBeLessThan(0.002);
+    }
   });
 });
