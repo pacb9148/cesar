@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Icono, type NombreIcono } from "./Iconos";
 
@@ -57,6 +57,8 @@ export default function Shell({ nombre, children }: { nombre: string; children: 
   const guardado = useSyncExternalStore(suscribir, leerColapsado, () => null);
   const colapsado = guardado === "1";
   const [vista, setVista] = useState<Vista>({ titulo: "", pasos: [], acciones: [] });
+  // Cada paso es un desplegable cerrado por defecto: al hacer clic se abre y muestra las acciones de ese paso.
+  const [abierto, setAbierto] = useState<string | null>(null);
   // Los manejadores se guardan aparte: el menú solo se repinta cuando cambia lo que se ve y siempre llama a la versión más reciente.
   const manejadores = useRef<{ pasos: Map<string, () => void>; acciones: Map<string, () => void> }>({ pasos: new Map(), acciones: new Map() });
 
@@ -90,13 +92,33 @@ export default function Shell({ nombre, children }: { nombre: string; children: 
   }
 
   const { titulo, pasos, acciones } = vista;
-  const boton = (it: Visible, paso: boolean) => (
+  const boton = (it: Visible, paso: boolean, sangria = false) => (
     <li key={it.id}>
-      <button type="button" className={`menu-item ${it.primaria ? "menu-item-primaria" : ""}`} aria-current={it.activo ? (paso ? "step" : "page") : undefined} aria-label={it.etiqueta} title={it.etiqueta} disabled={it.deshabilitado} onClick={() => manejadores.current[paso ? "pasos" : "acciones"].get(it.id)?.()}>
+      <button
+        type="button"
+        className={`menu-item ${it.primaria ? "menu-item-primaria" : ""} ${sangria ? "!pl-8 text-sm" : ""}`}
+        aria-current={it.activo ? (paso ? "step" : "page") : undefined}
+        aria-expanded={paso && !colapsado ? abierto === it.id && !!it.activo : undefined}
+        aria-label={it.etiqueta}
+        title={it.etiqueta}
+        disabled={it.deshabilitado}
+        onClick={() => {
+          manejadores.current[paso ? "pasos" : "acciones"].get(it.id)?.();
+          if (paso) setAbierto((a) => (a === it.id && it.activo ? null : it.id));
+        }}
+      >
         <Icono nombre={it.icono} tam={20} />
-        {!colapsado && <span className="min-w-0 truncate">{it.etiqueta}</span>}
+        {!colapsado && <span className="min-w-0 flex-1 truncate text-left">{it.etiqueta}</span>}
+        {paso && !colapsado && <span aria-hidden="true" className="text-xs opacity-70">{abierto === it.id && it.activo ? "▾" : "▸"}</span>}
       </button>
     </li>
+  );
+  /** Un paso con sus acciones debajo cuando está abierto (en el menú de solo iconos, las acciones van aparte). */
+  const pasoConAcciones = (p: Visible) => (
+    <Fragment key={p.id}>
+      {boton(p, true)}
+      {!colapsado && p.activo && abierto === p.id && acciones.map((a) => boton(a, false, true))}
+    </Fragment>
   );
   const enlace = (href: string, etiqueta: string, icono: NombreIcono, activo: boolean) => (
     <li>
@@ -124,9 +146,9 @@ export default function Shell({ nombre, children }: { nombre: string; children: 
               {enlace("/casos", "Casos", "casos", ruta === "/casos")}
               {enlace("/ajustes", "Ajustes de IA", "sliders", ruta === "/ajustes")}
               {pasos.length > 0 && rotulo(titulo || "Pasos")}
-              {pasos.map((p) => boton(p, true))}
-              {acciones.length > 0 && rotulo("Acciones")}
-              {acciones.map((a) => boton(a, false))}
+              {pasos.map((p) => pasoConAcciones(p))}
+              {colapsado && acciones.length > 0 && rotulo("Acciones")}
+              {colapsado && acciones.map((a) => boton(a, false))}
             </ul>
           </nav>
           <div className="space-y-1 border-t border-[color:var(--borde)] p-2">

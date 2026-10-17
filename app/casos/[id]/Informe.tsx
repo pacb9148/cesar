@@ -1,41 +1,23 @@
 "use client";
 
 import type { ArchivoMeta, Caso } from "@/lib/caso/repositorio";
-import { useFlujo } from "@/components/useFlujo";
+import type { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Icono } from "@/components/Iconos";
 import { useAccionesMenu } from "@/components/Shell";
-import FotosInforme from "./FotosInforme";
-import VistaDocumento from "./VistaDocumento";
 import Previa from "./Previa";
 import TituloAyuda from "@/components/Ayuda";
 import OpcionesEntrega from "./OpcionesEntrega";
-import VistaSimple from "./VistaSimple";
-import SugerenciasFotos from "./SugerenciasFotos";
 
-type Gen = { entregables: { id: string; nombre: string }[]; motorPdf: string; faltantes: string[]; totales: { reclamacionUF: number; ajusteUF: number; indemnizacionUF: number } };
+export type Gen = { entregables: { id: string; nombre: string }[]; motorPdf: string; faltantes: string[]; totales: { reclamacionUF: number; ajusteUF: number; indemnizacionUF: number } };
 
-const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
-
-export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyendasGrupos, alDia }: { caso: Caso; archivos: ArchivoMeta[]; tieneAjuste: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; alDia: boolean }) {
-  const router = useRouter();
-  const [viendo, setViendo] = useState<{ id: string; nombre: string } | null>(null);
-  const [simple, setSimple] = useState<{ id: string; nombre: string } | null>(null);
+export default function Informe({ caso, archivos, tieneAjuste, alDia, gen, generar }: { caso: Caso; archivos: ArchivoMeta[]; tieneAjuste: boolean; alDia: boolean; gen: ReturnType<typeof useFlujo<Gen>>; generar: () => Promise<void> }) {
   const [previa, setPrevia] = useState<{ tipo: "informe" } | null>(null);
-  const gen = useFlujo<Gen>(`/api/casos/${caso.id}/generar`);
   const salidas = archivos.filter((a) => a.tipo === "salida");
   const faltantes = gen.resultado?.faltantes ?? [];
   const hayInforme = salidas.length > 0;
   // Con informe ya generado, el botón solo se activa si cambió algo (archivos, fotos, datos, ajuste o leyendas) desde la última generación.
   const hayCambios = !hayInforme || !alDia;
-
-  async function generar() {
-    if (hayInforme && !window.confirm("Se rehará todo el informe con la última versión de los datos. Las ediciones que hayas hecho directamente en el Word o el Excel se descartan. ¿Continuar?")) return;
-    const r = await gen.ejecutar();
-    if (r) router.refresh();
-  }
 
   // Generar el informe es una acción del menú lateral; activa solo si hay algo nuevo que entregar.
   useAccionesMenu([
@@ -52,41 +34,9 @@ export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyend
           Incluye la captura de agrometeorologia.cl con la estación más cercana al riesgo; eso puede tardar un minuto. Se genera con la acción «Generar informe» del menú lateral.
         </p>
         </TituloAyuda>
-        {!tieneAjuste && <p className="aviso aviso-alerta">Primero ejecuta el ajuste (paso 3).</p>}
+        {!tieneAjuste && <p className="aviso aviso-alerta">Primero revisa el ajuste en el paso «Ajustes».</p>}
       </div>
       <OpcionesEntrega casoId={caso.id} entrega={caso.datos.entrega} />
-      <SugerenciasFotos casoId={caso.id} hayFotos={archivos.some((a) => a.tipo === "foto")} />
-      <FotosInforme casoId={caso.id} fotos={archivos.filter((a) => a.tipo === "foto")} enInforme={enInforme} leyendasGrupos={leyendasGrupos} alDia={alDia} hayInforme={hayInforme} puedeGenerar={tieneAjuste} generando={gen.cargando} onRegenerar={generar} />
-      {hayInforme && (
-        <div className="panel p-5">
-          <h3 className="mb-2 font-semibold">Descargas</h3>
-          <ul className="divide-y divide-[var(--borde)]">
-            {salidas.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 py-2">
-                <span className="min-w-0 truncate">{a.nombre} <span className="texto-suave text-xs">· {kb(a.tamano)}</span></span>
-                <span className="flex shrink-0 gap-2">
-                  {/\.(docx|xlsx)$/i.test(a.nombre) && (
-                    <button type="button" className="btn btn-sec" onClick={() => setViendo({ id: a.id, nombre: a.nombre })} aria-label={`Ver y editar ${a.nombre}`}>
-                      <Icono nombre="ojo" /> Ver y editar
-                    </button>
-                  )}
-                  {/\.(txt|zip)$/i.test(a.nombre) && (
-                    <button type="button" className="btn btn-sec" onClick={() => setSimple({ id: a.id, nombre: a.nombre })} aria-label={`${/\.txt$/i.test(a.nombre) ? "Ver y editar" : "Ver contenido de"} ${a.nombre}`}>
-                      <Icono nombre="ojo" /> {/\.txt$/i.test(a.nombre) ? "Ver y editar" : "Ver contenido"}
-                    </button>
-                  )}
-                  {/\.pdf$/i.test(a.nombre) && (
-                    <a className="btn btn-sec" href={`/api/casos/${caso.id}/archivos/${a.id}`} target="_blank" rel="noopener noreferrer" aria-label={`Ver ${a.nombre}`}>
-                      <Icono nombre="ojo" /> Ver
-                    </a>
-                  )}
-                  <a className="btn btn-sec" href={`/api/casos/${caso.id}/archivos/${a.id}?descargar=1`}>Descargar</a>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
       <div className="panel space-y-3 p-5">
         <h3 className="font-semibold">{hayInforme ? "Estado del informe" : "Generación del informe"}</h3>
         <p className="texto-suave text-sm">
@@ -118,8 +68,6 @@ export default function Informe({ caso, archivos, tieneAjuste, enInforme, leyend
         )}
       </div>
       {previa && <Previa casoId={caso.id} cuerpo={previa} titulo="Informe (vista previa)" onCerrar={() => setPrevia(null)} />}
-      {simple && <VistaSimple key={simple.id} casoId={caso.id} archivoId={simple.id} nombre={simple.nombre} onCerrar={() => setSimple(null)} onGuardado={() => router.refresh()} />}
-      {viendo && <VistaDocumento key={viendo.id} casoId={caso.id} archivoId={viendo.id} nombre={viendo.nombre} onCerrar={() => setViendo(null)} onGuardado={() => router.refresh()} />}
     </section>
   );
 }

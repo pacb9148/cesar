@@ -8,20 +8,36 @@ import type { NombreIcono } from "@/components/Iconos";
 import Documentos from "./Documentos";
 import Datos from "./Datos";
 import Ajuste from "./Ajuste";
-import Informe from "./Informe";
+import Informe, { type Gen } from "./Informe";
+import Fotos from "./Fotos";
+import Descargas from "./Descargas";
+import { useFlujo } from "@/components/useFlujo";
+import { useRouter } from "next/navigation";
 
 export type AjusteGuardado = { version: number; salida: SalidaAgente; origen: string; creado: string };
 
 const PESTANAS = [
-  ["documentos", "1 · Documentos", "carpeta"],
-  ["datos", "2 · Datos", "datos"],
-  ["ajuste", "3 · Ajuste", "actividad"],
-  ["informe", "4 · Informe", "informe"],
+  ["documentos", "Documentos", "carpeta"],
+  ["datos", "Datos", "datos"],
+  ["fotos", "Fotos", "imagen"],
+  ["informe", "Informe", "informe"],
+  ["ajuste", "Ajustes", "actividad"],
+  ["editar", "Editar y descargar", "lapiz"],
 ] as const satisfies readonly (readonly [string, string, NombreIcono])[];
 
 export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; ajusteBase: SalidaAgente | null; iaConfigurada: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; informeAlDia: boolean }) {
   const [tab, setTab] = useState<(typeof PESTANAS)[number][0]>("documentos");
+  const router = useRouter();
   const alertas = p.caso.datos.alertas ?? [];
+  // La generación se comparte entre «Fotos» (volver a generar tras ordenar) e «Informe».
+  const gen = useFlujo<Gen>(`/api/casos/${p.caso.id}/generar`);
+  const hayInforme = p.archivos.some((a) => a.tipo === "salida");
+  const tieneAjuste = !!p.ajuste || !!p.ajusteBase;
+  async function generar() {
+    if (hayInforme && !window.confirm("Se rehará todo el informe con la última versión de los datos. Las ediciones que hayas hecho directamente en el Word o el Excel se descartan. ¿Continuar?")) return;
+    const r = await gen.ejecutar();
+    if (r) router.refresh();
+  }
   // Los pasos viven en el menú lateral; aquí solo se trabaja el contenido del paso elegido.
   usePasosMenu(`Siniestro ${p.caso.siniestro}`, PESTANAS.map(([k, etiqueta, icono]) => ({ id: k, etiqueta, icono, activo: tab === k, onClick: () => setTab(k) })));
   return (
@@ -31,17 +47,18 @@ export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; recl
           Siniestro {p.caso.siniestro}
           <span className="texto-suave ml-3 text-base font-normal">{p.caso.datos.asegurado?.nombre}</span>
         </h1>
-        <span className="insignia">{p.caso.modo === "reclamacion" ? "Con presupuesto del contratista" : "Pérdida determinada (sin presupuesto)"}</span>
       </div>
       {alertas.length > 0 && tab !== "documentos" && (
         <div className="aviso aviso-alerta">
-          <strong>{alertas.length} aviso(s) del procesamiento.</strong> Revísalos en el paso «Documentos» del menú.
+          <strong>{alertas.length} aviso(s) del procesamiento.</strong> Revísalos en «Documentos» del menú.
         </div>
       )}
       {tab === "documentos" && <Documentos {...p} />}
       {tab === "datos" && <Datos caso={p.caso} />}
       {tab === "ajuste" && <Ajuste caso={p.caso} reclamacion={p.reclamacion} ajuste={p.ajuste} ajusteBase={p.ajusteBase} iaConfigurada={p.iaConfigurada} />}
-      {tab === "informe" && <Informe caso={p.caso} archivos={p.archivos} tieneAjuste={!!p.ajuste || !!p.ajusteBase} enInforme={p.enInforme} leyendasGrupos={p.leyendasGrupos} alDia={p.informeAlDia} />}
+      {tab === "fotos" && <Fotos casoId={p.caso.id} archivos={p.archivos} enInforme={p.enInforme} leyendasGrupos={p.leyendasGrupos} alDia={p.informeAlDia} hayInforme={hayInforme} puedeGenerar={tieneAjuste} generando={gen.cargando} onRegenerar={generar} />}
+      {tab === "informe" && <Informe caso={p.caso} archivos={p.archivos} tieneAjuste={tieneAjuste} alDia={p.informeAlDia} gen={gen} generar={generar} />}
+      {tab === "editar" && <Descargas caso={p.caso} archivos={p.archivos} />}
     </div>
   );
 }

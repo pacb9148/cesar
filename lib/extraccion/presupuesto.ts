@@ -95,7 +95,9 @@ const celdaNum = (c: ExcelJS.Cell): number | null => {
 type Columnas = { desc: number; um: number; cant: number; pu: number; total: number | null };
 
 /** Cada contratista nombra distinto sus columnas («Costo uni», «P. Unit.», «Valor unitario»…): se reconoce por el sentido, no por una palabra fija. */
-const ES_DESC = /PARTIDA|DESCRIP|DETALLE|ITEM|[IÍ]TEM|TRABAJO|ACTIVIDAD|CONCEPTO/;
+const ES_DESC = /PARTIDA|DESCRIP|DETALLE|TRABAJO|ACTIVIDAD|CONCEPTO/;
+/** «Ítem» solo sirve como descripción si no hay otra columna de texto: casi siempre es el número de la partida. */
+const ES_ITEM = /^(ITEM|[IÍ]TEM)\b/;
 const ES_UM = /^(UNIDAD|UND|UN|U\/M|UM|U\.M\.?|MEDIDA)\b/;
 const ES_CANT = /CANT/;
 const ES_PU = /PREC|COSTO\s*UNI|VALOR\s*UNI|V\.?\s*UNIT|P\.?\s*UNIT|C\.?\s*UNIT|UNITARIO/;
@@ -107,6 +109,7 @@ function buscarCabecera(ws: ExcelJS.Worksheet): { fila: number; col: Columnas } 
   ws.eachRow((row, r) => {
     if (hallada || r > 60) return;
     const col: Partial<Columnas> = {};
+    let item: number | undefined;
     row.eachCell((c, i) => {
       const h = celdaTxt(c).toUpperCase().replace(/\s+/g, " ").trim();
       if (!h) return;
@@ -115,8 +118,9 @@ function buscarCabecera(ws: ExcelJS.Worksheet): { fila: number; col: Columnas } 
       else if (ES_UM.test(h)) col.um ??= i;
       else if (ES_TOTAL.test(h)) col.total ??= i;
       else if (ES_DESC.test(h)) col.desc ??= i;
+      else if (ES_ITEM.test(h)) item ??= i;
     });
-    if (col.um && col.cant && col.pu) hallada = { fila: r, col: { desc: col.desc ?? Math.max(1, col.um - 1), um: col.um, cant: col.cant, pu: col.pu, total: col.total ?? null } };
+    if (col.um && col.cant && col.pu) hallada = { fila: r, col: { desc: col.desc ?? item ?? Math.max(1, col.um - 1), um: col.um, cant: col.cant, pu: col.pu, total: col.total ?? null } };
   });
   return hallada;
 }
@@ -244,4 +248,27 @@ export function parsearPresupuestoPdf(paginas: string[]): ResultadoPresupuesto {
   const mDirecto = lineas.find((l) => /^costo directo/i.test(l));
   if (mDirecto && decl.directo == null) decl.directo = numeroCL(MONTO.exec(mDirecto)?.[1] ?? "0");
   return cerrar(c.resultado(), decl, alertas);
+}
+
+/** Presupuesto ya estructurado (lo entrega la lectura con IA de una imagen, un PDF escaneado o un Word): se arma igual que los demás formatos. */
+export type PresupuestoEstructurado = {
+  secciones: { titulo: string; partidas: { descripcion: string; um: string; cantidad: number; pu: number }[] }[];
+  costoDirecto: number | null;
+  gastosGenerales: number | null;
+  utilidad: number | null;
+  iva: number | null;
+};
+
+export function presupuestoDeEstructura(e: PresupuestoEstructurado): ResultadoPresupuesto {
+  const c = new Constructor();
+  const alertas: string[] = [];
+  for (const s of e.secciones) {
+    c.seccion(s.titulo || "GENERAL");
+    for (const p of s.partidas) {
+      const um = unidadDe(p.um);
+      if (!um) alertas.push(`Partida con unidad desconocida «${p.um}»: «${p.descripcion}» se tomó como global (gl); revísala.`);
+      c.linea(p.descripcion, um ?? "gl", p.cantidad, p.pu);
+    }
+  }
+  return cerrar(c.resultado(), { directo: e.costoDirecto, gg: e.gastosGenerales, util: e.utilidad, iva: e.iva }, alertas);
 }

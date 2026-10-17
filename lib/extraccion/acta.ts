@@ -35,6 +35,10 @@ export type ActaInspeccion = {
   pavimentos: string | null;
   danosEdificio: boolean | null;
   danosContenido: boolean | null;
+  /** «Los daños se produjeron a consecuencia de: …» (punto III). */
+  causa?: string | null;
+  /** Tipo de inmueble del punto III (Casa, Departamento…). */
+  tipoInmueble?: string | null;
   danos: DanoActa[];
 };
 
@@ -131,6 +135,8 @@ export function parsearActa(paginas: string[]): ActaInspeccion {
     pavimentos: limpiar(campo(plano, /Pavimentos:\s*(.*?)\s+V\.\s*INSTRUCCIONES/)),
     danosEdificio: /Da[ñn]os en EDIFICIO:\s*Si/i.test(plano) ? true : /Da[ñn]os en EDIFICIO:\s*No/i.test(plano) ? false : null,
     danosContenido: /Da[ñn]os en CONTENIDO:\s*Si/i.test(plano) ? true : /Da[ñn]os en CONTENIDO:\s*No/i.test(plano) ? false : null,
+    causa: limpiar(campo(plano, /consecuencia de:\s*(.+?)\s+Descripci[óo]n del Inmueble/)),
+    tipoInmueble: limpiar(campo(plano, /Tipo:\s*(.+?)\s+Vigilancia:/)),
     danos,
   };
 }

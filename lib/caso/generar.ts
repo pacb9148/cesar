@@ -6,6 +6,7 @@ import { generarExcel, type EntradaExcel } from "../docs/excel";
 import { generarAnexo } from "../docs/anexo";
 import { verificarPresupuestoGenerado } from "../docs/verificar-presupuesto";
 import { armarFilas } from "../engine/filas";
+import { modernizarEvidencia, parrafoInmueble } from "./parrafo-inmueble";
 import { reparosDeOrigenPrecio } from "../engine/auditoria";
 import { CALIDAD_POR_DEFECTO } from "../fotos/calidad";
 import { seleccionarFotosInforme } from "../docs/fotos-seleccion";
@@ -261,8 +262,9 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     caso: datos,
     valorUF,
     caracteristicas: salida.caracteristicas,
-    evidencia: salida.evidencia_observada,
+    evidencia: modernizarEvidencia(salida.evidencia_observada, acta.danos),
     evidenciaTexto: salida.evidencia_texto,
+    caracteristicasTexto: parrafoInmueble(acta) || undefined,
     ajusteTexto: salida.ajuste_de_perdida_texto,
     totales: { reclamacionPesos: res.recTotalPesos, reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF },
     meteo: met,
@@ -352,8 +354,9 @@ export async function previaInforme(casoId: string, usuarioId: string): Promise<
     caso: datos,
     valorUF,
     caracteristicas: salida.caracteristicas,
-    evidencia: salida.evidencia_observada,
+    evidencia: modernizarEvidencia(salida.evidencia_observada, acta.danos),
     evidenciaTexto: salida.evidencia_texto,
+    caracteristicasTexto: parrafoInmueble(acta) || undefined,
     ajusteTexto: salida.ajuste_de_perdida_texto,
     totales: { reclamacionPesos: res.recTotalPesos, reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF },
     meteo: null,

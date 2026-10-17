@@ -1,5 +1,5 @@
 import { conUsuario, fallo, json } from "@/lib/api";
-import { clasificarArchivo } from "@/lib/caso/clasificar";
+import { clasificarArchivo, clasificarEnRanura, esRanura, FORMATOS_DOCUMENTO } from "@/lib/caso/clasificar";
 import { expandirZip, MAX_BYTES_ZIP } from "@/lib/caso/zip-entrada";
 import { auditar, guardarArchivo, listarArchivos, obtenerCaso } from "@/lib/caso/repositorio";
 
@@ -7,7 +7,7 @@ export const maxDuration = 300;
 export const runtime = "nodejs";
 
 const MAX_BYTES = 30 * 1024 * 1024;
-const PERMITIDOS = /\.(pdf|docx?|xlsx?|jpe?g|png|webp)$/i;
+const PERMITIDOS = FORMATOS_DOCUMENTO;
 
 export const GET = conUsuario<{ id: string }>(async (_req, u, { id }) => {
   if (!(await obtenerCaso(id, u.id))) return fallo("Caso no encontrado", 404);
@@ -20,6 +20,9 @@ export const POST = conUsuario<{ id: string }>(async (req, u, { id }) => {
   const form = await req.formData();
   const recibidos = form.getAll("archivos").filter((x): x is File => x instanceof File);
   const rutasForm = form.getAll("rutas").map(String);
+  // «ranura»: dónde la subió el usuario (inspección, presupuesto o fotos). Sin ella se clasifica por el nombre, como antes.
+  const ranuraForm = form.get("ranura");
+  const ranura = esRanura(ranuraForm) ? ranuraForm : null;
   if (!recibidos.length) return fallo("No llegó ningún archivo");
   const aceptados: { nombre: string; tipo: string; recinto: string | null }[] = [];
   const rechazados: { nombre: string; motivo: string }[] = [];
@@ -57,7 +60,11 @@ export const POST = conUsuario<{ id: string }>(async (req, u, { id }) => {
       rechazados.push({ nombre: f.name, motivo: "supera 30 MB" });
       continue;
     }
-    const c = clasificarArchivo(f.name, rutas[i] || null, f.type);
+    const c = ranura ? clasificarEnRanura(ranura, f.name, rutas[i] || null, f.type) : clasificarArchivo(f.name, rutas[i] || null, f.type);
+    if (!c) {
+      rechazados.push({ nombre: f.name, motivo: ranura === "fotos" ? "no es una imagen" : "formato no admitido aquí" });
+      continue;
+    }
     // Los .doc/.docx sueltos de correspondencia no aportan datos: se guardan igual como "otro".
     await guardarArchivo({ casoId: id, nombre: f.name, tipo: c.tipo, mime: f.type || "application/octet-stream", recinto: c.recinto, orden: orden++, contenido: Buffer.from(await f.arrayBuffer()) });
     aceptados.push({ nombre: f.name, tipo: c.tipo, recinto: c.recinto });

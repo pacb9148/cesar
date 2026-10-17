@@ -44,6 +44,8 @@ export type EntradaInforme = {
   alOmitirFoto?: (f: FotoOrigen) => void;
   /** Evidencia redactada como párrafo: reemplaza a la lista de viñetas por recinto. */
   evidenciaTexto?: string;
+  /** Párrafo de características del inmueble armado con la inspección; si viene, reemplaza a la frase de la plantilla. */
+  caracteristicasTexto?: string;
   ajusteTexto: string;
   totales: { reclamacionPesos: number; reclamacionUF: number; ajusteUF: number; indemnizacionUF: number };
   meteo: Meteo | null;
@@ -227,7 +229,8 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
       datoOFalta(k.cubierta),
       datoOFalta(k.pavimentos),
     ];
-    reemplazarEnParrafo(pCar, /x{2,}/, (_m, i) => vals[i] ?? FALTA);
+    if (e.caracteristicasTexto?.trim()) reemplazarEnParrafo(pCar, /^[\s\S]+$/, () => e.caracteristicasTexto!.trim());
+    else reemplazarEnParrafo(pCar, /x{2,}/, (_m, i) => vals[i] ?? FALTA);
   }
 
   // Viñeta "•" propia: la numeración 1 de la plantilla usa un tilde (Wingdings).
@@ -251,11 +254,10 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     if (e.evidenciaTexto?.trim())
       pXxx.parentNode!.insertBefore(crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="120"/><w:jc w:val="both"/></w:pPr><w:r>${rpr("")}<w:t xml:space="preserve">${escXml(e.evidenciaTexto.trim())}</w:t></w:r></w:p>`), pXxx);
     else for (const ev of e.evidencia) {
-      const m2 = ev.m2_acta != null ? ` ${nf(ev.m2_acta, ev.m2_acta % 1 ? 2 : 0)} m² según acta.` : "";
       const pXml =
-        `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="90"/></w:numPr><w:spacing w:before="0" w:after="0"/><w:ind w:left="720" w:hanging="360"/><w:jc w:val="both"/></w:pPr>` +
+        `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:spacing w:before="0" w:after="0"/><w:ind w:left="720" w:hanging="360"/><w:jc w:val="both"/></w:pPr>` +
         `<w:r>${rpr('<w:i/><w:u w:val="single"/>')}<w:t xml:space="preserve">${escXml(ev.recinto)}:</w:t></w:r>` +
-        `<w:r>${rpr("")}<w:t xml:space="preserve"> ${escXml(ev.vineta)}${m2}${ev.atribuible ? "" : " No atribuible al siniestro."}</w:t></w:r></w:p>`;
+        `<w:r>${rpr("")}<w:t xml:space="preserve"> ${escXml(ev.vineta)}${ev.atribuible ? "" : " No atribuible al siniestro."}</w:t></w:r></w:p>`;
       pXxx.parentNode!.insertBefore(crearEl(doc, pXml), pXxx);
     }
     pXxx.parentNode!.removeChild(pXxx);

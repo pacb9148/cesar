@@ -1,9 +1,14 @@
 import { emitir } from "../traza";
 import { datosCasoSchema, type DatosCaso } from "../domain/tipos";
 import { hashReclamacion } from "../engine/hash";
-import { parsearActa, type ActaInspeccion } from "../extraccion/acta";
-import { esEscaneado, textoPdf } from "../extraccion/pdf";
-import { parsearPresupuestoPdf, parsearPresupuestoXlsx, type ResultadoPresupuesto } from "../extraccion/presupuesto";
+import type { ActaInspeccion } from "../extraccion/acta";
+import { textoPdf } from "../extraccion/pdf";
+import type { ResultadoPresupuesto } from "../extraccion/presupuesto";
+import type { ActaConExtras } from "../extraccion/ia-documentos";
+import type { Fuente } from "../extraccion/universal";
+import { leerInspeccion, leerPresupuesto } from "./leer-documentos";
+import { ClienteConRespaldo } from "../ia/rotacion";
+import { RegistroDb } from "../ia/repo-proveedores";
 import mammoth from "mammoth";
 import { consulta } from "../db";
 import { clasificarArchivo } from "./clasificar";
@@ -117,19 +122,20 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
   const leidos: string[] = [];
   emitir("info", "documentos", "Buscando los documentos cargados en el caso");
 
-  let acta: ActaInspeccion | null = null;
+  // Inspección y presupuesto pueden venir en cualquier formato: lectura directa si se reconoce, IA (con visión) si no.
+  const cliente = () => new ClienteConRespaldo(new RegistroDb(usuarioId), 3);
+  const aFuentes = (l: { nombre: string; mime: string; contenido: Buffer }[]): Fuente[] => l.map((x) => ({ nombre: x.nombre, mime: x.mime, contenido: x.contenido }));
+  let acta: ActaConExtras | null = null;
   const actas = await archivosConContenido(casoId, "acta");
-  if (actas[0]) {
-    const pag = await textoPdf(actas[0].contenido);
-    emitir("info", "acta", `Acta «${actas[0].nombre}»: ${pag.length} páginas con ${pag.reduce((t, x) => t + x.length, 0)} caracteres de texto`);
-    if (esEscaneado(pag)) alertas.push("El acta está escaneada (sin texto): no se pudo leer. Sube la versión original en PDF.");
-    else {
-      acta = parsearActa(pag);
-      leidos.push(actas[0].nombre);
-      emitir("ok", "acta", `Acta leída: siniestro ${acta.siniestro ?? "?"}, ${acta.danos.length} recinto(s) dañado(s), ${acta.hechos?.length ?? 0} caracteres de hechos`);
-      if (acta.danos.length === 0) alertas.push("No se encontraron recintos dañados en el acta.");
+  if (actas.length) {
+    emitir("info", "acta", `Inspección: ${actas.map((a) => a.nombre).join(", ")}`);
+    acta = await leerInspeccion(aFuentes(actas), cliente, alertas);
+    if (acta) {
+      leidos.push(...actas.map((a) => a.nombre));
+      emitir("ok", "acta", `Inspección leída: siniestro ${acta.siniestro ?? "?"}, ${acta.danos.length} recinto(s) dañado(s), ${acta.hechos?.length ?? 0} caracteres de hechos`);
+      if (acta.danos.length === 0) alertas.push("No se encontraron recintos dañados en la inspección.");
     }
-  } else alertas.push("Falta el Acta de inspección.");
+  } else alertas.push("Falta el documento de inspección.");
 
   let prov: Provision | null = null;
   const provs = await archivosConContenido(casoId, "provision");
@@ -157,19 +163,12 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
   }
 
   let presupuesto: ResultadoPresupuesto | null = null;
-  const xl = await archivosConContenido(casoId, "presupuesto_xlsx");
-  const pd = await archivosConContenido(casoId, "presupuesto_pdf");
-  if (xl[0]) {
-    presupuesto = await parsearPresupuestoXlsx(xl[0].contenido);
-    emitir("ok", "presupuesto", `Presupuesto Excel leído: ${presupuesto.reclamacion.lineas.length} partidas`);
-    leidos.push(xl[0].nombre);
-  } else if (pd[0]) {
-    const pag = await textoPdf(pd[0].contenido);
-    if (esEscaneado(pag)) alertas.push("El presupuesto en PDF está escaneado: se requiere el original con texto.");
-    else {
-      presupuesto = parsearPresupuestoPdf(pag);
-      emitir("ok", "presupuesto", `Presupuesto PDF leído: ${presupuesto.reclamacion.lineas.length} partidas`);
-      leidos.push(pd[0].nombre);
+  const docsPresupuesto = [...(await archivosConContenido(casoId, "presupuesto_xlsx")), ...(await archivosConContenido(casoId, "presupuesto_pdf")), ...(await archivosConContenido(casoId, "presupuesto_otro"))];
+  if (docsPresupuesto.length) {
+    presupuesto = await leerPresupuesto(aFuentes(docsPresupuesto), cliente, alertas);
+    if (presupuesto) {
+      leidos.push(...docsPresupuesto.map((d) => d.nombre));
+      emitir("ok", "presupuesto", `Presupuesto leído: ${presupuesto.reclamacion.lineas.length} partidas`);
     }
   }
   if (presupuesto) {

@@ -17,6 +17,7 @@ export const ICONOS = {
   rotarDer: D("M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"),
   volteoH: D("M12 3v18M8 7l-5 5 5 5V7zM16 7l5 5-5 5V7z"),
   volteoV: D("M3 12h18M7 8l5-5 5 5H7zM7 16l5 5 5-5H7z"),
+  imagen: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-8 8" /></>,
   cuadricula: D("M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18"),
   mano: D("M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.9-2.4L3.4 16a2 2 0 0 1 3.2-2.4L8 15"),
   sol: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,

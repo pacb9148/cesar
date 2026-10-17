@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { conUsuario, fallo, json } from "@/lib/api";
-import { clasificarArchivo, type TipoArchivo } from "@/lib/caso/clasificar";
+import { clasificarArchivo, FORMATOS_DOCUMENTO, type TipoArchivo } from "@/lib/caso/clasificar";
 import { auditar, contenidoArchivo, eliminarArchivo, obtenerCaso, reemplazarArchivo } from "@/lib/caso/repositorio";
 
 export const GET = conUsuario<{ id: string; aid: string }>(async (req, u, { id, aid }) => {
@@ -31,7 +31,7 @@ export const DELETE = conUsuario<{ id: string; aid: string }>(async (_req, u, { 
 });
 
 const MAX_BYTES = 30 * 1024 * 1024;
-const PERMITIDOS = /\.(pdf|docx?|xlsx?|jpe?g|png|webp)$/i;
+const PERMITIDOS = FORMATOS_DOCUMENTO;
 
 /** Reemplaza el contenido de un archivo cargado por otro (por ejemplo, una versión corregida del presupuesto). Hay que volver a leer los documentos. */
 export const PUT = conUsuario<{ id: string; aid: string }>(async (req, u, { id, aid }) => {

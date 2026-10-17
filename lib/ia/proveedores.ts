@@ -64,7 +64,11 @@ export class ClienteAnthropic implements ClienteLlm {
 
   async generarJson(o: { system: string; partes: Parte[]; schema: object; maxSalida?: number }): Promise<RespuestaLlm> {
     const content = o.partes.map((p) =>
-      "text" in p ? { type: "text", text: p.text } : { type: "image", source: { type: "base64", media_type: p.inlineData.mimeType, data: p.inlineData.data } },
+      "text" in p
+        ? { type: "text", text: p.text }
+        : p.inlineData.mimeType === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: p.inlineData.data } }
+          : { type: "image", source: { type: "base64", media_type: p.inlineData.mimeType, data: p.inlineData.data } },
     );
     // Salida estructurada por herramienta forzada: es el mecanismo que acepta toda la familia Claude.
     const cuerpo = (max: number) => ({

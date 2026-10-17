@@ -1,6 +1,7 @@
 import { CLAVES_CARACTERISTICAS, type SalidaAgente } from "../domain/tipos";
 import type { ActaInspeccion } from "../extraccion/acta";
 import { caracteristicasDelActa } from "../ia/agente";
+import { vinetaDeDano } from "./parrafo-inmueble";
 
 /**
  * Ajuste de partida: todas las partidas del presupuesto aceptadas tal como se reclamaron («sin ajustar»), listo para que el liquidador
@@ -14,7 +15,7 @@ export function salidaBase(acta: ActaInspeccion | null): SalidaAgente {
     caracteristicas,
     evidencia_observada: (acta?.danos ?? []).map((x) => ({
       recinto: x.recinto,
-      vineta: `${x.recinto}: ${x.cantidad ?? 0} m² con daño de tipo ${x.tipoDano || "no clasificado"} registrado en el acta de inspección.`,
+      vineta: vinetaDeDano(x),
       m2_acta: x.cantidad ?? null,
       atribuible: true,
       fotos: [],

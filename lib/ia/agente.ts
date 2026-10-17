@@ -11,6 +11,7 @@ import { clasificacionPorDefecto, clasificacionSchema, decidirLinea, type Clasif
 import { PROMPT_VERSION, SYSTEM_CLASIFICAR, SYSTEM_NARRATIVA } from "./prompt";
 import { SinProveedores } from "./rotacion";
 import { validarSalida, type ResultadoValidacion } from "./validadores";
+import { vinetaDeDano } from "../caso/parrafo-inmueble";
 
 export type FotoModelo = { id: string; recinto: string; mime: string; base64: string };
 
@@ -218,7 +219,7 @@ function narrativaAutomatica(e: EntradaAgente, d: Digesto): Narrativa {
   const letras = Object.entries(d.porLetra).map(([l, n]) => `${l}: ${n}`).join(", ") || "sin observaciones";
   return {
     caracteristicas,
-    evidencia_observada: e.acta.danos.map((x) => ({ recinto: x.recinto, vineta: `${x.recinto}: ${x.cantidad ?? 0} m² con daño de tipo ${x.tipoDano || "no clasificado"} registrado en el acta de inspección.`, m2_acta: x.cantidad ?? null, atribuible: true, fotos: [] })),
+    evidencia_observada: e.acta.danos.map((x) => ({ recinto: x.recinto, vineta: vinetaDeDano(x), m2_acta: x.cantidad ?? null, atribuible: true, fotos: [] })),
     lineas_adicionales: [],
     ajuste_de_perdida_texto:
       "El ajuste se realizó sobre la medición del acta de inspección y precios de baremo a todo costo, acotando las cantidades a los m² dañados y a los mínimos técnicos constructivos, y excluyendo los daños por mantenimiento, desgaste o deterioro progresivo.",
