@@ -98,3 +98,14 @@ describe("orden de las estancias según el presupuesto", () => {
     expect(ordenarGruposPorPresupuesto(fotos, [])).toBe(fotos);
   });
 });
+
+describe("arrastrar y soltar fotos", () => {
+  it("la foto arrastrada ocupa el lugar de la de destino, hacia delante o hacia atrás", async () => {
+    const { soltarFoto } = await import("../lib/fotos/orden");
+    expect(soltarFoto(["a", "b", "c", "d"], "a", "c")).toEqual(["b", "c", "a", "d"]);
+    expect(soltarFoto(["a", "b", "c", "d"], "d", "b")).toEqual(["a", "d", "b", "c"]);
+    expect(soltarFoto(["a", "b", "c"], "x", "b")).toEqual(["a", "x", "b", "c"]); // una foto que no iba entra en esa posición
+    expect(soltarFoto(["a", "b"], "a", "z")).toEqual(["a", "b"]);
+    expect(soltarFoto(["a", "b"], "a", "a")).toEqual(["a", "b"]);
+  });
+});

@@ -14,8 +14,9 @@ const cuerpo = z
     denunciaTexto: z.string().max(4000).nullable(),
     fechas: z.object({ emision: fecha.nullable(), informadoPartes: fecha.nullable() }).partial(),
     poliza: z.object({ sumaAseguradaUF: z.number().nonnegative(), deducibleUF: z.number().nonnegative() }).partial(),
-    // La UF ronda los 40.000 pesos: un valor fuera de rango es un error de tipeo (p. ej. 4.084.479 por borrar el decimal).
+    textos: z.object({ caracteristicas: z.string().max(2000), evidencia: z.string().max(6000) }).partial(),
     entrega: z.object({ calidad: z.enum(["150", "300"]), anexoCompacto: z.boolean() }),
+    // La UF ronda los 40.000 pesos: un valor fuera de rango es un error de tipeo (p. ej. 4.084.479 por borrar el decimal).
     valor_uf: z.number().min(1000, "La UF parece demasiado baja").max(200000, "La UF parece demasiado alta: revisa el punto y la coma decimal"),
   })
   .partial();
@@ -33,6 +34,7 @@ export const PATCH = conUsuario<{ id: string }>(async (req, u, { id }) => {
     asegurado: { ...d.asegurado, ...resto.asegurado, ...(resto.asegurado?.genero === null ? { genero: undefined } : {}) },
     fechas: { ...d.fechas, ...resto.fechas },
     poliza: { ...d.poliza, ...resto.poliza },
+    ...(resto.textos ? { textos: { ...d.textos, ...resto.textos } } : {}),
   } as typeof d;
   if (resto.siniestro) {
     const otro = await casoConSiniestro(u.id, resto.siniestro, id);

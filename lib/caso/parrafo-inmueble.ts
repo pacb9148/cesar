@@ -45,7 +45,10 @@ export function vinetaDeDano(d: Pick<DanoActa, "descripcion" | "tipoDano">): str
   const hallados = ELEMENTOS.map(([re, nombre]) => ({ nombre, pos: desc.search(re) })).filter((x) => x.pos >= 0).sort((a, b) => a.pos - b.pos).map((x) => x.nombre);
   const tipo = (d.tipoDano || "afectado por agua").toLowerCase().replace(/por agua/, "por humedad").trim();
   const elementos = hallados.length ? mayus(unir(hallados)) : mayus(d.descripcion.trim().replace(/^da(ñ|n)os? (en|de)\s+/i, "").replace(/\s+por agua$/i, "") || "Recinto");
-  const sinTipo = /^afectado|manchado|roto|reparado|fisurado|desprendido|oxidado/.test(tipo) ? tipo : `con ${tipo}`;
+  // Concordancia con un único elemento femenino: «Cubierta rota», «Ventana afectada».
+  const femenino = hallados.length === 1 && ["cubierta", "ventana", "puerta"].includes(hallados[0]);
+  const tipoConcordado = femenino ? tipo.replace(/^(\p{L}+)o(?=\s|$)/u, "$1a") : tipo;
+  const sinTipo = /^afectado|manchado|roto|reparado|fisurado|desprendido|oxidado/.test(tipo) ? tipoConcordado : `con ${tipo}`;
   return `${elementos} ${sinTipo}.`;
 }
 

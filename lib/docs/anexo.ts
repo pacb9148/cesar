@@ -4,18 +4,17 @@ import { readFileSync } from "node:fs";
 import { escXml, hijos, NS_W, parse, serializar, crearEl, type Doc } from "./docx-xml";
 import { fotoFinal } from "../fotos/procesar";
 import type { Calidad } from "../fotos/calidad";
-import { ordenarPorGrupo } from "../fotos/orden";
-import { ESTILO_PIE_FOTOS, ESTILO_TITULO_FOTOS, piezasDeGrupo, type FotoCelda } from "./fotos-xml";
+import { ESTILO_PIE_FOTOS, ESTILO_TITULO_FOTOS, bloquesPorGrupo, type FotoCelda } from "./fotos-xml";
 import type { FotoInforme } from "./word";
 
 /** Márgenes del anexo compacto en twips: 1,5 cm arriba/abajo, 1,84 cm izquierda/derecha. */
 export const MARGENES_COMPACTOS = { top: 850, bottom: 850, left: 1043, right: 1043 } as const;
 
 /**
- * Anexo de fotografías: portada + 2×2 por recinto. Se construye sobre la misma plantilla del informe
+ * Anexo de fotografías: portada + las fotos del informe con su misma disposición (2 × 3 por estancia). Se construye sobre la misma plantilla del informe
  * para heredar cabecera con logo, pies y estilos, y se vacía el cuerpo.
  */
-export async function generarAnexo(o: { siniestro: string; asegurado: string; liquidacion: string; anio: string; fotos: FotoInforme[]; pies?: Record<string, string>; calidad?: Calidad; compacto?: boolean; alOmitirFoto?: (f: FotoInforme) => void }): Promise<Buffer> {
+export async function generarAnexo(o: { siniestro: string; asegurado: string; liquidacion: string; anio: string; fotos: FotoInforme[]; fachada?: Buffer; pies?: Record<string, string>; calidad?: Calidad; compacto?: boolean; alOmitirFoto?: (f: FotoInforme) => void }): Promise<Buffer> {
   const zip = new PizZip(readFileSync(join(process.cwd(), "plantillas", "informe.docx")));
   const doc: Doc = parse(zip.file("word/document.xml")!.asText());
   const body = doc.getElementsByTagNameNS(NS_W, "body")[0] as unknown as Element;
@@ -56,22 +55,19 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
     add1(`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`);
   }
 
-  // Todas las fotos del caso, por recinto, en cuadrículas de 2 × 3 con el mismo tamaño y leyenda que el informe.
-  const recintos = [...new Set(o.fotos.map((f) => f.recinto))];
-  // Un bloque por estancia (título, tabla(s) y leyenda del grupo, todo fuera de las tablas); el orden de las estancias es el de las fotos recibidas.
-  const piezas: string[] = [];
-  for (const rc of recintos) {
-    const celdas: FotoCelda[] = [];
-    for (const f of ordenarPorGrupo(o.fotos.filter((x) => x.recinto === rc))) {
-      const final = await fotoFinal(f, o.calidad ?? "300");
-      if (!final) {
-        o.alOmitirFoto?.(f);
-        continue;
-      }
-      celdas.push({ rid: add(final), leyenda: f.edicion?.leyenda ?? "", id: f.id });
+  // Las mismas fotos del informe, en el mismo orden y disposición: fachada primero y sola, y un bloque por estancia (título, tabla(s) y leyenda del
+  // grupo, todo fuera de las tablas). El orden de las estancias y de las fotos es el de la lista recibida (la selección del informe).
+  const celdas: FotoCelda[] = [];
+  for (const f of o.fotos) {
+    const final = await fotoFinal(f, o.calidad ?? "300");
+    if (!final) {
+      o.alOmitirFoto?.(f);
+      continue;
     }
-    piezas.push(...piezasDeGrupo(celdas, { titulo: rc, pie: o.pies?.[rc]?.trim() || undefined }));
+    celdas.push({ rid: add(final), leyenda: f.edicion?.leyenda ?? "", id: f.id, grupo: f.recinto });
   }
+  const fachada: FotoCelda | null = o.fachada ? { rid: add(o.fachada), leyenda: "" } : null;
+  const piezas = bloquesPorGrupo(celdas, o.pies ?? {}, fachada).flat();
   // Cada tabla de 6 fotos casi llena la página: el salto va antes de cada título (o de una tabla que sigue a otra) y en un párrafo de 1 pt para no desbordar.
   const salto = o.compacto ? "" : `<w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:br w:type="page"/></w:r>`;
   const separador = `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr>${salto}</w:p>`;

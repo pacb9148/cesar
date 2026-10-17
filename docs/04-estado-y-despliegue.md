@@ -110,3 +110,7 @@ npx tsx scripts/e2e.mts 1981023
 - Menú lateral desplegable con el orden Documentos, Datos, Fotos, Informe, Ajustes, Editar y descargar.
 - Informe: párrafo del inmueble y evidencia con ✓ desde la inspección; fotos por estancia en el orden del presupuesto, con título y leyenda fuera de las tablas; editor con fuente, tamaño, color y alineación; giro fino de fotos; miniaturas con la edición aplicada.
 - Sin cambios de variables de entorno ni de migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 18/10/2026
+- Giro de fotos de 360°; ordenar fotos arrastrando; textos del informe (características y evidencia) editables en «Datos» con «Guardar e insertar»; el editor del informe ya no dibuja líneas de tabla donde el Word no las tiene; el anexo repite las fotos del informe con su misma disposición; y sin presupuesto se parte de una plantilla base con las partidas que salen de la evidencia de la inspección.
+- Sin cambios de variables de entorno ni de migraciones. El push a `main` dispara el despliegue automático en Coolify.

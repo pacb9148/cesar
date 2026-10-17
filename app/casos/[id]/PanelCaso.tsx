@@ -8,6 +8,7 @@ import type { NombreIcono } from "@/components/Iconos";
 import Documentos from "./Documentos";
 import Datos from "./Datos";
 import Ajuste from "./Ajuste";
+import type { ActaInspeccion } from "@/lib/extraccion/acta";
 import Informe, { type Gen } from "./Informe";
 import Fotos from "./Fotos";
 import Descargas from "./Descargas";
@@ -25,7 +26,7 @@ const PESTANAS = [
   ["editar", "Editar y descargar", "lapiz"],
 ] as const satisfies readonly (readonly [string, string, NombreIcono])[];
 
-export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; ajusteBase: SalidaAgente | null; iaConfigurada: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; informeAlDia: boolean }) {
+export default function PanelCaso(p: { acta: ActaInspeccion | null; propuestaTextos: { caracteristicas: string; evidencia: string } | null; caso: Caso; archivos: ArchivoMeta[]; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; ajusteBase: SalidaAgente | null; iaConfigurada: boolean; enInforme: string[]; leyendasGrupos: Record<string, string>; informeAlDia: boolean }) {
   const [tab, setTab] = useState<(typeof PESTANAS)[number][0]>("documentos");
   const router = useRouter();
   const alertas = p.caso.datos.alertas ?? [];
@@ -54,8 +55,8 @@ export default function PanelCaso(p: { caso: Caso; archivos: ArchivoMeta[]; recl
         </div>
       )}
       {tab === "documentos" && <Documentos {...p} />}
-      {tab === "datos" && <Datos caso={p.caso} />}
-      {tab === "ajuste" && <Ajuste caso={p.caso} reclamacion={p.reclamacion} ajuste={p.ajuste} ajusteBase={p.ajusteBase} iaConfigurada={p.iaConfigurada} />}
+      {tab === "datos" && <Datos caso={p.caso} propuesta={p.propuestaTextos} hayInforme={hayInforme} />}
+      {tab === "ajuste" && <Ajuste caso={p.caso} reclamacion={p.reclamacion} ajuste={p.ajuste} ajusteBase={p.ajusteBase} iaConfigurada={p.iaConfigurada} acta={p.acta} />}
       {tab === "fotos" && <Fotos casoId={p.caso.id} archivos={p.archivos} enInforme={p.enInforme} leyendasGrupos={p.leyendasGrupos} alDia={p.informeAlDia} hayInforme={hayInforme} puedeGenerar={tieneAjuste} generando={gen.cargando} onRegenerar={generar} />}
       {tab === "informe" && <Informe caso={p.caso} archivos={p.archivos} tieneAjuste={tieneAjuste} alDia={p.informeAlDia} gen={gen} generar={generar} />}
       {tab === "editar" && <Descargas caso={p.caso} archivos={p.archivos} />}

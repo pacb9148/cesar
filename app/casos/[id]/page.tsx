@@ -8,6 +8,7 @@ import { seleccionarFotosInforme } from "@/lib/docs/fotos-seleccion";
 import { salidaBase } from "@/lib/caso/ajuste-base";
 import type { ActaInspeccion } from "@/lib/extraccion/acta";
 import PanelCaso from "./PanelCaso";
+import { textosDelInforme, textoDeEvidencia } from "@/lib/caso/textos-informe";
 import { ordenarGruposPorPresupuesto } from "@/lib/fotos/orden";
 
 export const dynamic = "force-dynamic";
@@ -28,15 +29,20 @@ export default async function PaginaCaso({ params }: { params: Promise<{ id: str
   const enInforme = acta ? seleccionarFotosInforme(fotos, acta).fotos.map((f) => f.id) : [];
   const [leyendasGrupos, alDia] = await Promise.all([leerLeyendasGrupos(id), informeAlDia(id)]);
   // Con presupuesto pero sin ajuste guardado, el paso Ajuste parte de «sin ajustar»: todas las partidas tal como se reclamaron, editables a mano.
-  const ajusteBase = recl && !ajuste && caso.modo === "reclamacion" ? salidaBase(acta) : null;
+  const ajusteBase = !ajuste && acta ? (recl && caso.modo === "reclamacion" ? salidaBase(acta) : caso.modo === "perdida_determinada" ? salidaBase(acta, { conPartidas: true }) : null) : null;
+  const salidaTextos = ajuste?.salida ?? salidaBase(acta);
+  const textos = acta ? textosDelInforme(caso.datos, acta, salidaTextos) : null;
+  const propuestaTextos = textos ? { caracteristicas: textos.caracteristicas, evidencia: textoDeEvidencia(textos.evidencia) } : null;
   return (
     <Shell nombre={u.nombre}>
         <PanelCaso
+          propuestaTextos={propuestaTextos}
           caso={JSON.parse(JSON.stringify(caso))}
           archivos={JSON.parse(JSON.stringify(archivosEnOrden))}
           reclamacion={recl ? JSON.parse(JSON.stringify(recl.datos)) : null}
           ajuste={ajuste ? JSON.parse(JSON.stringify(ajuste)) : null}
           ajusteBase={ajusteBase}
+          acta={acta ? JSON.parse(JSON.stringify(acta)) : null}
           iaConfigurada={ia}
           enInforme={enInforme}
           leyendasGrupos={leyendasGrupos}

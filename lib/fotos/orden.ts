@@ -52,3 +52,16 @@ export function ordenarGruposPorPresupuesto<T extends { recinto: string }>(fotos
   });
   return orden.flatMap((r) => fotos.filter((f) => f.recinto === r));
 }
+
+/**
+ * Arrastrar y soltar una foto sobre otra: la arrastrada ocupa el lugar de la de destino (si venía de antes, queda detrás; si venía de después, delante).
+ * Una foto que aún no iba al informe entra en esa posición. Si el destino no está en la lista no cambia nada.
+ */
+export function soltarFoto(ids: string[], arrastrada: string, destino: string): string[] {
+  if (arrastrada === destino || !ids.includes(destino)) return ids;
+  const sin = ids.filter((x) => x !== arrastrada);
+  const k = sin.indexOf(destino);
+  const desde = ids.indexOf(arrastrada);
+  const idx = desde >= 0 && desde < ids.indexOf(destino) ? k + 1 : k;
+  return [...sin.slice(0, idx), arrastrada, ...sin.slice(idx)];
+}

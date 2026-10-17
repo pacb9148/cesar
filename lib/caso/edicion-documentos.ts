@@ -6,7 +6,7 @@ import { generarAnexo } from "../docs/anexo";
 import { CALIDAD_POR_DEFECTO } from "../fotos/calidad";
 import { docxAPdf, motorPdfDisponible } from "../docs/pdf";
 import { seleccionarFotosInforme } from "../docs/fotos-seleccion";
-import { actualizarTotales, reemplazarCuadro, reemplazarFotos, type FotoParaWord } from "../docs/sincronizar-word";
+import { actualizarTotales, reemplazarCuadro, reemplazarFotos, reemplazarTextosDatos, type FotoParaWord } from "../docs/sincronizar-word";
 import { aplicarEdiciones, docxAVista, type BloqueVista, type EdicionesWord } from "../docs/vista-docx";
 import { aplicarCeldas, cargarLibro, libroAVista, type CambioCelda, type CambioFormato, type HojaVista } from "../docs/vista-xlsx";
 import type { EntradaExcel } from "../docs/excel";
@@ -14,7 +14,9 @@ import { datosCasoSchema } from "../domain/tipos";
 import { leerPlanilla } from "../extraccion/planilla";
 import type { ActaInspeccion } from "../extraccion/acta";
 import { leerLeyendasGrupos } from "./generacion";
-import { fotosPerezosas, guardarExtraccion, leerExtraccion, obtenerCaso } from "./repositorio";
+import { fotosPerezosas, guardarExtraccion, leerExtraccion, obtenerCaso, ultimoAjuste } from "./repositorio";
+import { salidaBase } from "./ajuste-base";
+import { textosDelInforme } from "./textos-informe";
 
 export type VistaDocumento =
   | { tipo: "docx"; nombre: string; bloques: BloqueVista[] }
@@ -142,8 +144,8 @@ export async function sincronizarFotos(casoId: string, usuarioId: string): Promi
   const { todas: fotos, acta } = await fotosParaWord(casoId);
   const avisos: string[] = [];
   const calidad = caso.datos.entrega?.calidad ?? CALIDAD_POR_DEFECTO;
+  const elegidas = acta ? seleccionarFotosInforme(fotos, acta).fotos : fotos;
   if (acta) {
-    const { fotos: elegidas } = seleccionarFotosInforme(fotos, acta);
     const pies = await leerLeyendasGrupos(casoId);
     const r = await reemplazarFotos(informe.contenido, elegidas, pies, { calidad, alOmitirFoto: (f) => avisos.push(`Foto omitida por estar dañada: ${f.id}`) });
     if (r.encontrado) await reemplazar(informe.id, r.buffer);
@@ -152,7 +154,7 @@ export async function sincronizarFotos(casoId: string, usuarioId: string): Promi
   const anexo = todas.find((a) => /^Anexo/i.test(a.nombre) && esDocx(a.nombre));
   if (anexo) {
     const d = caso.datos;
-    await reemplazar(anexo.id, await generarAnexo({ siniestro: d.siniestro ?? "", asegurado: d.asegurado?.nombre ?? "", liquidacion: d.liquidacion ?? "", anio: (d.fechas?.ocurrencia ?? "").slice(0, 4), fotos, pies: await leerLeyendasGrupos(casoId), calidad, compacto: caso.datos.entrega?.anexoCompacto, alOmitirFoto: (f) => avisos.push(`Foto omitida del anexo por estar dañada: ${f.id}`) }));
+    await reemplazar(anexo.id, await generarAnexo({ siniestro: d.siniestro ?? "", asegurado: d.asegurado?.nombre ?? "", liquidacion: d.liquidacion ?? "", anio: (d.fechas?.ocurrencia ?? "").slice(0, 4), fotos: elegidas, fachada: (await (await import("./generar")).fachadaDelActa(casoId))[0], pies: await leerLeyendasGrupos(casoId), calidad, compacto: caso.datos.entrega?.anexoCompacto, alOmitirFoto: (f) => avisos.push(`Foto omitida del anexo por estar dañada: ${f.id}`) }));
   }
   return [...avisos, ...(await rehacerDerivados(casoId, pieDe(caso.datos)))];
 }
@@ -205,4 +207,23 @@ export async function guardarLeyendaGrupo(casoId: string, recinto: string, leyen
   if (limpia) actual[recinto] = limpia;
   else delete actual[recinto];
   await guardarExtraccion(casoId, "leyendas_grupos", actual);
+}
+
+/** Inserta en el informe ya generado los textos de «Datos» (características y evidencia observada) y rehace el PDF y el ZIP. `insertado` es false si aún no hay informe. */
+export async function sincronizarTextos(casoId: string, usuarioId: string): Promise<{ insertado: boolean; avisos: string[] }> {
+  const informe = (await salidas(casoId)).find((a) => esInforme(a.nombre));
+  if (!informe) return { insertado: false, avisos: [] };
+  const caso = await obtenerCaso(casoId, usuarioId);
+  const acta = await leerExtraccion<ActaInspeccion>(casoId, "acta");
+  if (!caso || !acta) return { insertado: false, avisos: [] };
+  const aj = await ultimoAjuste(casoId);
+  const t = textosDelInforme(caso.datos, acta, aj?.salida ?? salidaBase(acta));
+  const r = reemplazarTextosDatos(informe.contenido, { caracteristicas: t.caracteristicas, evidencia: t.evidencia });
+  const avisos: string[] = [];
+  if (!r.caracteristicas && t.caracteristicas) avisos.push("No se encontró el párrafo de características en el informe: vuelve a generarlo para que lo incluya.");
+  if (!r.evidencia) avisos.push("No se encontró la lista de evidencia observada en el informe: vuelve a generarlo para que la incluya.");
+  if (r.caracteristicas || r.evidencia) await reemplazar(informe.id, r.buffer);
+  avisos.push(...(await rehacerDerivados(casoId, pieDe(caso.datos))));
+  await consulta("update casos set actualizado = now() where id = $1", [casoId]);
+  return { insertado: r.caracteristicas || r.evidencia, avisos };
 }

@@ -303,3 +303,53 @@ import { tmpdir } from "node:os";
   console.log("  el ZIP muestra su contenido:", ok(zipV.tipo === "zip" && zipV.entradas.length >= 5));
   console.log("  el anexo se abre para editar:", ok(vAnexo.status === 200));
 }
+
+// Textos del informe editados en «Datos» y caso sin presupuesto (plantilla base con las partidas de la evidencia).
+{
+  const ok = (c: boolean) => (c ? "OK" : "FALLA");
+  const lista = (await (await api(`/api/casos/${id}/archivos`)).json()) as { id: string; nombre: string; tipo: string }[];
+  const informe = lista.find((a) => a.tipo === "salida" && /INFORME\.docx$/.test(a.nombre))!;
+  const put = await api(`/api/casos/${id}/textos-informe`, { method: "PUT", json: { caracteristicas: "Casa de prueba con texto propio del usuario.", evidencia: "Dormitorio 1: Texto propio de la evidencia." } });
+  const pj = (await put.json().catch(() => ({}))) as { insertado?: boolean };
+  const xml = new PizZip(Buffer.from(await (await api(`/api/casos/${id}/archivos/${informe.id}?descargar=1`)).arrayBuffer())).file("word/document.xml")!.asText();
+  console.log("TEXTOS DEL INFORME EN «DATOS»:");
+  console.log("  guardar e insertar:", ok(put.status === 200 && pj.insertado === true), "| en el Word:", ok(xml.includes("Casa de prueba con texto propio del usuario.") && xml.includes("Texto propio de la evidencia.")));
+
+  const acta = globSync(`fuente/${prefijo}*/TEXTO/INSP*.pdf`)[0];
+  const fotosDir = archivos(dir).filter((f) => /\.jpe?g$/i.test(f)).slice(0, 4);
+  if (acta && fotosDir.length) {
+    const { id: id2 } = (await (await api("/api/casos", { method: "POST" })).json()) as { id: string };
+    const fa = new FormData();
+    fa.append("ranura", "inspeccion");
+    fa.append("archivos", new File([new Uint8Array(readFileSync(acta))], "inspeccion.pdf", { type: "application/pdf" }));
+    fa.append("rutas", "inspeccion.pdf");
+    await api(`/api/casos/${id2}/archivos`, { method: "POST", body: fa });
+    const ff = new FormData();
+    ff.append("ranura", "fotos");
+    for (const p of fotosDir) {
+      ff.append("archivos", new File([new Uint8Array(readFileSync(p))], p.split(/[\/]/).pop()!, { type: "image/jpeg" }));
+      ff.append("rutas", `Dormitorio 1/${p.split(/[\/]/).pop()}`);
+    }
+    await api(`/api/casos/${id2}/archivos`, { method: "POST", body: ff });
+    const pr = await resultadoDeFlujo<{ partidas: number }>(await api(`/api/casos/${id2}/procesar`, { method: "POST" }));
+    await api(`/api/casos/${id2}/datos`, { method: "PATCH", json: { valor_uf: 40000 } });
+    const gen2 = await resultadoDeFlujo<{ entregables?: { id: string; nombre: string }[] }>(await api(`/api/casos/${id2}/generar`, { method: "POST" }));
+    const ent = gen2.entregables ?? [];
+    const x = ent.find((e) => /\.xlsx$/.test(e.nombre));
+    const w = ent.find((e) => /INFORME\.docx$/.test(e.nombre));
+    const an = ent.find((e) => /^Anexo/.test(e.nombre));
+    const bajar = async (e: { id: string }) => Buffer.from(await (await api(`/api/casos/${id2}/archivos/${e.id}?descargar=1`)).arrayBuffer());
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    if (x) await wb.xlsx.load((await bajar(x)) as never);
+    let partidas = 0;
+    wb.getWorksheet("EDIFICIO")?.eachRow((r) => { if (/Pintura en Muros|Empaste y Lijado/.test(String(r.getCell(2).value ?? ""))) partidas++; });
+    const docW = w ? new PizZip(await bajar(w)).file("word/document.xml")!.asText() : "";
+    const docA = an ? new PizZip(await bajar(an)).file("word/document.xml")!.asText() : "";
+    console.log("SIN PRESUPUESTO (plantilla base desde la evidencia):");
+    console.log("  procesar sin presupuesto:", ok(!pr.error && pr.partidas === 0), "| generar:", ok(!gen2.error && ent.length >= 5));
+    console.log(`  Excel con partidas de la evidencia (${partidas}):`, ok(partidas >= 6));
+    console.log("  informe con párrafo del inmueble y evidencia:", ok(/(Casa|Vivienda) de [0-9]+ pisos?/.test(docW) && /afectado por humedad/.test(docW)));
+    console.log("  anexo con las mismas fotos y títulos fuera de tabla:", ok(docA.includes("CesarFotoTitulo") && (docA.match(/<wp:extent cx="3117600"/g) ?? []).length === (docW.match(/<wp:extent cx="3117600"/g) ?? []).length));
+  }
+}

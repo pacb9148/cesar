@@ -95,7 +95,7 @@ describe("giro fino (progresivo)", () => {
   it("con giro fino la ventana siempre cae dentro de la imagen girada: sus cuatro esquinas están dentro del rectángulo original", () => {
     const W = 2000;
     const H = 1500;
-    for (const angulo of [-40, -15, -3, 0.5, 7, 22, 45]) {
+    for (const angulo of [-180, -135, -90, -40, -15, -3, 0.5, 7, 22, 45, 90, 135, 179]) {
       for (const [cx, cy, zoom] of [[0.5, 0.5, 1], [0, 0, 3], [1, 1, 2], [0.2, 0.9, 6]] as const) {
         const e = { zoom, cx, cy, angulo };
         const v = ventanaDeRecorte(W, H, e);
@@ -118,7 +118,7 @@ describe("giro fino (progresivo)", () => {
     expect(ventanaDeRecorte(2000, 1000, { zoom: 2, cx: 0.5, cy: 0.5, angulo: 0 })).toEqual(ventanaDeRecorte(2000, 1000, { zoom: 2, cx: 0.5, cy: 0.5 }));
     expect(esEdicionNula(EDICION_INICIAL)).toBe(true);
     expect(esEdicionNula({ ...EDICION_INICIAL, angulo: 2 })).toBe(false);
-    expect(edicionFotoSchema.safeParse({ ...EDICION_INICIAL, angulo: 46 }).success).toBe(false);
+    expect(edicionFotoSchema.safeParse({ ...EDICION_INICIAL, angulo: 181 }).success).toBe(false);
     expect(edicionFotoSchema.safeParse({ ...EDICION_INICIAL, angulo: -12.5 }).success).toBe(true);
   });
   it("el servidor aplica el giro fino y entrega la foto final del tamaño pedido, sin esquinas vacías", async () => {
@@ -126,7 +126,7 @@ describe("giro fino (progresivo)", () => {
     const { aplicarEdicion } = await import("../lib/fotos/aplicar");
     // imagen toda blanca: si entrara una esquina vacía (transparente → negra al pasar a JPEG), habría píxeles oscuros
     const blanca = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
-    for (const angulo of [-30, 12, 45]) {
+    for (const angulo of [-180, -30, 12, 45, 90, 135]) {
       const out = await aplicarEdicion(blanca, { ...EDICION_INICIAL, angulo }, { ancho: 400, alto: 310 });
       const m = await sharp(out).metadata();
       expect([m.width, m.height]).toEqual([400, 310]);

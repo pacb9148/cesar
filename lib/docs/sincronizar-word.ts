@@ -1,4 +1,7 @@
 import PizZip from "pizzip";
+import { XMLSerializer } from "@xmldom/xmldom";
+import type { EvidenciaRecinto } from "../domain/tipos";
+import { baseDeRpr, parrafoEvidenciaXml } from "./evidencia-xml";
 import { fotoFinal, type FotoOrigen } from "../fotos/procesar";
 import { CALIDAD_POR_DEFECTO, type Calidad } from "../fotos/calidad";
 import { MARCA_CUADRO } from "./cuadro";
@@ -144,4 +147,35 @@ export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[], pies:
   zip.file("[Content_Types].xml", ct);
   zip.file("word/document.xml", xmlNuevo);
   return { buffer: zip.generate({ type: "nodebuffer", compression: "DEFLATE" }), encontrado: true };
+}
+
+/**
+ * Pone en un informe ya generado los textos que el usuario corrigió en «Datos»: el párrafo de características del bien (el primero con texto tras su título)
+ * y la lista de evidencia observada (entre su frase de introducción y «Las siguientes imágenes dan cuenta…»). El resto del documento no se toca.
+ */
+export function reemplazarTextosDatos(docx: Buffer, t: { caracteristicas?: string; evidencia?: EvidenciaRecinto[] }): { buffer: Buffer; caracteristicas: boolean; evidencia: boolean } {
+  const { zip, doc, body } = cargar(docx);
+  const ps = hijos(body);
+  let car = false;
+  let evi = false;
+  if (t.caracteristicas?.trim()) {
+    const i = ps.findIndex((e) => e.localName === "p" && /Caracter[ií]sticas del bien en riesgo/.test(textoDe(e)));
+    const p = i >= 0 ? ps.slice(i + 1).find((e) => e.localName === "p" && textoDe(e).trim() !== "") : undefined;
+    if (p) {
+      reemplazarEnParrafo(p, /^[\s\S]+$/, () => t.caracteristicas!.trim());
+      car = true;
+    }
+  }
+  if (t.evidencia) {
+    const intro = ps.findIndex((e) => e.localName === "p" && /Durante la visita de inspecci[oó]n se observ/.test(textoDe(e)));
+    const fin = ps.findIndex((e, k) => k > intro && e.localName === "p" && /Las siguientes im[aá]genes dan cuenta/.test(textoDe(e)));
+    if (intro >= 0 && fin > intro) {
+      const rprModelo = porTag(ps[intro], "rPr").pop();
+      const base = baseDeRpr(rprModelo ? new XMLSerializer().serializeToString(rprModelo as never) : "");
+      for (const e of ps.slice(intro + 1, fin)) if (textoDe(e).trim() !== "" || porTag(e, "numPr").length) e.parentNode!.removeChild(e);
+      for (const ev of t.evidencia) ps[fin].parentNode!.insertBefore(crearEl(doc, parrafoEvidenciaXml(ev, base)), ps[fin]);
+      evi = true;
+    }
+  }
+  return { buffer: car || evi ? guardar(zip, doc) : docx, caracteristicas: car, evidencia: evi };
 }

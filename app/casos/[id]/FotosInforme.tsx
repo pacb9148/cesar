@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
 import { BotonIcono, Icono } from "@/components/Iconos";
 import { esEdicionNula } from "@/lib/fotos/recorte";
+import { soltarFoto } from "@/lib/fotos/orden";
 import { FOTO_TAMANO_TEXTO, FOTO_ALTO_CM, FOTO_ANCHO_CM } from "@/lib/domain/constantes";
 import EditorFoto from "./EditorFoto";
 import TituloAyuda from "@/components/Ayuda";
@@ -42,6 +43,8 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [pies, setPies] = useState<Record<string, string>>(leyendasGrupos);
   const [borrador, setBorrador] = useState<Record<string, string[]>>({});
+  const [arrastre, setArrastre] = useState<{ id: string; recinto: string } | null>(null); // foto que se está arrastrando para cambiar su posición
+  const [sobre, setSobre] = useState<string | null>(null);
   const [tocados, setTocados] = useState<string[]>([]); // estancias con fotos editadas o leyenda guardada en esta sesión
   const marcarTocado = (recinto: string) => setTocados((t) => (t.includes(recinto) ? t : [...t, recinto]));
 
@@ -83,6 +86,14 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
       [n[i], n[j]] = [n[j], n[i]];
       return n;
     });
+  /** Arrastrar y soltar: la foto arrastrada ocupa el lugar de la de destino (si no iba al informe, entra en esa posición). Solo dentro de la misma estancia. */
+  const soltar = (recinto: string, destino: string) => {
+    const a = arrastre;
+    setArrastre(null);
+    setSobre(null);
+    if (!a || a.recinto !== recinto || a.id === destino) return;
+    editarBorrador(recinto, (ids) => soltarFoto(ids, a.id, destino));
+  };
   const alternar = (recinto: string, id: string) => editarBorrador(recinto, (ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
   /** Aplica el borrador de una estancia: qué fotos van y en qué orden; rehace informe, anexo, PDF y ZIP. */
@@ -120,11 +131,11 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
       <TituloAyuda titulo="Fotografías del informe" nivel={3}>
         <p>
           Cada foto se inserta en un marco de {FOTO_TAMANO_TEXTO} (tabla de {FOTO_ANCHO_CM * 2} cm). Ya vienen marcadas con ✓ las que el sistema pone en el informe (las de los recintos con daño, hasta 6 por recinto).
-          Desmarca las que no quieras, marca otras y usa las flechas ← → para cambiar su posición dentro de la estancia (1, 2, 3… de izquierda a derecha).
+          Desmarca las que no quieras, marca otras y arrastra cada foto a su lugar (o usa las flechas ← →) para cambiar su posición dentro de la estancia (1, 2, 3… de izquierda a derecha).
         </p>
         <p>
           Esos cambios quedan en un borrador: el botón «Actualizar» de cada estancia los aplica al informe, al anexo, al PDF y al ZIP. Si sales sin actualizar, se descartan. Recortar una foto con el lápiz y guardar la leyenda del grupo se aplican al momento.
-          Cada grupo lleva el nombre de su estancia y puedes escribirle una leyenda al pie. El anexo siempre lleva todas las fotos. La leyenda de cada foto es opcional: sin texto no sale ninguna.
+          Cada grupo lleva el nombre de su estancia y puedes escribirle una leyenda al pie. El anexo lleva las mismas fotos del informe, en el mismo orden. La leyenda de cada foto es opcional: sin texto no sale ninguna.
         </p>
       </TituloAyuda>
       <p role="status" className="text-sm text-[color:var(--texto)]">
@@ -189,10 +200,34 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
                 const quitada = f.edicion?.excluir === true;
                 const editada = !!f.edicion && !esEdicionNula(f.edicion);
                 return (
-                  <li key={f.id} className={`overflow-hidden rounded-lg bg-[color:var(--panel-2)] ${incluida ? "border-2 border-[color:var(--ok)]" : "border border-[color:var(--borde)]"}`}>
+                  <li
+                    key={f.id}
+                    draggable={!ocupadoGrupo}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", f.id);
+                      setArrastre({ id: f.id, recinto });
+                    }}
+                    onDragEnd={() => {
+                      setArrastre(null);
+                      setSobre(null);
+                    }}
+                    onDragOver={(e) => {
+                      if (arrastre && arrastre.recinto === recinto) {
+                        e.preventDefault();
+                        setSobre(f.id);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      soltar(recinto, f.id);
+                    }}
+                    title="Arrastra para cambiar la posición de la foto dentro de la estancia"
+                    className={`cursor-grab overflow-hidden rounded-lg bg-[color:var(--panel-2)] ${incluida ? "border-2 border-[color:var(--ok)]" : "border border-[color:var(--borde)]"} ${arrastre?.id === f.id ? "opacity-40" : ""} ${sobre === f.id && arrastre?.id !== f.id ? "outline outline-2 outline-offset-2 outline-[color:var(--acento)]" : ""}`}
+                  >
                     <div className="relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1&v=${versionDe(f.edicion)}`} alt={`${recinto}: ${f.nombre}`} loading="lazy" className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}`, opacity: incluida ? 1 : 0.55 }} />
+                      <img src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1&v=${versionDe(f.edicion)}`} alt={`${recinto}: ${f.nombre}`} loading="lazy" draggable={false} className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}`, opacity: incluida ? 1 : 0.55 }} />
                       {incluida && (
                         <span className="absolute left-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-sm font-bold" style={{ background: "var(--acento)", color: "var(--acento-texto)" }} title={`Posición ${indice} de ${ids.length} en el informe, de izquierda a derecha`}>{indice}</span>
                       )}

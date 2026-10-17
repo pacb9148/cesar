@@ -11,7 +11,9 @@ export type RunVista = { t: string; b?: boolean; i?: boolean; u?: boolean; sz?: 
 /** `idx` es la posición de la imagen entre todas las del documento (estable): sirve para cambiar su tamaño o quitarla. */
 export type ImagenVista = { idx: number; src: string; w: number; h: number; fotoId?: string; nombre: string };
 export type ParrafoVista = { tipo: "p"; i: number; jc?: "left" | "center" | "right" | "justify"; runs: RunVista[]; imagenes: ImagenVista[]; editable: boolean; texto: string; sangria?: number };
-export type TablaVista = { tipo: "tabla"; anchos: number[]; filas: { celdas: { span: number; bloques: BloqueVista[] }[] }[] };
+/** Lados de una celda que llevan borde en el documento (los demás se dibujan sin línea, como en Word). */
+export type BordesCelda = { t?: true; b?: true; l?: true; r?: true };
+export type TablaVista = { tipo: "tabla"; anchos: number[]; filas: { celdas: { span: number; bloques: BloqueVista[]; bordes?: BordesCelda }[] }[] };
 export type BloqueVista = ParrafoVista | TablaVista;
 
 const MAX_TEXTO = 5000;
@@ -153,7 +155,22 @@ export function docxAVista(buf: Buffer): { bloques: BloqueVista[]; parrafos: num
       if (c.localName === "tbl") return [tabla(c)];
       return [];
     });
+  /** Lados con borde visible dentro de un w:tblBorders o w:tcBorders (los de valor none/nil no cuentan). */
+  const lados = (el: Element | undefined, nombres: Record<string, keyof BordesCelda>): BordesCelda => {
+    const out: BordesCelda = {};
+    if (!el) return out;
+    for (const c of hijos(el)) {
+      const k = nombres[c.localName ?? ""];
+      if (k && !["none", "nil", undefined].includes(val(c))) out[k] = true;
+    }
+    return out;
+  };
   function tabla(t: Element): TablaVista {
+    // Bordes de la tabla (los de dentro valen para todas sus celdas) y de cada celda: las tablas de maquetación sin bordes se ven como texto normal.
+    const bt = hijo(hijo(t, "tblPr") ?? t, "tblBorders");
+    const deTabla = lados(bt, { top: "t", bottom: "b", left: "l", right: "r", insideH: "t", insideV: "l" });
+    const dentroH = bt && hijo(bt, "insideH") && !["none", "nil"].includes(val(hijo(bt, "insideH")) ?? "none");
+    const dentroV = bt && hijo(bt, "insideV") && !["none", "nil"].includes(val(hijo(bt, "insideV")) ?? "none");
     const grid = hijo(t, "tblGrid");
     const anchos = grid ? hijos(grid).map((g) => Math.round(Number(val(g, "w") ?? 0) / 15)) : [];
     const filas = hijos(t)
@@ -166,7 +183,9 @@ export function docxAVista(buf: Buffer): { bloques: BloqueVista[]; parrafos: num
             const vm = pr && hijo(pr, "vMerge");
             if (vm && val(vm) !== "restart") return []; // continuación de una celda combinada verticalmente
             const span = pr && hijo(pr, "gridSpan") ? Number(val(hijo(pr, "gridSpan"))) : 1;
-            return [{ span: span || 1, bloques: bloquesDe(tc) }];
+            const propios = lados(pr && hijo(pr, "tcBorders"), { top: "t", bottom: "b", left: "l", right: "r", start: "l", end: "r" });
+            const bordes: BordesCelda = { ...(deTabla.t && dentroH ? { t: true as const, b: true as const } : {}), ...(deTabla.l && dentroV ? { l: true as const, r: true as const } : {}), ...propios };
+            return [{ span: span || 1, bloques: bloquesDe(tc), ...(Object.keys(bordes).length ? { bordes } : {}) }];
           }),
       }));
     return { tipo: "tabla", anchos, filas };

@@ -12,6 +12,8 @@ import { calcularTotales } from "@/lib/engine/totales";
 import { auditarAjuste } from "@/lib/engine/auditoria";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
+import PartidasLiquidador from "./PartidasLiquidador";
+import type { ActaInspeccion } from "@/lib/extraccion/acta";
 import { useAccionesMenu } from "@/components/Shell";
 import VistaPreviaAjuste from "./VistaPreviaAjuste";
 import Previa from "./Previa";
@@ -31,7 +33,7 @@ const reclamacionVacia: Reclamacion = { secciones: [], lineas: [], totalDirectoD
 
 type Resp = { version: number; intentos: number; errores: string[]; advertencias: string[] };
 
-export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfigurada }: { caso: Caso; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; ajusteBase: SalidaAgente | null; iaConfigurada: boolean }) {
+export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfigurada, acta }: { acta: ActaInspeccion | null; caso: Caso; reclamacion: Reclamacion | null; ajuste: AjusteGuardado | null; ajusteBase: SalidaAgente | null; iaConfigurada: boolean }) {
   const router = useRouter();
   const ia = useFlujo<Resp>(`/api/casos/${caso.id}/ajustar`);
   const [salida, setSalida] = useState<SalidaAgente | null>(ajuste?.salida ?? ajusteBase ?? null);
@@ -144,12 +146,15 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
       {salida && calc && (
         <>
           {!valorUF && <p className="aviso aviso-alerta">Falta el valor de la UF de la fecha del siniestro: los importes en pesos ya se ven, pero la UF y el informe la necesitan. Ingrésala en el paso «Datos».</p>}
-          {!ajuste && <p className="aviso aviso-ok">Partida a partida el presupuesto está <strong>sin ajustar</strong> (tal como lo reclamó el contratista). Ajusta a mano lo que corresponda, o ejecuta el ajuste con IA desde el menú; luego guarda para fijar esta versión.</p>}
+          {!ajuste && !dos && <p className="aviso aviso-ok">No subiste un presupuesto: la plantilla base parte de las partidas que salen de la evidencia de la inspección, a precio de la hoja Datos. Edítalas, agrega las que falten y guarda para fijar esta versión.</p>}
+          {!ajuste && dos && <p className="aviso aviso-ok">Partida a partida el presupuesto está <strong>sin ajustar</strong> (tal como lo reclamó el contratista). Ajusta a mano lo que corresponda, o ejecuta el ajuste con IA desde el menú; luego guarda para fijar esta versión.</p>}
           <div className="grid gap-3 sm:grid-cols-3">
             <Kpi t="Reclamado" v={dos ? ufTxt(calc.rec.uf) : "—"} s={dos ? `$${n0(calc.rec.total)}` : "sin presupuesto"} />
             <Kpi t="Ajustado" v={ufTxt(calc.aj.uf)} s={`$${n0(calc.aj.total)}`} />
             <Kpi t="A indemnizar" v={ufTxt(calc.aj.uf - (caso.datos.poliza?.deducibleUF ?? 0))} s={dos && calc.rec.uf > 0 ? `${Math.round((calc.aj.uf / calc.rec.uf) * 100)} % de lo reclamado` : ""} />
           </div>
+
+          {!dos && <PartidasLiquidador salida={salida} setSalida={setSalida} acta={acta} secciones={recl.secciones.map((s) => s.titulo)} />}
 
           <div className="panel space-y-3 p-5" aria-labelledby="cumplimiento-titulo">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -271,6 +276,8 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
               })}
             </table>
           </div>
+
+          {dos && <PartidasLiquidador salida={salida} setSalida={setSalida} acta={acta} secciones={recl.secciones.map((s) => s.titulo)} />}
 
           <div className="panel p-5">
             <h3 className="mb-2 font-semibold">Leyenda de observaciones</h3>

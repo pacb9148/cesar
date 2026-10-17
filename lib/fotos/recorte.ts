@@ -7,7 +7,7 @@ import { FOTO_ALTO_CM, FOTO_ANCHO_CM } from "../domain/constantes";
  */
 export const ZOOM_MAX = 16;
 /** Giro fino (progresivo) máximo a cada lado, en grados, además de los giros de 90°. */
-export const ANGULO_MAX = 45;
+export const ANGULO_MAX = 180;
 
 export const edicionFotoSchema = z.object({
   /** true = va al informe; sin ninguna marcada, el informe usa solo las fotos del área afectada. */

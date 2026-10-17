@@ -6,7 +6,7 @@ import { generarExcel, type EntradaExcel } from "../docs/excel";
 import { generarAnexo } from "../docs/anexo";
 import { verificarPresupuestoGenerado } from "../docs/verificar-presupuesto";
 import { armarFilas } from "../engine/filas";
-import { modernizarEvidencia, parrafoInmueble } from "./parrafo-inmueble";
+import { textosDelInforme } from "./textos-informe";
 import { reparosDeOrigenPrecio } from "../engine/auditoria";
 import { CALIDAD_POR_DEFECTO } from "../fotos/calidad";
 import { seleccionarFotosInforme } from "../docs/fotos-seleccion";
@@ -152,7 +152,7 @@ export async function ejecutarAjuste(casoId: string, usuarioId: string, cliente?
 }
 
 /** Fotos de fachada y número del inmueble que vienen incrustadas en el acta (páginas finales). */
-async function fachadaDelActa(casoId: string): Promise<Buffer[]> {
+export async function fachadaDelActa(casoId: string): Promise<Buffer[]> {
   const actas = await archivosConContenido(casoId, "acta");
   if (!actas[0]) return [];
   try {
@@ -227,9 +227,9 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
   let aj = await ultimoAjuste(casoId);
   if (!aj) {
     // Sin ajuste guardado (ni de la IA ni manual) pero con presupuesto: se parte de «sin ajustar», así el informe no depende de la IA.
-    if (!recl) throw new Error("Aún no hay un ajuste: ejecútalo primero.");
-    await guardarAjuste(casoId, salidaBase(acta), "manual");
-    emitir("info", "informe", "No había ajuste guardado: se usa el presupuesto tal como se reclamó («sin ajustar»)");
+    // Con presupuesto: «sin ajustar». Sin presupuesto: plantilla base con las partidas que salen de la evidencia de la inspección.
+    await guardarAjuste(casoId, salidaBase(acta, { conPartidas: !recl }), "manual");
+    emitir("info", "informe", recl ? "No había ajuste guardado: se usa el presupuesto tal como se reclamó («sin ajustar»)" : "No había ajuste guardado ni presupuesto: se usan las partidas generadas desde la evidencia de la inspección");
     aj = await ultimoAjuste(casoId);
   }
   const salida = aj!.salida;
@@ -258,13 +258,14 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
 
   emitir("ok", "informe", `Excel, cuadro y fotos listos; meteorología: ${met ? `estación ${met.estacion}` : "no disponible"}; ${fotosDb.length} fotos del caso, ${fachada.length} de fachada`);
   emitir("info", "informe", "Armando el informe Word con la plantilla");
+  const textos = textosDelInforme(datos, acta, salida);
   const docx = await generarInforme({
     caso: datos,
     valorUF,
     caracteristicas: salida.caracteristicas,
-    evidencia: modernizarEvidencia(salida.evidencia_observada, acta.danos),
-    evidenciaTexto: salida.evidencia_texto,
-    caracteristicasTexto: parrafoInmueble(acta) || undefined,
+    evidencia: textos.evidencia,
+    evidenciaTexto: datos.textos?.evidencia?.trim() ? undefined : salida.evidencia_texto,
+    caracteristicasTexto: textos.caracteristicas || undefined,
     ajusteTexto: salida.ajuste_de_perdida_texto,
     totales: { reclamacionPesos: res.recTotalPesos, reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF },
     meteo: met,
@@ -283,7 +284,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
       emitir("error", "informe", `No se pudo generar el PDF (${err instanceof Error ? err.message : "error"}): se entrega el Word`);
       return null;
     }),
-    generarAnexo({ siniestro: datos.siniestro, asegurado: datos.asegurado.nombre, liquidacion: datos.liquidacion, anio: datos.fechas.ocurrencia.slice(0, 4), fotos: todas, pies: await leerLeyendasGrupos(casoId), calidad: datos.entrega?.calidad ?? CALIDAD_POR_DEFECTO, compacto: datos.entrega?.anexoCompacto, alOmitirFoto: (f) => emitir("error", "informe", `Foto omitida del anexo por estar dañada: ${f.id ?? f.recinto}`) }),
+    generarAnexo({ siniestro: datos.siniestro, asegurado: datos.asegurado.nombre, liquidacion: datos.liquidacion, anio: datos.fechas.ocurrencia.slice(0, 4), fotos: paraInforme, fachada: fachada[0], pies: await leerLeyendasGrupos(casoId), calidad: datos.entrega?.calidad ?? CALIDAD_POR_DEFECTO, compacto: datos.entrega?.anexoCompacto, alOmitirFoto: (f) => emitir("error", "informe", `Foto omitida del anexo por estar dañada: ${f.id ?? f.recinto}`) }),
   ]);
 
   const pdf = pdfMotor?.pdf ?? null;
@@ -350,13 +351,14 @@ export async function previaInforme(casoId: string, usuarioId: string): Promise<
   const res = resumenCuadro(entrada);
   const [fachada, fotosDb] = await Promise.all([fachadaDelActa(casoId), fotosPerezosas(casoId)]);
   const todas: FotoInforme[] = fotosDb.map((f) => ({ ...f, leyenda: "" }));
+  const textos = textosDelInforme(datos, acta, salida);
   const docx = await generarInforme({
     caso: datos,
     valorUF,
     caracteristicas: salida.caracteristicas,
-    evidencia: modernizarEvidencia(salida.evidencia_observada, acta.danos),
-    evidenciaTexto: salida.evidencia_texto,
-    caracteristicasTexto: parrafoInmueble(acta) || undefined,
+    evidencia: textos.evidencia,
+    evidenciaTexto: datos.textos?.evidencia?.trim() ? undefined : salida.evidencia_texto,
+    caracteristicasTexto: textos.caracteristicas || undefined,
     ajusteTexto: salida.ajuste_de_perdida_texto,
     totales: { reclamacionPesos: res.recTotalPesos, reclamacionUF: res.recUF, ajusteUF: res.ajUF, indemnizacionUF: res.indemnizacionUF },
     meteo: null,

@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { MARCADOR_FALTA_DATO } from "../domain/constantes";
+import { parrafoEvidenciaXml } from "./evidencia-xml";
 import { tratamientoDe } from "../domain/genero";
 import type { Dato, DatosCaso, EvidenciaRecinto, SalidaAgente } from "../domain/tipos";
 import {
@@ -253,13 +254,7 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     const rpr = (extra: string) => `<w:rPr>${base}${extra}</w:rPr>`;
     if (e.evidenciaTexto?.trim())
       pXxx.parentNode!.insertBefore(crearEl(doc, `<w:p><w:pPr><w:spacing w:before="0" w:after="120"/><w:jc w:val="both"/></w:pPr><w:r>${rpr("")}<w:t xml:space="preserve">${escXml(e.evidenciaTexto.trim())}</w:t></w:r></w:p>`), pXxx);
-    else for (const ev of e.evidencia) {
-      const pXml =
-        `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:spacing w:before="0" w:after="0"/><w:ind w:left="720" w:hanging="360"/><w:jc w:val="both"/></w:pPr>` +
-        `<w:r>${rpr('<w:i/><w:u w:val="single"/>')}<w:t xml:space="preserve">${escXml(ev.recinto)}:</w:t></w:r>` +
-        `<w:r>${rpr("")}<w:t xml:space="preserve"> ${escXml(ev.vineta)}${ev.atribuible ? "" : " No atribuible al siniestro."}</w:t></w:r></w:p>`;
-      pXxx.parentNode!.insertBefore(crearEl(doc, pXml), pXxx);
-    }
+    else for (const ev of e.evidencia) pXxx.parentNode!.insertBefore(crearEl(doc, parrafoEvidenciaXml(ev, base)), pXxx);
     pXxx.parentNode!.removeChild(pXxx);
   }
 

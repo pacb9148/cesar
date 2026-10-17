@@ -80,13 +80,13 @@ export function Bloques({ bloques, c }: { bloques: BloqueVista[]; c: Contexto })
         b.tipo === "p" ? (
           <Parrafo key={`${b.i}-${k}`} p={b} c={c} />
         ) : (
-          <table key={k} style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed", margin: "4px 0", border: "1px dotted #c7ccd4" }}>
+          <table key={k} style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed", margin: "0" }}>
             <colgroup>{b.anchos.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
             <tbody>
               {b.filas.map((f, i) => (
                 <tr key={i}>
                   {f.celdas.map((ce, j) => (
-                    <td key={j} colSpan={ce.span} style={{ verticalAlign: "top", padding: "1px 4px", border: "1px dotted #c7ccd4" }}>
+                    <td key={j} colSpan={ce.span} style={{ verticalAlign: "top", padding: "1px 4px", borderTop: ce.bordes?.t ? "1px solid #000" : "none", borderBottom: ce.bordes?.b ? "1px solid #000" : "none", borderLeft: ce.bordes?.l ? "1px solid #000" : "none", borderRight: ce.bordes?.r ? "1px solid #000" : "none" }}>
                       <Bloques bloques={ce.bloques} c={c} />
                     </td>
                   ))}
