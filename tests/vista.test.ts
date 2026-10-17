@@ -80,7 +80,7 @@ describe("vista y edición del Excel", () => {
   it("una celda con fórmula no se puede pisar", async () => {
     const { buf } = await excelCaso1();
     const ed = libroAVista(await cargarLibro(buf)).find((h) => h.nombre === "EDIFICIO")!;
-    const f = ed.celdas.find((c) => c.f)!;
+    const f = ed.celdas.find((c) => c.f && c.c >= 7)!; // una de Valor ajustado: las de Reclamación se rechazan antes por protegidas
     await expect(aplicarCeldas(buf, [{ hoja: "EDIFICIO", r: f.r, c: f.c, valor: "1" }])).rejects.toThrow(/fórmula/);
   });
 });

@@ -123,6 +123,20 @@ export async function archivosConContenido(casoId: string, tipo: string) {
   );
 }
 
+/** Fotos del caso sin su contenido: cada una trae `cargar()` que lo pide a la base solo al usarla, para no tener cientos de MB en memoria a la vez. */
+export async function fotosPerezosas(casoId: string) {
+  const filas = await consulta<{ id: string; recinto: string | null; edicion: EdicionFoto | null }>(
+    "select id, recinto, edicion from archivos where caso_id = $1 and tipo = 'foto' order by recinto nulls first, orden, nombre",
+    [casoId],
+  );
+  return filas.map((f) => ({
+    id: f.id,
+    recinto: f.recinto ?? "General",
+    edicion: f.edicion,
+    cargar: async () => (await uno<{ contenido: Buffer }>("select contenido from archivos where id = $1 and caso_id = $2", [f.id, casoId]))!.contenido,
+  }));
+}
+
 export async function guardarEdicionFoto(id: string, casoId: string, edicion: EdicionFoto | null): Promise<boolean> {
   const r = await uno<{ id: string }>("update archivos set edicion = $3::jsonb where id = $1 and caso_id = $2 and tipo = 'foto' returning id", [id, casoId, edicion ? JSON.stringify(edicion) : null]);
   if (r) await consulta(tocar, [casoId]);

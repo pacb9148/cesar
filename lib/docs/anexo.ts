@@ -1,19 +1,21 @@
 import PizZip from "pizzip";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import sharp from "sharp";
 import { escXml, hijos, NS_W, parse, serializar, crearEl, type Doc } from "./docx-xml";
-import { aplicarEdicion } from "../fotos/aplicar";
+import { fotoFinal } from "../fotos/procesar";
+import type { Calidad } from "../fotos/calidad";
 import { ordenarPorGrupo } from "../fotos/orden";
-import { esEdicionNula } from "../fotos/recorte";
-import { FOTO_PX, tablasDeFotos, type FotoCelda } from "./fotos-xml";
+import { tablasDeFotos, type FotoCelda } from "./fotos-xml";
 import type { FotoInforme } from "./word";
+
+/** Márgenes del anexo compacto en twips: 1,5 cm arriba/abajo, 1,84 cm izquierda/derecha. */
+export const MARGENES_COMPACTOS = { top: 850, bottom: 850, left: 1043, right: 1043 } as const;
 
 /**
  * Anexo de fotografías: portada + 2×2 por recinto. Se construye sobre la misma plantilla del informe
  * para heredar cabecera con logo, pies y estilos, y se vacía el cuerpo.
  */
-export async function generarAnexo(o: { siniestro: string; asegurado: string; liquidacion: string; anio: string; fotos: FotoInforme[]; pies?: Record<string, string> }): Promise<Buffer> {
+export async function generarAnexo(o: { siniestro: string; asegurado: string; liquidacion: string; anio: string; fotos: FotoInforme[]; pies?: Record<string, string>; calidad?: Calidad; compacto?: boolean; alOmitirFoto?: (f: FotoInforme) => void }): Promise<Buffer> {
   const zip = new PizZip(readFileSync(join(process.cwd(), "plantillas", "informe.docx")));
   const doc: Doc = parse(zip.file("word/document.xml")!.asText());
   const body = doc.getElementsByTagNameNS(NS_W, "body")[0] as unknown as Element;
@@ -30,8 +32,7 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
 
   let rels = zip.file("word/_rels/document.xml.rels")!.asText();
   let n = 0;
-  const add = async (buf: Buffer) => {
-    const j = await sharp(buf).rotate().resize(FOTO_PX.ancho, FOTO_PX.alto, { fit: "cover", position: sharp.strategy.attention }).jpeg({ quality: 82 }).toBuffer();
+  const add = (j: Buffer) => {
     const nombre = `anexo-${++n}.jpg`;
     zip.file(`word/media/${nombre}`, j);
     const rid = `rIdAnexo${n}`;
@@ -43,24 +44,38 @@ export async function generarAnexo(o: { siniestro: string; asegurado: string; li
     `<w:p><w:pPr><w:spacing w:before="${antes}" w:after="120"/><w:jc w:val="${jc}"/></w:pPr><w:r>${fuente(sz, extra)}<w:t xml:space="preserve">${escXml(texto)}</w:t></w:r></w:p>`;
 
   const add1 = (xml: string) => body.insertBefore(crearEl(doc, xml), sect ?? null);
-  add1(par("ANEXO", 56, "<w:b/>", "center", 3600));
-  add1(par("FOTOGRAFÍAS", 56, "<w:b/>", "center"));
-  add1(par(`Siniestro     ${o.siniestro}`, 28, "", "left", 2400));
-  add1(par(`Asegurado ${o.asegurado}`, 28, "", "left"));
-  add1(`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`);
+  if (o.compacto) {
+    // Anexo compacto: sin portada ni saltos entre estancias, márgenes 1,5 cm arriba/abajo y 1,84 cm a los lados (A4: 17,32 cm útiles = 2 fotos de 8,66 cm).
+    const mar = sect?.getElementsByTagNameNS(NS_W, "pgMar")[0];
+    if (mar) for (const [k, v] of Object.entries(MARGENES_COMPACTOS)) mar.setAttributeNS(NS_W, "w:" + k, String(v));
+  } else {
+    add1(par("ANEXO", 56, "<w:b/>", "center", 3600));
+    add1(par("FOTOGRAFÍAS", 56, "<w:b/>", "center"));
+    add1(par(`Siniestro     ${o.siniestro}`, 28, "", "left", 2400));
+    add1(par(`Asegurado ${o.asegurado}`, 28, "", "left"));
+    add1(`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`);
+  }
 
   // Todas las fotos del caso, por recinto, en cuadrículas de 2 × 3 con el mismo tamaño y leyenda que el informe.
   const recintos = [...new Set(o.fotos.map((f) => f.recinto))];
   const tablas: string[] = [];
   for (const rc of recintos) {
     const celdas: FotoCelda[] = [];
-    for (const f of ordenarPorGrupo(o.fotos.filter((x) => x.recinto === rc))) celdas.push({ rid: await add(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer), leyenda: f.edicion?.leyenda ?? "", id: f.id });
+    for (const f of ordenarPorGrupo(o.fotos.filter((x) => x.recinto === rc))) {
+      const final = await fotoFinal(f, o.calidad ?? "300");
+      if (!final) {
+        o.alOmitirFoto?.(f);
+        continue;
+      }
+      celdas.push({ rid: add(final), leyenda: f.edicion?.leyenda ?? "", id: f.id });
+    }
     tablas.push(...tablasDeFotos(celdas, { titulo: rc, pie: o.pies?.[rc]?.trim() || undefined }));
   }
   tablas.forEach((t, i) => {
     add1(t);
     // Una tabla de 6 fotos de 6,70 cm casi llena la página: el salto va en un párrafo de 1 pt para que no se desborde y deje una página vacía.
-    if (i < tablas.length - 1) add1(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:br w:type="page"/></w:r></w:p>`);
+    if (i < tablas.length - 1 && o.compacto) add1(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr></w:p>`);
+    else if (i < tablas.length - 1) add1(`<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:br w:type="page"/></w:r></w:p>`);
   });
   zip.file("word/document.xml", serializar(doc));
   zip.file("word/_rels/document.xml.rels", rels);

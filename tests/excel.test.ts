@@ -70,7 +70,7 @@ describe("generarExcel", () => {
     expect(JSON.stringify(rs.getCell("C4").value)).toContain("EDIFICIO!J");
     const textos: string[] = [];
     rs.eachRow((r) => textos.push(String(r.getCell(2).value ?? "")));
-    expect(textos.filter((t) => t === "Cumple")).toHaveLength(5);
+    expect(textos.filter((t) => t === "Cumple")).toHaveLength(7);
   });
 });
 

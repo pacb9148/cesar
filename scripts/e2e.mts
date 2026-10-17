@@ -252,3 +252,54 @@ import { tmpdir } from "node:os";
   const xl = await (await import("../lib/extraccion/planilla")).leerPlanilla(xlsx);
   console.log("  Excel editado se lee y recalcula (UF ajuste):", ok(Number.isFinite(xl.ufCalculadoAjuste ?? NaN)), xl.ufCalculadoAjuste?.toFixed(2));
 }
+
+// Opciones de entrega: la calidad por defecto es 150 ppp; con 300 ppp los documentos pesan más, y el anexo compacto quita la portada y usa menos páginas.
+{
+  const pesos = async () => {
+    const lista = (await (await api(`/api/casos/${id}/archivos`)).json()) as { id: string; nombre: string; tipo: string; tamano: number }[];
+    const sal = lista.filter((a) => a.tipo === "salida");
+    return { informe: sal.find((a) => /INFORME\.docx$/.test(a.nombre))!, anexo: sal.find((a) => /^Anexo/.test(a.nombre))! };
+  };
+  const antes = await pesos();
+  const patch = await api(`/api/casos/${id}/datos`, { method: "PATCH", json: { entrega: { calidad: "300", anexoCompacto: true } } });
+  const g = await api(`/api/casos/${id}/generar`, { method: "POST" });
+  const r = await resultadoDeFlujo<{ motorPdf?: string }>(g);
+  const despues = await pesos();
+  const bajarAnexo = Buffer.from(await (await api(`/api/casos/${id}/archivos/${despues.anexo.id}?descargar=1`)).arrayBuffer());
+  const xml = new PizZip(bajarAnexo).file("word/document.xml")!.asText();
+  const dirC = mkdtempSync(join(tmpdir(), "e2e-compacto-"));
+  const soffice = process.env.SOFFICE_PATH ?? "C:/Program Files/LibreOffice/program/soffice.exe";
+  writeFileSync(join(dirC, "anexo.docx"), bajarAnexo);
+  execFileSync(soffice, ["--headless", "--convert-to", "pdf", "--outdir", dirC, join(dirC, "anexo.docx")], { timeout: 180000, stdio: "ignore" });
+  const paginasCompacto = (await textoPdf(readFileSync(join(dirC, "anexo.pdf")))).length;
+  rmSync(dirC, { recursive: true, force: true });
+  const ok = (c: boolean) => (c ? "OK" : "FALLA");
+  console.log("OPCIONES DE ENTREGA:");
+  console.log("  guardar entrega:", ok(patch.status === 200), "| regenerar:", ok(g.status === 200 && !r.error));
+  console.log(`  300 ppp pesa más que 150 ppp (informe ${Math.round(antes.informe.tamano / 1024)} → ${Math.round(despues.informe.tamano / 1024)} KB):`, ok(despues.informe.tamano > antes.informe.tamano));
+  console.log(`  anexo compacto: sin portada ${ok(!xml.includes("FOTOGRAFÍAS"))}, márgenes 1,5/1,84 cm ${ok(/w:top="850"/.test(xml) && /w:left="1043"/.test(xml))}, ${paginasCompacto} páginas (normal: ver arriba)`);
+  const mal = (xml.match(/<w:tcMar>/g) ?? []).length;
+  console.log("  margen cero en las celdas del anexo y del informe:", ok(mal > 0 && !/<w:tcMar><w:top w:w="[1-9]/.test(xml)));
+}
+
+// Todos los documentos tienen vista y descarga: el resumen en texto se edita y el ZIP muestra su contenido.
+{
+  const lista = (await (await api(`/api/casos/${id}/archivos`)).json()) as { id: string; nombre: string; tipo: string }[];
+  const sal = lista.filter((a) => a.tipo === "salida");
+  const txt = sal.find((a) => /\.txt$/i.test(a.nombre))!;
+  const zipA = sal.find((a) => /\.zip$/i.test(a.nombre))!;
+  const ok = (c: boolean) => (c ? "OK" : "FALLA");
+  const v = (await (await api(`/api/casos/${id}/archivos/${txt.id}/vista`)).json()) as { tipo: string; contenido: string };
+  const put = await api(`/api/casos/${id}/archivos/${txt.id}/vista`, { method: "PUT", json: { texto: `${v.contenido}\nNota del perito: revisado.` } });
+  const bajado = Buffer.from(await (await api(`/api/casos/${id}/archivos/${txt.id}?descargar=1`)).arrayBuffer()).toString("utf8");
+  const zipV = (await (await api(`/api/casos/${id}/archivos/${zipA.id}/vista`)).json()) as { tipo: string; entradas: { nombre: string }[] };
+  const zipNuevo = new PizZip(Buffer.from(await (await api(`/api/casos/${id}/archivos/${zipA.id}?descargar=1`)).arrayBuffer()));
+  const nombreTxt = Object.keys(zipNuevo.files).find((n) => /Resumen/.test(n))!;
+  const anexo = sal.find((a) => /^Anexo/.test(a.nombre))!;
+  const vAnexo = await api(`/api/casos/${id}/archivos/${anexo.id}/vista`);
+  console.log("DOCUMENTOS CON VISTA Y EDICIÓN:");
+  console.log("  resumen .txt se lee y se edita:", ok(v.tipo === "texto" && put.status === 200 && bajado.includes("Nota del perito")));
+  console.log("  el ZIP se rehízo con el resumen editado:", ok(zipNuevo.file(nombreTxt)!.asText().includes("Nota del perito")));
+  console.log("  el ZIP muestra su contenido:", ok(zipV.tipo === "zip" && zipV.entradas.length >= 5));
+  console.log("  el anexo se abre para editar:", ok(vAnexo.status === 200));
+}

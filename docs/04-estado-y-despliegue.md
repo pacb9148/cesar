@@ -98,3 +98,9 @@ npx tsx scripts/e2e.mts 1981023
 - **Fotos**: 8,66 × 6,70 cm, tabla de 17,32 cm, máximo 6 por estancia.
 - **Panel «Cumplimiento de las reglas del ajuste»** (reglas duras de `Especificacion_Tecnica_ACAS.md`).
 - Nota sobre `docs/01-informe-analisis-y-diseno.md`: su línea «el PU nunca va a 0; si debe ir a 0 va la cantidad» queda superada por la regla anterior (la cantidad tampoco va a 0).
+
+## Cambios del 17/10/2026
+- **Calidad de entrega** 150 ppp (recomendada, por defecto) o 300 ppp, elegible por caso en el paso Informe; **anexo compacto** opcional (sin portada, márgenes 1,5 / 1,84 cm); **margen cero** en los cuatro lados de las celdas de todas las tablas de fotos, informe incluido.
+- **Presupuesto original intacto**: la parte azul (Reclamación) no se modifica ni por el agente ni a mano; el Excel generado se relee y contrasta con el original antes de entregarlo. Los ajustes van solo en «Valor ajustado».
+- **Subida de ZIP**, **revisión de fotos** (duplicadas, borrosas, cantidad impar) y **vista/edición/descarga de todos los documentos** (Word, Excel, anexo, PDF, resumen de texto y ZIP).
+- Sin cambios de variables de entorno ni de migraciones. El push a `main` dispara el despliegue automático en Coolify.

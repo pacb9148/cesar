@@ -4,6 +4,10 @@ import { extractImages, getDocumentProxy } from "unpdf";
 import { cuadroTablaXml, resumenCuadro } from "../docs/cuadro";
 import { generarExcel, type EntradaExcel } from "../docs/excel";
 import { generarAnexo } from "../docs/anexo";
+import { verificarPresupuestoGenerado } from "../docs/verificar-presupuesto";
+import { armarFilas } from "../engine/filas";
+import { reparosDeOrigenPrecio } from "../engine/auditoria";
+import { CALIDAD_POR_DEFECTO } from "../fotos/calidad";
 import { seleccionarFotosInforme } from "../docs/fotos-seleccion";
 import { docxAPdf } from "../docs/pdf";
 import { generarInforme, type FotoInforme, type Meteo } from "../docs/word";
@@ -29,6 +33,7 @@ import { cargarLibro, libroAVista } from "../docs/vista-xlsx";
 import {
   actualizarCaso,
   archivosConContenido,
+  fotosPerezosas,
   guardarAjuste,
   guardarArchivo,
   guardarExtraccion,
@@ -236,10 +241,16 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     generarExcel(entrada),
     meteo(casoId, datos),
     fachadaDelActa(casoId),
-    archivosConContenido(casoId, "foto"),
+    fotosPerezosas(casoId),
   ]);
 
-  const todas: FotoInforme[] = fotosDb.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: "", edicion: f.edicion }));
+  // El presupuesto original no se toca: se relee el Excel recién generado y se contrasta con lo que reclamó el contratista.
+  const diferencias = await verificarPresupuestoGenerado(xlsx, armarFilas(entrada), entrada.reclamacion);
+  if (diferencias.length > 0) throw new Error(`El Excel no respeta el presupuesto original, no se entrega: ${diferencias.slice(0, 5).join(" ")}`);
+  emitir("ok", "informe", `Presupuesto verificado: las ${entrada.reclamacion.lineas.length} partidas reclamadas están intactas en la parte de Reclamación`);
+  for (const r of reparosDeOrigenPrecio(salida.lineas, salida.lineas_adicionales).slice(0, 10)) emitir("info", "informe", `Precio sin respaldo en la hoja Datos — ${r}`);
+
+  const todas: FotoInforme[] = fotosDb.map((f) => ({ ...f, leyenda: "" }));
   // Si el usuario marcó fotos para el informe, van esas (con su recorte); si no, las del área afectada. El anexo lleva todas.
   const { fotos: paraInforme, elegidas } = seleccionarFotosInforme(todas, acta);
   emitir("info", "informe", `${paraInforme.length} fotos para el informe (${elegidas ? "elegidas por ti" : "automáticas del área afectada"}); ${todas.filter((f) => f.edicion).length} con recorte editado`);
@@ -257,6 +268,8 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
     meteo: met,
     cuadroTabla: cuadroTablaXml(entrada),
     fotos: paraInforme,
+    calidad: datos.entrega?.calidad ?? CALIDAD_POR_DEFECTO,
+    alOmitirFoto: (f) => emitir("error", "informe", `Foto omitida por estar dañada: ${f.id ?? f.recinto}`),
     piesGrupos: await leerLeyendasGrupos(casoId),
     fachada,
     siniestrosAnteriores: false,
@@ -268,7 +281,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
       emitir("error", "informe", `No se pudo generar el PDF (${err instanceof Error ? err.message : "error"}): se entrega el Word`);
       return null;
     }),
-    generarAnexo({ siniestro: datos.siniestro, asegurado: datos.asegurado.nombre, liquidacion: datos.liquidacion, anio: datos.fechas.ocurrencia.slice(0, 4), fotos: todas, pies: await leerLeyendasGrupos(casoId) }),
+    generarAnexo({ siniestro: datos.siniestro, asegurado: datos.asegurado.nombre, liquidacion: datos.liquidacion, anio: datos.fechas.ocurrencia.slice(0, 4), fotos: todas, pies: await leerLeyendasGrupos(casoId), calidad: datos.entrega?.calidad ?? CALIDAD_POR_DEFECTO, compacto: datos.entrega?.anexoCompacto, alOmitirFoto: (f) => emitir("error", "informe", `Foto omitida del anexo por estar dañada: ${f.id ?? f.recinto}`) }),
   ]);
 
   const pdf = pdfMotor?.pdf ?? null;
@@ -333,8 +346,8 @@ export async function previaInforme(casoId: string, usuarioId: string): Promise<
   const salida = await salidaParaPrevia(casoId, acta, recl);
   const entrada = entradaExcelDe(datos, acta, recl, salida, valorUF);
   const res = resumenCuadro(entrada);
-  const [fachada, fotosDb] = await Promise.all([fachadaDelActa(casoId), archivosConContenido(casoId, "foto")]);
-  const todas: FotoInforme[] = fotosDb.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: "", edicion: f.edicion }));
+  const [fachada, fotosDb] = await Promise.all([fachadaDelActa(casoId), fotosPerezosas(casoId)]);
+  const todas: FotoInforme[] = fotosDb.map((f) => ({ ...f, leyenda: "" }));
   const docx = await generarInforme({
     caso: datos,
     valorUF,

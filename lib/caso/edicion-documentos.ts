@@ -3,6 +3,7 @@ import PizZip from "pizzip";
 import { consulta, uno } from "../db";
 import { cuadroTablaXml, n0, nf2, resumenCuadro } from "../docs/cuadro";
 import { generarAnexo } from "../docs/anexo";
+import { CALIDAD_POR_DEFECTO } from "../fotos/calidad";
 import { docxAPdf, motorPdfDisponible } from "../docs/pdf";
 import { seleccionarFotosInforme } from "../docs/fotos-seleccion";
 import { actualizarTotales, reemplazarCuadro, reemplazarFotos, type FotoParaWord } from "../docs/sincronizar-word";
@@ -13,14 +14,20 @@ import { datosCasoSchema } from "../domain/tipos";
 import { leerPlanilla } from "../extraccion/planilla";
 import type { ActaInspeccion } from "../extraccion/acta";
 import { leerLeyendasGrupos } from "./generacion";
-import { archivosConContenido, guardarExtraccion, leerExtraccion, obtenerCaso } from "./repositorio";
+import { fotosPerezosas, guardarExtraccion, leerExtraccion, obtenerCaso } from "./repositorio";
 
-export type VistaDocumento = { tipo: "docx"; nombre: string; bloques: BloqueVista[] } | { tipo: "xlsx"; nombre: string; hojas: HojaVista[] };
+export type VistaDocumento =
+  | { tipo: "docx"; nombre: string; bloques: BloqueVista[] }
+  | { tipo: "xlsx"; nombre: string; hojas: HojaVista[] }
+  | { tipo: "texto"; nombre: string; contenido: string }
+  | { tipo: "zip"; nombre: string; entradas: { nombre: string; tamano: number }[] };
 
 type Salida = { id: string; nombre: string; mime: string; contenido: Buffer };
 
 const esDocx = (n: string) => /\.docx$/i.test(n);
 const esXlsx = (n: string) => /\.xlsx$/i.test(n);
+const esTexto = (n: string) => /\.txt$/i.test(n);
+const esZip = (n: string) => /\.zip$/i.test(n);
 const esInforme = (n: string) => /INFORME\.docx$/i.test(n);
 
 const salidas = (casoId: string) => consulta<Salida>("select id, nombre, mime, contenido from archivos where caso_id = $1 and tipo = 'salida'", [casoId]);
@@ -34,6 +41,11 @@ export async function vistaDe(casoId: string, aid: string): Promise<VistaDocumen
   if (!a) return null;
   if (esDocx(a.nombre)) return { tipo: "docx", nombre: a.nombre, bloques: docxAVista(a.contenido).bloques };
   if (esXlsx(a.nombre)) return { tipo: "xlsx", nombre: a.nombre, hojas: libroAVista(await cargarLibro(a.contenido)) };
+  if (esTexto(a.nombre)) return { tipo: "texto", nombre: a.nombre, contenido: a.contenido.toString("utf8") };
+  if (esZip(a.nombre)) {
+    const z = new PizZip(a.contenido);
+    return { tipo: "zip", nombre: a.nombre, entradas: Object.values(z.files).filter((f) => !f.dir).map((f) => ({ nombre: f.name, tamano: f.asNodeBuffer().length })) };
+  }
   return null;
 }
 
@@ -113,8 +125,7 @@ async function sincronizarWordConExcel(casoId: string, usuarioId: string, antes:
 
 async function fotosParaWord(casoId: string): Promise<{ todas: (FotoParaWord & { edicion: FotoParaWord["edicion"] })[]; acta: ActaInspeccion | null }> {
   const acta = await leerExtraccion<ActaInspeccion>(casoId, "acta");
-  const filas = await archivosConContenido(casoId, "foto");
-  const todas = filas.map((f) => ({ id: f.id, recinto: f.recinto ?? "General", buffer: f.contenido, leyenda: "", edicion: f.edicion }));
+  const todas = (await fotosPerezosas(casoId)).map((f) => ({ ...f, leyenda: "" }));
   return { todas, acta };
 }
 
@@ -130,24 +141,25 @@ export async function sincronizarFotos(casoId: string, usuarioId: string): Promi
   if (!caso) return [];
   const { todas: fotos, acta } = await fotosParaWord(casoId);
   const avisos: string[] = [];
+  const calidad = caso.datos.entrega?.calidad ?? CALIDAD_POR_DEFECTO;
   if (acta) {
     const { fotos: elegidas } = seleccionarFotosInforme(fotos, acta);
     const pies = await leerLeyendasGrupos(casoId);
-    const r = await reemplazarFotos(informe.contenido, elegidas, pies);
+    const r = await reemplazarFotos(informe.contenido, elegidas, pies, { calidad, alOmitirFoto: (f) => avisos.push(`Foto omitida por estar dañada: ${f.id}`) });
     if (r.encontrado) await reemplazar(informe.id, r.buffer);
     else avisos.push("No se encontró la sección de fotografías del informe: vuelve a generarlo.");
   }
   const anexo = todas.find((a) => /^Anexo/i.test(a.nombre) && esDocx(a.nombre));
   if (anexo) {
     const d = caso.datos;
-    await reemplazar(anexo.id, await generarAnexo({ siniestro: d.siniestro ?? "", asegurado: d.asegurado?.nombre ?? "", liquidacion: d.liquidacion ?? "", anio: (d.fechas?.ocurrencia ?? "").slice(0, 4), fotos, pies: await leerLeyendasGrupos(casoId) }));
+    await reemplazar(anexo.id, await generarAnexo({ siniestro: d.siniestro ?? "", asegurado: d.asegurado?.nombre ?? "", liquidacion: d.liquidacion ?? "", anio: (d.fechas?.ocurrencia ?? "").slice(0, 4), fotos, pies: await leerLeyendasGrupos(casoId), calidad, compacto: caso.datos.entrega?.anexoCompacto, alOmitirFoto: (f) => avisos.push(`Foto omitida del anexo por estar dañada: ${f.id}`) }));
   }
   return [...avisos, ...(await rehacerDerivados(casoId, pieDe(caso.datos)))];
 }
 
 export type ResultadoEdicion = { avisos: string[]; aplicados: number; vista: VistaDocumento };
 
-export async function guardarEdicion(casoId: string, usuarioId: string, aid: string, cambios: { word?: EdicionesWord; celdas?: CambioCelda[]; formato?: CambioFormato }): Promise<ResultadoEdicion> {
+export async function guardarEdicion(casoId: string, usuarioId: string, aid: string, cambios: { word?: EdicionesWord; celdas?: CambioCelda[]; formato?: CambioFormato; texto?: string }): Promise<ResultadoEdicion> {
   const a = await salida(casoId, aid);
   if (!a) throw new Error("Documento no encontrado.");
   const caso = await obtenerCaso(casoId, usuarioId);
@@ -166,7 +178,11 @@ export async function guardarEdicion(casoId: string, usuarioId: string, aid: str
     aplicados = (cambios.celdas ?? []).length + (cambios.formato?.columnas?.length ?? 0) + (cambios.formato?.filas?.length ?? 0);
     await reemplazar(a.id, nuevo);
     avisos.push(...(await sincronizarWordConExcel(casoId, usuarioId, a.contenido, nuevo)));
-  } else throw new Error("Solo se pueden editar los documentos Word y Excel.");
+  } else if (esTexto(a.nombre)) {
+    nuevo = Buffer.from(cambios.texto ?? a.contenido.toString("utf8"), "utf8");
+    aplicados = 1;
+    await reemplazar(a.id, nuevo);
+  } else throw new Error("Solo se pueden editar los documentos Word, Excel y de texto.");
   avisos.push(...(await rehacerDerivados(casoId, pieDe(caso.datos))));
   await consulta("update casos set actualizado = now() where id = $1", [casoId]);
   const vista = (await vistaDe(casoId, aid))!;

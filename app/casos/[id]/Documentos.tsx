@@ -93,12 +93,12 @@ export default function Documentos({ caso, archivos }: { caso: Caso; archivos: A
       <div className="panel space-y-3 p-5">
         <TituloAyuda titulo="Antecedentes del siniestro" nivel={2}>
           <p>
-            Basta con <strong>tres documentos</strong>: el informe de inspección (PDF), el borrador del informe (Word) y el presupuesto del contratista (Excel o PDF), más las fotografías por recinto (las carpetas se reconocen por su nombre: «Living», «Dormitorio 1», «Cubierta»…). Del borrador salen la póliza, la vigencia, la suma asegurada, las fechas y las partes; no hace falta subir la provisión, el mandato ni nada más. Súbelos con «Subir carpeta del caso» o «Subir archivos» del menú lateral.
+            Basta con <strong>tres documentos</strong>: el informe de inspección (PDF), el borrador del informe (Word) y el presupuesto del contratista (Excel o PDF), más las fotografías por recinto (las carpetas se reconocen por su nombre: «Living», «Dormitorio 1», «Cubierta»…). Del borrador salen la póliza, la vigencia, la suma asegurada, las fechas y las partes; no hace falta subir la provisión, el mandato ni nada más. Súbelos con «Subir carpeta del caso» o «Subir archivos» del menú lateral (también acepta un ZIP con todo dentro).
           </p>
         </TituloAyuda>
         <div className="hidden">
           <input ref={carpeta} type="file" multiple className="hidden" onChange={(e) => subir(e.target.files)} {...({ webkitdirectory: "" } as object)} />
-          <input ref={sueltos} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={(e) => subir(e.target.files)} />
+          <input ref={sueltos} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.zip" onChange={(e) => subir(e.target.files)} />
         </div>
         {subiendo && <p role="status" className="aviso aviso-ok">{subiendo}</p>}
         {errorSubida && <p role="alert" className="aviso aviso-error">{errorSubida}</p>}

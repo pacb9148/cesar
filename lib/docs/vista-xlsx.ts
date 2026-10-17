@@ -1,8 +1,9 @@
 import ExcelJS from "exceljs";
 import { evaluarFormula, numeroACol } from "./formulas";
+import { celdaProtegida } from "./presupuesto-protegido";
 
 /** Vista editable de la planilla: valores tal como se ven, con las celdas de fórmula marcadas (no se editan: se recalculan). */
-export type CeldaVista = { r: number; c: number; txt: string; raw: string; f?: string; b?: boolean; fondo?: string; al?: "left" | "center" | "right"; fecha?: boolean; aj?: boolean };
+export type CeldaVista = { r: number; c: number; txt: string; raw: string; f?: string; b?: boolean; fondo?: string; al?: "left" | "center" | "right"; fecha?: boolean; aj?: boolean; /** Parte de Reclamación del presupuesto: no se edita. */ prot?: boolean };
 /** `altos`: alto de cada fila en px (0 = automático); `ajusteTexto`: las celdas parten el texto en varias líneas en vez de cortarlo. */
 export type HojaVista = { nombre: string; filas: number; columnas: number; anchos: number[]; altos: number[]; ajusteTexto: boolean; combinadas: { r1: number; c1: number; r2: number; c2: number }[]; celdas: CeldaVista[] };
 export type CambioCelda = { hoja: string; r: number; c: number; valor: string };
@@ -88,6 +89,7 @@ export function libroAVista(wb: ExcelJS.Workbook): HojaVista[] {
             al: al === "left" || al === "center" || al === "right" ? al : undefined,
             fecha: res instanceof Date || undefined,
             aj: cell.alignment?.wrapText || undefined,
+            prot: celdaProtegida(ws, r, c) || undefined,
           });
         }
       const merges = ((ws.model as { merges?: string[] }).merges ?? []).flatMap((m) => {
@@ -190,6 +192,7 @@ export async function aplicarCeldas(buf: Buffer, cambios: CambioCelda[], formato
     const ws = wb.getWorksheet(k.hoja);
     if (!ws) throw new Error(`La hoja «${k.hoja}» no existe.`);
     if (k.r < 1 || k.c < 1 || k.r > MAX_FILAS || k.c > MAX_COLS) throw new Error(`Celda fuera de rango: ${numeroACol(k.c)}${k.r}`);
+    if (celdaProtegida(ws, k.r, k.c)) throw new Error(`${k.hoja}!${numeroACol(k.c)}${k.r} es parte de la Reclamación del contratista: no se modifica. Los ajustes van en «Valor ajustado».`);
     const cell = ws.getCell(k.r, k.c);
     if (esFormula(cell.value)) throw new Error(`${k.hoja}!${numeroACol(k.c)}${k.r} es una fórmula: edita los valores de los que depende.`);
     cell.value = interpretarEntrada(k.valor, resultadoDe(cell.value) instanceof Date) as ExcelJS.CellValue;

@@ -1,10 +1,11 @@
 import { FOTO_ALTO_CM, FOTO_ANCHO_CM, FOTOS_COLUMNAS, FOTOS_POR_TABLA, LEYENDA_FOTO_MAX } from "../domain/constantes";
+import { pxDeCalidad } from "../fotos/calidad";
 import { escXml, xmlImagen } from "./docx-xml";
 
 /** Tamaño de cada foto en EMU (unidad de Word): exactamente FOTO_ANCHO_CM × FOTO_ALTO_CM (8,66 × 6,70 cm). */
 export const FOTO_EMU = { cx: Math.round(FOTO_ANCHO_CM * 360000), cy: Math.round(FOTO_ALTO_CM * 360000) };
 /** Píxeles de la imagen incrustada (≈300 ppp) con la misma proporción que la caja de la foto. */
-export const FOTO_PX = { ancho: 1024, alto: Math.round((1024 * FOTO_ALTO_CM) / FOTO_ANCHO_CM) };
+export const FOTO_PX = pxDeCalidad("300");
 /** Ancho de cada celda en twips: 8,66 cm, para que la imagen ocupe la celda sin encogerse ni salirse. */
 const CELDA_TWIPS = Math.round((FOTO_ANCHO_CM / 2.54) * 1440);
 
@@ -18,13 +19,16 @@ export const leyendaCorta = (t: string, max = LEYENDA_FOTO_MAX): string => {
 
 const fuente = (sz: number, extra = "") => `<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>${extra}<w:sz w:val="${sz}"/></w:rPr>`;
 
+/** Márgenes internos a cero en los cuatro lados: las fotos se tocan entre sí sin franjas blancas. */
+const SIN_MARGEN = `<w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar>`;
+
 const celda = (f: FotoCelda | undefined, nombre: string, ancho: number, span = 1) => {
   const contenido = f
     ? `<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>${xmlImagen(f.rid, FOTO_EMU.cx, FOTO_EMU.cy, nombre)}</w:r></w:p>` +
       // Leyenda opcional: solo si el usuario la escribió. Una línea (Times New Roman 10, cursiva, centrada), pegada a la imagen.
       (f.leyenda.trim() ? `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>${fuente(20, "<w:i/><w:noProof/>")}<w:t xml:space="preserve">${escXml(leyendaCorta(f.leyenda))}</w:t></w:r></w:p>` : "")
     : `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>`;
-  return `<w:tc><w:tcPr><w:tcW w:w="${ancho}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ""}</w:tcPr>${contenido}</w:tc>`;
+  return `<w:tc><w:tcPr><w:tcW w:w="${ancho}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ""}${SIN_MARGEN}</w:tcPr>${contenido}</w:tc>`;
 };
 
 /**
@@ -40,7 +44,7 @@ export function tablasDeFotos(fotos: FotoCelda[], opciones: { titulo?: string; f
     const filas: string[] = [];
     if (opciones.titulo)
       filas.push(
-        `<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${ancho * FOTOS_COLUMNAS}" w:type="dxa"/><w:gridSpan w:val="${FOTOS_COLUMNAS}"/></w:tcPr><w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0"/></w:pPr><w:r>${fuente(24, "<w:b/><w:i/>")}<w:t xml:space="preserve">${escXml(n === 0 ? opciones.titulo : `${opciones.titulo} (continuación)`)}</w:t></w:r></w:p></w:tc></w:tr>`,
+        `<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${ancho * FOTOS_COLUMNAS}" w:type="dxa"/><w:gridSpan w:val="${FOTOS_COLUMNAS}"/>${SIN_MARGEN}</w:tcPr><w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0"/></w:pPr><w:r>${fuente(24, "<w:b/><w:i/>")}<w:t xml:space="preserve">${escXml(n === 0 ? opciones.titulo : `${opciones.titulo} (continuación)`)}</w:t></w:r></w:p></w:tc></w:tr>`,
       );
     if (n === 0 && opciones.fachada) filas.push(`<w:tr><w:trPr><w:cantSplit/></w:trPr>${celda(opciones.fachada, "fachada", ancho * FOTOS_COLUMNAS, FOTOS_COLUMNAS)}</w:tr>`);
     for (let i = 0; i < g.length; i += FOTOS_COLUMNAS) {
@@ -50,11 +54,11 @@ export function tablasDeFotos(fotos: FotoCelda[], opciones: { titulo?: string; f
     // Leyenda del grupo (opcional): una fila al pie de la última tabla de la estancia, Times New Roman 10 cursiva centrada.
     if (opciones.pie && n === grupos.length - 1)
       filas.push(
-        `<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${ancho * FOTOS_COLUMNAS}" w:type="dxa"/><w:gridSpan w:val="${FOTOS_COLUMNAS}"/></w:tcPr><w:p><w:pPr><w:spacing w:before="40" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>${fuente(20, "<w:i/>")}<w:t xml:space="preserve">${escXml(leyendaCorta(opciones.pie, 400))}</w:t></w:r></w:p></w:tc></w:tr>`,
+        `<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${ancho * FOTOS_COLUMNAS}" w:type="dxa"/><w:gridSpan w:val="${FOTOS_COLUMNAS}"/>${SIN_MARGEN}</w:tcPr><w:p><w:pPr><w:spacing w:before="40" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r>${fuente(20, "<w:i/>")}<w:t xml:space="preserve">${escXml(leyendaCorta(opciones.pie, 400))}</w:t></w:r></w:p></w:tc></w:tr>`,
       );
     return (
-      `<w:tbl><w:tblPr><w:tblW w:w="${ancho * FOTOS_COLUMNAS}" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/>` +
-      `<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
+      `<w:tbl><w:tblPr><w:tblW w:w="${ancho * FOTOS_COLUMNAS}" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders><w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/></w:tblBorders><w:tblLayout w:type="fixed"/>` +
+      `<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
       `<w:tblGrid>${Array.from({ length: FOTOS_COLUMNAS }, () => `<w:gridCol w:w="${ancho}"/>`).join("")}</w:tblGrid>${filas.join("")}</w:tbl>`
     );
   });

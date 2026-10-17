@@ -1,5 +1,6 @@
 import { conUsuario, fallo, json } from "@/lib/api";
 import { clasificarArchivo } from "@/lib/caso/clasificar";
+import { expandirZip, MAX_BYTES_ZIP } from "@/lib/caso/zip-entrada";
 import { auditar, guardarArchivo, listarArchivos, obtenerCaso } from "@/lib/caso/repositorio";
 
 export const maxDuration = 300;
@@ -17,11 +18,35 @@ export const GET = conUsuario<{ id: string }>(async (_req, u, { id }) => {
 export const POST = conUsuario<{ id: string }>(async (req, u, { id }) => {
   if (!(await obtenerCaso(id, u.id))) return fallo("Caso no encontrado", 404);
   const form = await req.formData();
-  const archivos = form.getAll("archivos").filter((x): x is File => x instanceof File);
-  const rutas = form.getAll("rutas").map(String);
-  if (!archivos.length) return fallo("No llegó ningún archivo");
+  const recibidos = form.getAll("archivos").filter((x): x is File => x instanceof File);
+  const rutasForm = form.getAll("rutas").map(String);
+  if (!recibidos.length) return fallo("No llegó ningún archivo");
   const aceptados: { nombre: string; tipo: string; recinto: string | null }[] = [];
   const rechazados: { nombre: string; motivo: string }[] = [];
+  // Un ZIP se abre aquí mismo: cada archivo de su interior entra como si se hubiera subido suelto, con su carpeta como ruta.
+  const archivos: File[] = [];
+  const rutas: string[] = [];
+  for (const [i, f] of recibidos.entries()) {
+    if (!/\.zip$/i.test(f.name)) {
+      archivos.push(f);
+      rutas.push(rutasForm[i] ?? "");
+      continue;
+    }
+    if (f.size > MAX_BYTES_ZIP) {
+      rechazados.push({ nombre: f.name, motivo: "supera 150 MB" });
+      continue;
+    }
+    try {
+      const z = expandirZip(Buffer.from(await f.arrayBuffer()));
+      rechazados.push(...z.omitidos);
+      for (const e of z.entradas) {
+        archivos.push(new File([new Uint8Array(e.contenido)], e.nombre, { type: "" }));
+        rutas.push(e.ruta);
+      }
+    } catch (e) {
+      rechazados.push({ nombre: f.name, motivo: e instanceof Error ? e.message : "ZIP inválido" });
+    }
+  }
   let orden = 0;
   for (const [i, f] of archivos.entries()) {
     if (!PERMITIDOS.test(f.name)) {

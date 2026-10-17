@@ -1,7 +1,6 @@
-import { aplicarEdicion } from "../fotos/aplicar";
-import { esEdicionNula } from "../fotos/recorte";
-import type { EdicionFoto } from "../fotos/recorte";
-import { FOTO_PX, FOTO_EMU, tablasPorGrupo, type FotoCelda } from "./fotos-xml";
+import { fotoFinal, type FotoOrigen } from "../fotos/procesar";
+import { pxDeCalidad, type Calidad } from "../fotos/calidad";
+import { FOTO_EMU, tablasPorGrupo, type FotoCelda } from "./fotos-xml";
 import PizZip from "pizzip";
 import sharp from "sharp";
 import { join } from "node:path";
@@ -25,7 +24,7 @@ import {
   type Reemplazo,
 } from "./docx-xml";
 
-export type FotoInforme = { id?: string; recinto: string; buffer: Buffer; leyenda?: string; edicion?: EdicionFoto | null };
+export type FotoInforme = FotoOrigen & { leyenda?: string };
 
 export type Meteo = {
   estacion: string | null;
@@ -39,6 +38,10 @@ export type EntradaInforme = {
   valorUF: number;
   caracteristicas: SalidaAgente["caracteristicas"];
   evidencia: EvidenciaRecinto[];
+  /** Calidad de las fotos incrustadas (150 o 300 ppp). */
+  calidad?: Calidad;
+  /** Se llama con cada foto corrupta que se omitió, para avisar al usuario. */
+  alOmitirFoto?: (f: FotoOrigen) => void;
   /** Evidencia redactada como párrafo: reemplaza a la lista de viñetas por recinto. */
   evidenciaTexto?: string;
   ajusteTexto: string;
@@ -69,19 +72,27 @@ type Media = { rid: string; cx: number; cy: number };
 class Paquete {
   private n = 0;
   private rels: string;
+  calidad: Calidad = "300";
   constructor(public zip: PizZip) {
     this.rels = zip.file("word/_rels/document.xml.rels")!.asText();
   }
-  async imagen(buf: Buffer, anchoIn: number, opts: { cover43?: boolean; foto?: boolean; maxPx?: number } = {}): Promise<Media> {
+  async imagen(buf: Buffer, anchoIn: number, opts: { cover43?: boolean; foto?: boolean; maxPx?: number; yaFinal?: boolean } = {}): Promise<Media> {
+    if (opts.yaFinal) return this.guardar(buf, "jpg", FOTO_EMU);
     let img = sharp(buf).rotate();
     // Fotos del informe: recorte a 8,66 × 6,70 cm centrado en la zona más llamativa de la imagen (el área con el daño).
-    if (opts.foto) img = img.resize(FOTO_PX.ancho, FOTO_PX.alto, { fit: "cover", position: sharp.strategy.attention });
+    if (opts.foto) img = img.resize(pxDeCalidad(this.calidad).ancho, pxDeCalidad(this.calidad).alto, { fit: "cover", position: sharp.strategy.attention });
     else if (opts.cover43) img = img.resize(900, 675, { fit: "cover" });
     else img = img.resize({ width: opts.maxPx ?? 1600, withoutEnlargement: true });
     const esPng = !opts.cover43 && !opts.foto;
     const salida = esPng ? await img.png().toBuffer() : await img.jpeg({ quality: 82 }).toBuffer();
     const meta = await sharp(salida).metadata();
     const ext = esPng ? "png" : "jpg";
+    if (opts.foto) return this.guardar(salida, ext, FOTO_EMU);
+    const cx = Math.round(anchoIn * EMU_IN);
+    const cy = Math.round((cx * (meta.height ?? 1)) / (meta.width ?? 1));
+    return this.guardar(salida, ext, { cx, cy });
+  }
+  private guardar(salida: Buffer, ext: string, dim: { cx: number; cy: number }): Media {
     const nombre = `cesar-${++this.n}.${ext}`;
     this.zip.file(`word/media/${nombre}`, salida);
     const rid = `rIdCesar${this.n}`;
@@ -89,10 +100,7 @@ class Paquete {
       "</Relationships>",
       `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${nombre}"/></Relationships>`,
     );
-    if (opts.foto) return { rid, ...FOTO_EMU };
-    const cx = Math.round(anchoIn * EMU_IN);
-    const cy = Math.round((cx * (meta.height ?? 1)) / (meta.width ?? 1));
-    return { rid, cx, cy };
+    return { rid, ...dim };
   }
   cerrar() {
     this.zip.file("word/_rels/document.xml.rels", this.rels);
@@ -277,7 +285,15 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
     }
     // Una sola cuadrícula de 2 × 3 (varias si hay más fotos); la fachada, si existe, abre la primera como fila de cabecera.
     const celdas: FotoCelda[] = [];
-    for (const f of e.fotos) celdas.push({ rid: (await paq.imagen(f.edicion && !esEdicionNula(f.edicion) ? await aplicarEdicion(f.buffer, f.edicion) : f.buffer, 0, { foto: true })).rid, leyenda: f.edicion?.leyenda ?? "", id: f.id, grupo: f.recinto });
+    paq.calidad = e.calidad ?? "300";
+    for (const f of e.fotos) {
+      const final = await fotoFinal(f, paq.calidad);
+      if (!final) {
+        e.alOmitirFoto?.(f);
+        continue;
+      }
+      celdas.push({ rid: (await paq.imagen(final, 0, { foto: true, yaFinal: true })).rid, leyenda: f.edicion?.leyenda ?? "", id: f.id, grupo: f.recinto });
+    }
     const fachada: FotoCelda | null = e.fachada[0] ? { rid: (await paq.imagen(e.fachada[0], 0, { foto: true })).rid, leyenda: "" } : null;
     let ancla: Node = pImgs;
     for (const xml of tablasPorGrupo(celdas, e.piesGrupos, fachada)) {

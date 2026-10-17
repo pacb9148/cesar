@@ -31,8 +31,10 @@ describe("fotos del informe: 8,66 × 6,70 cm en cuadrícula de 2 × 3", () => {
     const ancho = Number(/<w:tblW w:w="(\d+)"/.exec(t)![1]);
     expect((ancho / 1440) * 2.54).toBeCloseTo(17.32, 1);
     expect(t).toContain('<w:left w:w="0"');
-    expect(t).not.toContain("<w:tblBorders>");
-    expect(t).toMatch(/<w:spacing w:before="0" w:after="0"\/><\/w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman"[^>]*\/><w:b\/><w:i\/><w:sz w:val="24"\/>/);
+    // Sin bordes explícitos y márgenes internos a cero en los cuatro lados, tanto de la tabla como de cada celda.
+    expect(cuenta(t, /<w:tblBorders>(<w:(top|left|bottom|right|insideH|insideV) w:val="none"[^>]*[/]>){6}<[/]w:tblBorders>/g)).toBe(1);
+    expect(t).toContain('<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>');
+    expect(cuenta(t, /<w:tcMar><w:top w:w="0" w:type="dxa"[/]><w:left w:w="0" w:type="dxa"[/]><w:bottom w:w="0" w:type="dxa"[/]><w:right w:w="0" w:type="dxa"[/]><[/]w:tcMar>/g)).toBe(cuenta(t, /<w:tc>/g));
     expect(t).toMatch(/<w:i\/><w:noProof\/><w:sz w:val="20"\/>/);
   });
   it("la leyenda es opcional: sin texto no sale ninguna, con texto sale una línea", () => {

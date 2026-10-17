@@ -15,6 +15,7 @@ const cuerpo = z
     fechas: z.object({ emision: fecha.nullable(), informadoPartes: fecha.nullable() }).partial(),
     poliza: z.object({ sumaAseguradaUF: z.number().nonnegative(), deducibleUF: z.number().nonnegative() }).partial(),
     // La UF ronda los 40.000 pesos: un valor fuera de rango es un error de tipeo (p. ej. 4.084.479 por borrar el decimal).
+    entrega: z.object({ calidad: z.enum(["150", "300"]), anexoCompacto: z.boolean() }),
     valor_uf: z.number().min(1000, "La UF parece demasiado baja").max(200000, "La UF parece demasiado alta: revisa el punto y la coma decimal"),
   })
   .partial();

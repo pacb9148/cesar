@@ -150,5 +150,7 @@ export const datosCasoSchema = z.object({
   }),
   denunciaTexto: z.string().nullable(),
   modo: z.enum(["reclamacion", "perdida_determinada"]),
+  /** Cómo se entregan los documentos: resolución de las fotos y maquetación del anexo. Sin valor: 150 ppp y anexo normal. */
+  entrega: z.object({ calidad: z.enum(["150", "300"]), anexoCompacto: z.boolean() }).optional(),
 });
 export type DatosCaso = z.infer<typeof datosCasoSchema>;

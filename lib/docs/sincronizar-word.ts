@@ -1,10 +1,9 @@
 import PizZip from "pizzip";
-import sharp from "sharp";
-import { aplicarEdicion } from "../fotos/aplicar";
-import { esEdicionNula, type EdicionFoto } from "../fotos/recorte";
+import { fotoFinal, type FotoOrigen } from "../fotos/procesar";
+import { CALIDAD_POR_DEFECTO, type Calidad } from "../fotos/calidad";
 import { MARCA_CUADRO } from "./cuadro";
 import { crearEl, hijos, NS_W, parse, porTag, reemplazarEnParrafo, serializar, textoDe, type Doc } from "./docx-xml";
-import { FOTO_PX, tablasPorGrupo, type FotoCelda } from "./fotos-xml";
+import { tablasPorGrupo, type FotoCelda } from "./fotos-xml";
 
 /**
  * Mantiene el Word al día cuando cambia algo de lo que depende: el cuadro de pérdida y los totales del texto (al editar el
@@ -59,7 +58,7 @@ export function actualizarTotales(docx: Buffer, pares: [string, string][]): { bu
   return { buffer: n ? guardar(zip, doc) : docx, reemplazos: n };
 }
 
-export type FotoParaWord = { id: string; recinto: string; buffer: Buffer; leyenda: string; edicion?: EdicionFoto | null };
+export type FotoParaWord = FotoOrigen & { id: string; leyenda: string };
 
 function agregarJpg(zip: PizZip, rels: { texto: string }, jpg: Buffer, n: number): string {
   const nombre = `cesar-f${Date.now().toString(36)}-${n}.jpg`;
@@ -69,16 +68,11 @@ function agregarJpg(zip: PizZip, rels: { texto: string }, jpg: Buffer, n: number
   return rid;
 }
 
-async function fotoFinal(f: FotoParaWord): Promise<Buffer> {
-  if (f.edicion && !esEdicionNula(f.edicion)) return aplicarEdicion(f.buffer, f.edicion);
-  return sharp(f.buffer).rotate().resize(FOTO_PX.ancho, FOTO_PX.alto, { fit: "cover", position: sharp.strategy.attention }).jpeg({ quality: 82 }).toBuffer();
-}
-
 /**
  * Rehace la sección de fotografías del informe con la selección y los recortes actuales: quita las tablas de fotos anteriores
  * (conserva la imagen de fachada que tuvieran) y pone las nuevas en cuadrículas de 2 × 3.
  */
-export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[], pies: Record<string, string> = {}): Promise<{ buffer: Buffer; encontrado: boolean }> {
+export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[], pies: Record<string, string> = {}, opc: { calidad?: Calidad; alOmitirFoto?: (f: FotoParaWord) => void } = {}): Promise<{ buffer: Buffer; encontrado: boolean }> {
   const { zip, doc, body } = cargar(docx);
   const ancla = hijos(body).find((e) => e.localName === "p" && /Las siguientes imágenes dan cuenta/.test(textoDe(e)));
   if (!ancla) return { buffer: docx, encontrado: false };
@@ -104,7 +98,14 @@ export async function reemplazarFotos(docx: Buffer, fotos: FotoParaWord[], pies:
   const rels = { texto: zip.file("word/_rels/document.xml.rels")!.asText() };
   const celdas: FotoCelda[] = [];
   let n = 0;
-  for (const f of fotos) celdas.push({ rid: agregarJpg(zip, rels, await fotoFinal(f), n++), leyenda: f.edicion?.leyenda ?? "", id: f.id, grupo: f.recinto });
+  for (const f of fotos) {
+    const final = await fotoFinal(f, opc.calidad ?? CALIDAD_POR_DEFECTO);
+    if (!final) {
+      opc.alOmitirFoto?.(f);
+      continue;
+    }
+    celdas.push({ rid: agregarJpg(zip, rels, final, n++), leyenda: f.edicion?.leyenda ?? "", id: f.id, grupo: f.recinto });
+  }
   for (const t of viejas) t.parentNode!.removeChild(t);
 
   let ultimo: Node = ancla;

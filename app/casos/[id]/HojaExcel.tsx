@@ -170,9 +170,9 @@ export default function HojaExcel({ h, ediciones, alEditar, alFormato, pendiente
                       key={c}
                       colSpan={m ? m.c2 - m.c1 + 1 : 1}
                       rowSpan={m ? m.r2 - m.r1 + 1 : 1}
-                      title={esFormula ? `Fórmula: =${x!.f} (se recalcula sola)` : soloLectura ? "Vista previa: solo lectura" : "Clic para editar"}
-                      onClick={() => !esFormula && !soloLectura && setActiva({ r, c })}
-                      style={{ border: "1px solid #e1e4ea", padding: enEdicion ? 0 : "1px 4px", background: editada !== undefined ? "#fde68a" : (x?.fondo ?? "#fff"), color: editada !== undefined ? "#111827" : colorSobre(x?.fondo), fontWeight: x?.b ? 700 : 400, textAlign: x?.al ?? (x && /^-?[\d.,%]+$/.test(x.txt) ? "right" : "left"), whiteSpace: ajuste ? "pre-wrap" : "nowrap", wordBreak: ajuste ? "break-word" : undefined, verticalAlign: ajuste ? "top" : undefined, overflow: "hidden", textOverflow: ajuste ? undefined : "ellipsis", cursor: esFormula || soloLectura ? "default" : "text" }}
+                      title={esFormula ? `Fórmula: =${x!.f} (se recalcula sola)` : soloLectura ? "Vista previa: solo lectura" : x?.prot ? "Reclamación del contratista: no se modifica" : "Clic para editar"}
+                      onClick={() => !esFormula && !soloLectura && !x?.prot && setActiva({ r, c })}
+                      style={{ border: "1px solid #e1e4ea", padding: enEdicion ? 0 : "1px 4px", background: editada !== undefined ? "#fde68a" : (x?.fondo ?? "#fff"), color: editada !== undefined ? "#111827" : colorSobre(x?.fondo), fontWeight: x?.b ? 700 : 400, textAlign: x?.al ?? (x && /^-?[\d.,%]+$/.test(x.txt) ? "right" : "left"), whiteSpace: ajuste ? "pre-wrap" : "nowrap", wordBreak: ajuste ? "break-word" : undefined, verticalAlign: ajuste ? "top" : undefined, overflow: "hidden", textOverflow: ajuste ? undefined : "ellipsis", cursor: esFormula || soloLectura || x?.prot ? "default" : "text" }}
                     >
                       {enEdicion ? (
                         <input

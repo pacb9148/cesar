@@ -25,6 +25,7 @@ const cuerpo = z.object({
       ajusteTexto: z.array(z.object({ hoja: z.string().max(60), activo: z.boolean() })).max(20).optional(),
     })
     .optional(),
+  texto: z.string().max(200000).optional(),
   celdas: z.array(z.object({ hoja: z.string().max(60), r: z.number().int().min(1), c: z.number().int().min(1), valor: z.string().max(500) })).max(2000).optional(),
 });
 
@@ -40,7 +41,7 @@ export const GET = conUsuario<{ id: string; aid: string }>(async (req, u, { id, 
     }
   }
   const v = await vistaDe(id, aid);
-  return v ? json(v) : fallo("Este documento no tiene vista previa (solo Word y Excel).", 404);
+  return v ? json(v) : fallo("Este documento no tiene vista previa (Word, Excel, texto y ZIP).", 404);
 });
 
 /** Guarda las ediciones en el propio entregable y rehace lo que depende de él (cuadro y totales del Word, PDF, ZIP). */
