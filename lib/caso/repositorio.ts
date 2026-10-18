@@ -1,4 +1,6 @@
 import { ordenarGruposPorPresupuesto } from "../fotos/orden";
+import { ordenEstancias } from "./textos-informe";
+import type { ActaInspeccion } from "../extraccion/acta";
 import { createHash } from "node:crypto";
 import { consulta, transaccion, uno } from "../db";
 import type { DatosCaso, Reclamacion, SalidaAgente } from "../domain/tipos";
@@ -130,8 +132,11 @@ export async function fotosPerezosas(casoId: string) {
     "select id, recinto, edicion from archivos where caso_id = $1 and tipo = 'foto' order by recinto nulls first, orden, nombre",
     [casoId],
   );
-  // Las estancias salen en el orden de las secciones del presupuesto, como pide el informe.
+  // Las estancias salen en el orden del presupuesto y, las que este no trae, en el de la evidencia observada.
   const secciones = ((await leerReclamacion(casoId))?.datos.secciones ?? []).map((s) => s.titulo);
+  const acta = await leerExtraccion<ActaInspeccion>(casoId, "acta");
+  const caso = await uno<{ datos: DatosCaso }>("select datos from casos where id = $1", [casoId]);
+  if (acta && caso) secciones.push(...ordenEstancias(caso.datos, acta));
   return ordenarGruposPorPresupuesto(filas.map((f) => ({ ...f, recinto: f.recinto ?? "General" })), secciones).map((f) => ({
     id: f.id,
     recinto: f.recinto,

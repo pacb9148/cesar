@@ -128,3 +128,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 18/10/2026 (4.ª tanda)
 - «Generar desde la evidencia» ya lista todas las estancias del acta aunque la descripción del daño venga cortada: infiere el elemento desde los hechos y, si no consta, usa cielo y muros en daños por agua. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 18/10/2026 (5.ª tanda)
+- Las estancias del ajuste, del Excel y de las fotos siguen el orden de la lista de «Evidencia observada» (con presupuesto, el del presupuesto primero). Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.

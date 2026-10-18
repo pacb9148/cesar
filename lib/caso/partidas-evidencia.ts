@@ -2,7 +2,7 @@ import type { LineaAdicional } from "../domain/tipos";
 import type { ActaInspeccion, DanoActa } from "../extraccion/acta";
 import { candidatos, porId } from "../engine/baremo";
 import { cubicar } from "../engine/cubicacion";
-import { coincideEstancia } from "../fotos/orden";
+import { coincideEstancia, posicionEnPresupuesto } from "../fotos/orden";
 import { extrasDeElemento, type Aprendido } from "../conocimiento";
 
 type Elem = "cielo" | "muro" | "cubierta" | "piso" | "ventana" | "puerta";
@@ -76,6 +76,19 @@ function idsDe(e: Elem, texto: string): number[] {
 export type ExtrasMemoria = Record<string, { id: number; um: string }[]>;
 export const extrasDeMemoria = (a: Aprendido): ExtrasMemoria =>
   Object.fromEntries((Object.keys(CONJUNTOS) as Elem[]).map((e) => [e, extrasDeElemento(a, e, CONJUNTOS[e].ids)]));
+
+/**
+ * Pone las partidas adicionales en el orden de las estancias de la evidencia observada (las que no están en esa lista van después, en su orden).
+ * Estable: dentro de una estancia conserva el orden de sus partidas.
+ */
+export function ordenarAdicionales<T extends { seccion: string }>(lineas: T[], orden: string[]): T[] {
+  if (orden.length === 0) return lineas;
+  const pos = (l: T) => {
+    const p = posicionEnPresupuesto(l.seccion, orden);
+    return p >= 0 ? p : Infinity;
+  };
+  return lineas.map((l, i) => ({ l, i, p: pos(l) })).sort((a, b) => a.p - b.p || a.i - b.i).map((x) => x.l);
+}
 
 export type PartidasDeEvidencia = { partidas: LineaAdicional[]; sinPartida: string[] };
 

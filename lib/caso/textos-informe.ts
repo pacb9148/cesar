@@ -18,6 +18,16 @@ export function evidenciaDeTexto(t: string): EvidenciaRecinto[] {
     });
 }
 
+/**
+ * Orden de las estancias tal como aparecen en la lista de «Evidencia observada» (la que editó el usuario o, si no, la de la inspección).
+ * Es el orden de referencia de todo el informe: partidas del ajuste, hojas del Excel y fotos.
+ */
+export function ordenEstancias(datos: Pick<DatosCaso, "textos">, acta: Pick<ActaInspeccion, "danos">): string[] {
+  const propia = datos.textos?.evidencia?.trim();
+  const recintos = propia ? evidenciaDeTexto(propia).map((e) => e.recinto) : acta.danos.map((d) => d.recinto);
+  return [...new Set(recintos.map((r) => r.trim()).filter(Boolean))];
+}
+
 export type TextosInforme = { caracteristicas: string; evidencia: EvidenciaRecinto[] };
 
 /** Lo que va al informe: el texto que editó el usuario en «Datos» o, si no hay, el que sale de la inspección y del ajuste. */

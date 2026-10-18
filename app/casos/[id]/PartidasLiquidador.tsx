@@ -5,7 +5,7 @@ import type { LineaAdicional, SalidaAgente } from "@/lib/domain/tipos";
 import type { ActaInspeccion } from "@/lib/extraccion/acta";
 import { LEYENDA, LETRAS_OBS } from "@/lib/domain/constantes";
 import { BAREMO } from "@/lib/engine/baremo";
-import { partidasDeEvidencia, type ExtrasMemoria } from "@/lib/caso/partidas-evidencia";
+import { ordenarAdicionales, partidasDeEvidencia, type ExtrasMemoria } from "@/lib/caso/partidas-evidencia";
 import TituloAyuda from "@/components/Ayuda";
 import { coincideEstancia } from "@/lib/fotos/orden";
 
@@ -17,7 +17,7 @@ const clave = (a: Pick<LineaAdicional, "seccion" | "descripcion">) => `${a.secci
  * Partidas propias del liquidador. Sin presupuesto del contratista son la base de la liquidación: salen de la evidencia de la inspección (a precio de la
  * hoja Datos) y el usuario puede editarlas, quitarlas y agregar las que falten. El precio se toma del baremo al elegir una partida; si lo cambias a mano queda como precio de mercado.
  */
-export default function PartidasLiquidador({ salida, setSalida, acta, secciones, extras }: { extras?: ExtrasMemoria; salida: SalidaAgente; setSalida: (f: (s: SalidaAgente | null) => SalidaAgente | null) => void; acta: ActaInspeccion | null; secciones: string[] }) {
+export default function PartidasLiquidador({ salida, setSalida, acta, secciones, extras, orden }: { extras?: ExtrasMemoria; orden?: string[]; salida: SalidaAgente; setSalida: (f: (s: SalidaAgente | null) => SalidaAgente | null) => void; acta: ActaInspeccion | null; secciones: string[] }) {
   const [aviso, setAviso] = useState<string | null>(null);
   const filas = salida.lineas_adicionales;
   const recintos = useMemo(() => [...new Set([...secciones, ...(acta?.danos ?? []).map((d) => d.recinto.trim().toUpperCase())])], [secciones, acta]);
@@ -46,7 +46,7 @@ export default function PartidasLiquidador({ salida, setSalida, acta, secciones,
     const g = partidasDeEvidencia(acta, { omitirEstancias: secciones, extras });
     const ya = new Set(filas.map(clave));
     const nuevas = g.partidas.filter((p) => !ya.has(clave(p)));
-    setSalida((s) => (s ? { ...s, lineas_adicionales: [...s.lineas_adicionales, ...nuevas] } : s));
+    setSalida((s) => (s ? { ...s, lineas_adicionales: ordenarAdicionales([...s.lineas_adicionales, ...nuevas], orden ?? acta.danos.map((d) => d.recinto)) } : s));
     setAviso(`${nuevas.length} partida(s) agregada(s) desde la evidencia de la inspección.${g.sinPartida.length ? ` ${g.sinPartida.join(" ")}` : ""}`);
   }
 

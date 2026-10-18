@@ -10,7 +10,7 @@ import type { ActaInspeccion } from "@/lib/extraccion/acta";
 import PanelCaso from "./PanelCaso";
 import { leerAprendido } from "@/lib/conocimiento/repo";
 import { extrasDeMemoria } from "@/lib/caso/partidas-evidencia";
-import { textosDelInforme, textoDeEvidencia } from "@/lib/caso/textos-informe";
+import { textosDelInforme, textoDeEvidencia, ordenEstancias } from "@/lib/caso/textos-informe";
 import { ordenarGruposPorPresupuesto } from "@/lib/fotos/orden";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,8 @@ export default async function PaginaCaso({ params }: { params: Promise<{ id: str
   const [archivos, recl, ajuste, ia] = await Promise.all([listarArchivos(id), leerReclamacion(id), ultimoAjuste(id), hayProveedorActivo(u.id)]);
   // Fotos que van al informe: las que elige el sistema (recintos con daño) más las que añadió el usuario, menos las que quitó.
   const acta = await leerExtraccion<ActaInspeccion>(id, "acta");
-  const seccionesPresupuesto = (recl?.datos.secciones ?? []).map((s) => s.titulo);
+  // Estancias en el orden del presupuesto y, las que este no trae, en el de la evidencia observada.
+  const seccionesPresupuesto = [...(recl?.datos.secciones ?? []).map((s) => s.titulo), ...(acta ? ordenEstancias(caso.datos, acta) : [])];
   const fotos = ordenarGruposPorPresupuesto(archivos.filter((a) => a.tipo === "foto").map((a) => ({ ...a, recinto: a.recinto ?? "General" })), seccionesPresupuesto);
   // Las fotos se muestran (y se entregan) por estancia, en el mismo orden que el presupuesto.
   const archivosEnOrden = [...archivos.filter((a) => a.tipo !== "foto"), ...fotos.map((f) => archivos.find((a) => a.id === f.id)!)];

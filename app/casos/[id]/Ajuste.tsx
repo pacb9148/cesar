@@ -13,6 +13,8 @@ import { auditarAjuste } from "@/lib/engine/auditoria";
 import { useFlujo } from "@/components/useFlujo";
 import PanelTraza from "@/components/PanelTraza";
 import PartidasLiquidador from "./PartidasLiquidador";
+import { ordenarAdicionales } from "@/lib/caso/partidas-evidencia";
+import { ordenEstancias } from "@/lib/caso/textos-informe";
 import type { ExtrasMemoria } from "@/lib/caso/partidas-evidencia";
 import type { ActaInspeccion } from "@/lib/extraccion/acta";
 import { useAccionesMenu } from "@/components/Shell";
@@ -48,14 +50,15 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
   const ufTxt = (n: number) => (valorUF > 0 ? `UF ${uf(n)}` : "UF —");
   const dos = caso.modo === "reclamacion";
 
+  const orden = useMemo(() => (acta ? ordenEstancias(caso.datos, acta) : []), [acta, caso.datos]);
   const calc = useMemo(() => {
     if (!salida) return null;
-    const filas = armarFilas({ caso: { modo: caso.modo }, reclamacion: recl, decisiones: salida.lineas, adicionales: salida.lineas_adicionales });
+    const filas = armarFilas({ caso: { modo: caso.modo }, reclamacion: recl, decisiones: salida.lineas, adicionales: ordenarAdicionales(salida.lineas_adicionales, orden) });
     const p = { ggPct: recl.ggPct, utilidadPct: recl.utilidadPct, ivaPct: recl.ivaPct, valorUF };
     const rec = calcularTotales(filas.flatMap((f) => (f.tipo === "linea" && f.rec ? [{ cantidad: f.rec.cantidad, pu: f.rec.pu }] : [])), p);
     const aj = calcularTotales(filas.flatMap((f) => (f.tipo === "linea" && f.aj ? [{ cantidad: f.aj.cantidad, pu: f.aj.pu }] : [])), p);
     return { filas, rec, aj, auditoria: auditarAjuste(filas, recl) };
-  }, [salida, recl, valorUF, caso.modo]);
+  }, [salida, recl, valorUF, caso.modo, orden]);
 
   const porItem = useMemo(() => new Map((salida?.lineas ?? []).map((l) => [l.item, l])), [salida]);
   const reclamada = useMemo(() => new Map(recl.lineas.map((l) => [l.item, l])), [recl]);
@@ -155,7 +158,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
             <Kpi t="A indemnizar" v={ufTxt(calc.aj.uf - (caso.datos.poliza?.deducibleUF ?? 0))} s={dos && calc.rec.uf > 0 ? `${Math.round((calc.aj.uf / calc.rec.uf) * 100)} % de lo reclamado` : ""} />
           </div>
 
-          {!dos && <PartidasLiquidador extras={extrasMemoria} salida={salida} setSalida={setSalida} acta={acta} secciones={recl.secciones.map((s) => s.titulo)} />}
+          {!dos && <PartidasLiquidador extras={extrasMemoria} salida={salida} setSalida={setSalida} acta={acta} orden={orden} secciones={recl.secciones.map((s) => s.titulo)} />}
 
           <div className="panel space-y-3 p-5" aria-labelledby="cumplimiento-titulo">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -280,7 +283,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
             </table>
           </div>
 
-          {dos && <PartidasLiquidador extras={extrasMemoria} salida={salida} setSalida={setSalida} acta={acta} secciones={recl.secciones.map((s) => s.titulo)} />}
+          {dos && <PartidasLiquidador extras={extrasMemoria} salida={salida} setSalida={setSalida} acta={acta} orden={orden} secciones={recl.secciones.map((s) => s.titulo)} />}
 
           <div className="panel p-5">
             <h3 className="mb-2 font-semibold">Leyenda de observaciones</h3>

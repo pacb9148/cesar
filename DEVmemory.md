@@ -233,3 +233,9 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - **Al usuario:** un ajuste ya guardado no cambia solo; «Generar desde la evidencia» agrega las estancias que faltan.
 - **Decisión del dueño:** «OBS» en este proyecto = observaciones; se olvida NVIDIA por ahora.
 - **Aprendizaje:** un generador por palabras clave falla en silencio cuando el texto de origen viene cortado; probarlo con los datos reales del caso de producción y no dejar estancias sin partidas.
+
+## Orden único de las estancias: el de «Evidencia observada» (18/10/2026, 5.ª tanda)
+- **Problema:** al «Generar desde la evidencia» las partidas nuevas se añadían al final de las ya guardadas y el Excel numeraba las estancias por primera aparición, así que el orden no coincidía con la lista de evidencia ni con las fotos.
+- **Solución:** `ordenEstancias(datos, acta)` da el orden de la evidencia (el texto editado por el usuario o, si no, el de la inspección); `ordenarAdicionales` ordena las partidas por él (estable). Se aplica al generar desde la evidencia, en el cálculo de la pantalla Ajuste, en `entradaExcelDe` (Excel, cuadro y verificación) y en el orden de las fotos (primero las secciones del presupuesto, luego las estancias de la evidencia). Con presupuesto manda el orden del presupuesto.
+- **Verificado:** 211 pruebas, tsc, lint, build y batería de seguridad. No se probó en el navegador ni con e2e.
+- **Aprendizaje:** lo que se muestra en varias salidas (lista, Excel, fotos) debe salir de UNA función de orden compartida, no de cada una por su cuenta.

@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import PizZip from "pizzip";
-import { partidasDeEvidencia } from "../lib/caso/partidas-evidencia";
-import { evidenciaDeTexto, textoDeEvidencia, textosDelInforme } from "../lib/caso/textos-informe";
+import { ordenarAdicionales, partidasDeEvidencia } from "../lib/caso/partidas-evidencia";
+import { evidenciaDeTexto, ordenEstancias, textoDeEvidencia, textosDelInforme } from "../lib/caso/textos-informe";
 import { reemplazarTextosDatos } from "../lib/docs/sincronizar-word";
 import { docxAVista } from "../lib/docs/vista-docx";
 import { parsearActa } from "../lib/extraccion/acta";
@@ -161,5 +161,28 @@ describe("siniestro 1983404: descripciones del acta sin elemento", () => {
     expect(new Set(r.partidas.filter((p) => p.seccion === "QUINCHO").map((p) => p.elemento))).toEqual(new Set(["Cielo"]));
     expect(new Set(r.partidas.filter((p) => p.seccion === "COCINA").map((p) => p.elemento))).toEqual(new Set(["Muro"]));
     expect(new Set(r.partidas.filter((p) => p.seccion === "WALKING CLOSET").map((p) => p.elemento))).toEqual(new Set(["Cielo", "Muro"]));
+  });
+});
+
+describe("orden de las estancias según la evidencia observada", () => {
+  const acta = { danos: ["Quincho", "Logia", "Dormitorio 1", "Dormitorio 10"].map((recinto) => ({ recinto })) } as never;
+  const lin = (seccion: string) => ({ seccion });
+
+  it("ordena las partidas por la lista de evidencia, aunque ya hubiera otras guardadas", () => {
+    const orden = ordenEstancias({}, acta);
+    expect(orden).toEqual(["Quincho", "Logia", "Dormitorio 1", "Dormitorio 10"]);
+    const r = ordenarAdicionales([lin("DORMITORIO 1"), lin("LOGIA"), lin("DORMITORIO 10"), lin("QUINCHO"), lin("DORMITORIO 1"), lin("OTRA")], orden);
+    expect(r.map((x) => x.seccion)).toEqual(["QUINCHO", "LOGIA", "DORMITORIO 1", "DORMITORIO 1", "DORMITORIO 10", "OTRA"]);
+  });
+
+  it("respeta el orden que el usuario dejó en el texto de evidencia", () => {
+    expect(ordenEstancias({ textos: { caracteristicas: "", evidencia: "Logia: a\nQuincho: b" } }, acta)).toEqual(["Logia", "Quincho"]);
+  });
+
+  it("el Excel numera las estancias en ese orden", () => {
+    const orden = ordenEstancias({}, acta);
+    const ad = ordenarAdicionales(["DORMITORIO 1", "QUINCHO", "LOGIA"].map((seccion) => ({ seccion, elemento: "Cielo", descripcion: "x", um: "m2" as const, cantidad: 1, pu: 1, pu_origen: "mercado:manual", obs: [], justificacion: "" })), orden);
+    const f = armarFilas({ caso: { modo: "perdida_determinada" }, reclamacion: { secciones: [], lineas: [] } as never, decisiones: [], adicionales: ad });
+    expect(f.filter((x) => x.tipo === "seccion" && x.nivel !== 2).map((x) => (x.tipo === "seccion" ? `${x.item} ${x.titulo}` : ""))).toEqual(["1.0 QUINCHO", "2.0 LOGIA", "3.0 DORMITORIO 1"]);
   });
 });

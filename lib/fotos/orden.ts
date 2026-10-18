@@ -24,7 +24,7 @@ const normaliza = (s: string) =>
     .trim();
 
 /** Posición de la sección del presupuesto que corresponde a la estancia: igual (2) o una contiene a la otra (1); -1 si ninguna. */
-function posicionEnPresupuesto(recinto: string, secciones: string[]): number {
+export function posicionEnPresupuesto(recinto: string, secciones: string[]): number {
   const r = normaliza(recinto);
   if (!r) return -1;
   const igual = secciones.findIndex((s) => normaliza(s) === r);

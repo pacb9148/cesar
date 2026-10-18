@@ -6,7 +6,8 @@ import { generarExcel, type EntradaExcel } from "../docs/excel";
 import { generarAnexo } from "../docs/anexo";
 import { verificarPresupuestoGenerado } from "../docs/verificar-presupuesto";
 import { armarFilas } from "../engine/filas";
-import { textosDelInforme } from "./textos-informe";
+import { ordenEstancias, textosDelInforme } from "./textos-informe";
+import { ordenarAdicionales } from "./partidas-evidencia";
 import { aprenderDeAjuste, leerAprendido } from "../conocimiento/repo";
 import { reparosDeOrigenPrecio } from "../engine/auditoria";
 import { CALIDAD_POR_DEFECTO } from "../fotos/calidad";
@@ -217,7 +218,7 @@ export function entradaExcelDe(datos: DatosCaso, acta: ActaInspeccion, recl: Rec
     caso: datos,
     reclamacion: recl ?? reclamacionVacia(),
     decisiones: salida.lineas,
-    adicionales: salida.lineas_adicionales,
+    adicionales: ordenarAdicionales(salida.lineas_adicionales, ordenEstancias(datos, acta)),
     valorUF,
     recintos: acta.danos.map((d) => ({ nombre: d.recinto, alto: d.alto, largo: d.largo, ancho: d.ancho })),
     siniestrosAnteriores: [],
