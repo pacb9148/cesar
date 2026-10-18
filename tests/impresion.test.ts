@@ -45,4 +45,21 @@ describe("vista de impresión del Excel", () => {
     expect(h).toMatch(/text-align:right">7,8</);
     expect(h).toMatch(/background:#d9d9d9;color:#[0-9a-f]{3,6};font-weight:700/i);
   });
+  it("ajusta al contenido las columnas cortas (u/m, cantidad, precio, total) y no parte fechas ni cifras", () => {
+    const h: HojaVista = {
+      ...hoja,
+      combinadas: [],
+      anchos: [60, 500, 50, 120, 160, 200],
+      celdas: [celda(11, 3, "u/m"), celda(11, 4, "Cant."), celda(11, 5, "P. Unit. ($)"), celda(11, 6, "Total ($)"), celda(13, 2, "Una descripción de trabajos que es bastante larga y puede partirse"), celda(13, 3, "m2"), celda(13, 4, "7,8"), celda(13, 5, "4.680"), celda(13, 6, "1.145.943"), celda(20, 3, "01-08-2026"), celda(21, 3, "40.844,79")],
+    };
+    const html = hojaAHtml(h);
+    const anchos = [...html.matchAll(/<col style="width:(\d+)px">/g)].map((m) => Number(m[1]));
+    const col = (n: number) => anchos[n - 1];
+    expect(col(3)).toBeGreaterThanOrEqual(70); // u/m crece para que quepa una fecha
+    expect(col(4)).toBeLessThan(120); // cantidad deja de sobrar
+    expect(col(5)).toBeLessThan(160);
+    expect(col(6)).toBeLessThan(200);
+    expect(col(2)).toBe(500); // la descripción conserva su ancho y puede partirse
+    expect(html).toContain("white-space:nowrap");
+  });
 });

@@ -10,6 +10,23 @@ const NUMERO = /^-?[\d.,%]+$/;
 const ANCHO_HORIZONTAL = 1047;
 const ANCHO_VERTICAL = 718;
 
+// Columnas con textos cortos (u/m, cantidad, precio, total, fechas): su ancho sale del contenido y no del de la plantilla, para que ni sobre ni falte espacio.
+const MAX_CORTA = 16;
+const PX_CARACTER = 6.4;
+const PX_NEGRITA = 7;
+const RELLENO = 14;
+const ANCHO_MINIMO = 30;
+
+function anchoDeContenido(h: HojaVista, col: number): number | null {
+  const combinadas = new Set(h.combinadas.filter((m) => m.c2 > m.c1).map((m) => `${m.r1},${m.c1}`));
+  const textos = h.celdas.filter((x) => x.c === col && x.txt.trim() !== "" && !combinadas.has(`${x.r},${x.c}`));
+  if (textos.length === 0) return null;
+  const mayor = Math.max(...textos.flatMap((x) => x.txt.split("\n").map((l) => l.trim().length)));
+  if (mayor > MAX_CORTA) return null;
+  const px = Math.max(...textos.flatMap((x) => x.txt.split("\n").map((l) => l.trim().length * (x.b ? PX_NEGRITA : PX_CARACTER))));
+  return Math.ceil(Math.max(ANCHO_MINIMO, px + RELLENO));
+}
+
 /**
  * Vista de impresión de una hoja del Excel: solo el área con contenido, escalada para caber a lo ancho de una hoja A4 (horizontal si es ancha), con
  * los encabezados de la tabla repetidos en cada página y sin partir una fila entre dos páginas. Devuelve un documento HTML completo (para un iframe o una ventana).
@@ -18,7 +35,8 @@ export function hojaAHtml(h: HojaVista, opciones: { orientacion?: Orientacion } 
   const con = h.celdas.filter((c) => c.txt.trim() !== "");
   const ultimaFila = con.reduce((m, c) => Math.max(m, c.r), 1);
   const ultimaCol = con.reduce((m, c) => Math.max(m, c.c), 1);
-  const anchos = Array.from({ length: ultimaCol }, (_, i) => h.anchos[i] ?? 64);
+  const porContenido = Array.from({ length: ultimaCol }, (_, i) => anchoDeContenido(h, i + 1));
+  const anchos = porContenido.map((a, i) => a ?? h.anchos[i] ?? 64);
   const total = anchos.reduce((a, b) => a + b, 0);
   const orientacion = opciones.orientacion && opciones.orientacion !== "auto" ? opciones.orientacion : total > ANCHO_VERTICAL ? "horizontal" : "vertical";
   const disponible = orientacion === "horizontal" ? ANCHO_HORIZONTAL : ANCHO_VERTICAL;
@@ -40,7 +58,8 @@ export function hojaAHtml(h: HojaVista, opciones: { orientacion?: Orientacion } 
       const m = origen.get(k);
       const span = m ? ` colspan="${Math.min(m.c2, ultimaCol) - m.c1 + 1}" rowspan="${m.r2 - m.r1 + 1}"` : "";
       const al = x?.al ?? (x && NUMERO.test(x.txt) ? "right" : "left");
-      const estilo = [x?.fondo ? `background:${x.fondo}` : "", `color:${colorSobre(x?.fondo)}`, x?.b ? "font-weight:700" : "", `text-align:${al}`].filter(Boolean).join(";");
+      const corta = porContenido[c - 1] !== null;
+      const estilo = [corta ? "white-space:nowrap" : "", x?.fondo ? `background:${x.fondo}` : "", `color:${colorSobre(x?.fondo)}`, x?.b ? "font-weight:700" : "", `text-align:${al}`].filter(Boolean).join(";");
       tds.push(`<td${span} style="${estilo}">${x ? esc(x.txt) : ""}</td>`);
     }
     const alto = h.altos[r - 1];

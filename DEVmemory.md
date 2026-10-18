@@ -239,3 +239,10 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - **Solución:** `ordenEstancias(datos, acta)` da el orden de la evidencia (el texto editado por el usuario o, si no, el de la inspección); `ordenarAdicionales` ordena las partidas por él (estable). Se aplica al generar desde la evidencia, en el cálculo de la pantalla Ajuste, en `entradaExcelDe` (Excel, cuadro y verificación) y en el orden de las fotos (primero las secciones del presupuesto, luego las estancias de la evidencia). Con presupuesto manda el orden del presupuesto.
 - **Verificado:** 211 pruebas, tsc, lint, build y batería de seguridad. No se probó en el navegador ni con e2e.
 - **Aprendizaje:** lo que se muestra en varias salidas (lista, Excel, fotos) debe salir de UNA función de orden compartida, no de cada una por su cuenta.
+
+## Vista de impresión: columnas ajustadas al contenido y «Copiar todo» (18/10/2026, 6.ª tanda)
+- **Problema:** las columnas de la plantilla (u/m estrecha, cantidad/precio/total anchas) no se ajustaban al contenido: la fecha y el indicador de la parte final se partían en dos líneas y sobraba espacio en las cifras.
+- **Solución:** en `hojaAHtml` las columnas con textos cortos (≤ 16 caracteres, sin contar celdas combinadas) toman su ancho del contenido y no se parten (`white-space: nowrap`); las de texto largo (descripción) conservan el de la plantilla.
+- **«Copiar todo»** (`lib/docs/instantanea.ts`): imagen PNG de la hoja completa tal como se imprimirá (SVG con `foreignObject` en un canvas, sin librerías), copiada al portapapeles; si el navegador no deja, la descarga. La imagen se pasa como promesa al `ClipboardItem` para no perder el gesto del usuario.
+- **Verificado:** 212 pruebas, tsc, lint, e2e y navegador (columnas y fecha en una línea; la imagen se genera con contenido, 1047×1281 px). El portapapeles del panel de pruebas niega el permiso, así que la copia real en Chrome no se probó: se probó la descarga de respaldo.
+- **Aprendizaje:** el ancho de columnas heredado de una plantilla no sirve para imprimir; medir el contenido de las celdas cortas.

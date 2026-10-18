@@ -131,3 +131,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 18/10/2026 (5.ª tanda)
 - Las estancias del ajuste, del Excel y de las fotos siguen el orden de la lista de «Evidencia observada» (con presupuesto, el del presupuesto primero). Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 18/10/2026 (6.ª tanda)
+- Vista de impresión del Excel: columnas cortas ajustadas al contenido y botón «Copiar todo» (imagen de la hoja tal como se imprimirá). Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
