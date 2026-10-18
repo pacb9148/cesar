@@ -137,3 +137,29 @@ describe("todas las estancias de la inspección", () => {
     expect(banio.filter((p) => p.elemento === "Ventana").every((p) => p.um === "un" && p.cantidad === 1)).toBe(true);
   });
 });
+
+describe("siniestro 1983404: descripciones del acta sin elemento", () => {
+  const danos = [
+    ["Quincho", "Filtración y escurrimiento de agua Escurrimiento de", 19.53],
+    ["Logia", "Escurrimiento y filtración de agua Escurrimiento de", 7.31],
+    ["Cocina", "Escurrimiento, humedad y pandeo Escurrimiento de", 5.29],
+    ["Walking Closet", "Humedad y manchas de hongo por", 2.07],
+    ["Dormitorio 1", "Muro inflado por filtración y Muro Inflado", 7.8],
+    ["Dormitorio 3", "Escurrimiento de agua y manchas Escurrimiento de", 1.76],
+    ["Dormitorio 4", "Muro inflado, manchas de Muro Inflado", 3.15],
+    ["Dormitorio 5", "Union abierta entre el vano y Escurrimiento de", 3.15],
+  ].map(([recinto, descripcion, cantidad]) => ({ recinto: String(recinto), descripcion: String(descripcion), cantidad: Number(cantidad), um: "m2", alto: 2.4, ancho: 3, largo: 3, tipoDano: "" }));
+
+  it("lista las 8 estancias con partidas, sin dejar ninguna a mano", () => {
+    const r = partidasDeEvidencia({ danos } as never);
+    expect(new Set(r.partidas.map((p) => p.seccion)).size).toBe(8);
+    expect(r.sinPartida).toEqual([]);
+  });
+
+  it("toma el elemento de los hechos cuando nombran el cielo del recinto", () => {
+    const r = partidasDeEvidencia({ danos, hechos: "Se evidenció humedad en el cielo del quincho. También en el cielo de la logia y en el muro de la cocina." } as never);
+    expect(new Set(r.partidas.filter((p) => p.seccion === "QUINCHO").map((p) => p.elemento))).toEqual(new Set(["Cielo"]));
+    expect(new Set(r.partidas.filter((p) => p.seccion === "COCINA").map((p) => p.elemento))).toEqual(new Set(["Muro"]));
+    expect(new Set(r.partidas.filter((p) => p.seccion === "WALKING CLOSET").map((p) => p.elemento))).toEqual(new Set(["Cielo", "Muro"]));
+  });
+});

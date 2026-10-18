@@ -226,3 +226,10 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - **Verificado:** 206 pruebas, lint, tsc, build, e2e y navegador (61 filas, «Partida determinada», thead, landscape).
 - **Pendiente del dueño:** decidir si se alinean las letras OBS a las de sus referencias; probar la lectura de imágenes con IA real.
 - **Aprendizaje:** una vista de impresión fiable se hace con HTML en un iframe: `thead` con `display: table-header-group`, `tr { page-break-inside: avoid }`, `@page` y `zoom` calculado por ancho.
+
+## Siniestro 1983404: solo 2 de 8 estancias en el ajuste (18/10/2026, 4.ª tanda)
+- **Causa:** el acta trae las descripciones de daño cortadas y sin nombrar el elemento («Escurrimiento de agua Escurrimiento de…») en 6 de los 8 recintos; `partidasDeEvidencia` solo imputaba partidas si el texto decía cielo/muro/etc. y el respaldo por similitud no encontraba nada, así que esas 6 quedaban como aviso. Solo Dormitorio 1 y 4 («Muro inflado») entraron. Hallado leyendo la base real del caso con `db sql` (solo lectura).
+- **Arreglo:** si el daño no nombra elemento, se busca en los hechos del acta el elemento nombrado justo antes del recinto («humedad en el cielo del quincho»); si tampoco consta y el daño es por agua (humedad, filtración, escurrimiento, mancha…), cielo y muros por defecto. Pruebas con los 8 daños reales (208 en verde).
+- **Al usuario:** un ajuste ya guardado no cambia solo; «Generar desde la evidencia» agrega las estancias que faltan.
+- **Decisión del dueño:** «OBS» en este proyecto = observaciones; se olvida NVIDIA por ahora.
+- **Aprendizaje:** un generador por palabras clave falla en silencio cuando el texto de origen viene cortado; probarlo con los datos reales del caso de producción y no dejar estancias sin partidas.

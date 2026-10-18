@@ -42,6 +42,28 @@ function elementosDe(texto: string): Elem[] {
     .map(([e]) => e);
 }
 
+const sinTildes = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+/**
+ * El acta a veces trae la descripción del daño cortada y sin nombrar el elemento («Escurrimiento de agua…»). Entonces se busca en los hechos del
+ * siniestro el elemento nombrado justo antes del recinto («humedad en el cielo del quincho»); el más cercano al nombre es el que corresponde.
+ */
+function elementosDeHechos(hechos: string | null | undefined, recinto: string): Elem[] {
+  const h = sinTildes(hechos ?? "");
+  const nombre = sinTildes(recinto).trim();
+  if (!h || !nombre) return [];
+  const encontrados = new Set<Elem>();
+  for (let desde = h.indexOf(nombre); desde >= 0; desde = h.indexOf(nombre, desde + 1)) {
+    const previo = elementosDe(h.slice(Math.max(0, desde - 40), desde));
+    if (previo.length) encontrados.add(previo[previo.length - 1]);
+  }
+  return [...encontrados];
+}
+
+/** Daño por agua sin elemento nombrado ni en el acta ni en los hechos: lo habitual es que afecte cielo y muros del recinto. */
+const POR_DEFECTO: Elem[] = ["cielo", "muro"];
+const DANO_POR_AGUA = /humedad|filtraci|escurr|gotera|mancha|hongo|inflad|pandeo|agua|lluvia|union abierta/;
+
 /** Variantes de partida según el material que nombra el daño (teja en vez de zinc, piso flotante o cerámico). */
 function idsDe(e: Elem, texto: string): number[] {
   const d = texto.toLowerCase();
@@ -75,7 +97,7 @@ const partida = (seccion: string, elemento: string, b: { id: number; descripcion
  * varios elementos, se reparte según la cubicación del recinto). Un daño que no encaja en ninguno busca la partida más parecida de la hoja Datos; solo si
  * tampoco hay ninguna queda en `sinPartida`.
  */
-export function partidasDeEvidencia(acta: Pick<ActaInspeccion, "danos">, opciones: { omitirEstancias?: string[]; aprendido?: Aprendido; extras?: ExtrasMemoria } = {}): PartidasDeEvidencia {
+export function partidasDeEvidencia(acta: Pick<ActaInspeccion, "danos"> & { hechos?: string | null }, opciones: { omitirEstancias?: string[]; aprendido?: Aprendido; extras?: ExtrasMemoria } = {}): PartidasDeEvidencia {
   const partidas: LineaAdicional[] = [];
   const sinPartida: string[] = [];
   for (const d of acta.danos as DanoActa[]) {
@@ -83,7 +105,9 @@ export function partidasDeEvidencia(acta: Pick<ActaInspeccion, "danos">, opcione
     if ((opciones.omitirEstancias ?? []).some((s) => coincideEstancia(s, d.recinto))) continue;
     const seccion = d.recinto.trim().toUpperCase();
     const texto = `${d.recinto} ${d.descripcion}`;
-    const elementos = elementosDe(texto);
+    let elementos = elementosDe(texto);
+    if (elementos.length === 0) elementos = elementosDeHechos(acta.hechos, d.recinto);
+    if (elementos.length === 0 && DANO_POR_AGUA.test(sinTildes(texto))) elementos = POR_DEFECTO;
     if (elementos.length === 0) {
       const b = candidatos(`${d.tipoDano} ${d.descripcion}`, 1)[0] ?? candidatos(d.descripcion, 1)[0];
       if (!b) {

@@ -125,3 +125,6 @@ npx tsx scripts/e2e.mts 1981023
 - Párrafo de características con la redacción de plantilla en dos párrafos.
 - Previsualización del Excel con «Vista de impresión» (A4, títulos repetidos, imprimir).
 - Sin migraciones nuevas. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 18/10/2026 (4.ª tanda)
+- «Generar desde la evidencia» ya lista todas las estancias del acta aunque la descripción del daño venga cortada: infiere el elemento desde los hechos y, si no consta, usa cielo y muros en daños por agua. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
