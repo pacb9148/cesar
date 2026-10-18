@@ -50,7 +50,7 @@ describe("textos del informe editables", () => {
   it("las líneas «Recinto: texto» van y vuelven, y lo editado manda sobre lo automático", async () => {
     const a = await acta();
     const auto = textosDelInforme({}, a, salidaBase(a));
-    expect(auto.caracteristicas).toMatch(/^Casa de 2 pisos/);
+    expect(auto.caracteristicas).toMatch(/^Vivienda de 2 pisos/);
     expect(textoDeEvidencia(auto.evidencia).split("\n")[0]).toBe("Dormitorio 1: Muro y cielo afectado por humedad.");
     const ev = evidenciaDeTexto("Dormitorio 1: Cielo con mancha\nSolo una nota sin recinto\n\n");
     expect(ev).toHaveLength(2);
@@ -89,5 +89,28 @@ describe("viñetas de evidencia", () => {
     const { vinetaDeDano } = await import("../lib/caso/parrafo-inmueble");
     expect(vinetaDeDano({ descripcion: "Cubierta", tipoDano: "Roto" })).toBe("Cubierta rota.");
     expect(vinetaDeDano({ descripcion: "Daños en cielo y paredes por agua", tipoDano: "Afectado por agua" })).toBe("Cielo y muro afectado por humedad.");
+  });
+});
+
+describe("formato del ajuste según los ajustes de referencia", () => {
+  const reclVacia = { secciones: [], lineas: [], totalDirectoDeclarado: null, ggPct: 0.25, utilidadPct: 0, ivaPct: 0.19 };
+  it("una estancia nueva se arma estancia → elemento → partidas (1.0 / 1.1 Cielo / 1.1.1)", async () => {
+    const a = await acta();
+    const s = salidaBase(a, { conPartidas: true });
+    const filas = armarFilas({ caso: { modo: "perdida_determinada" }, reclamacion: reclVacia, decisiones: [], adicionales: s.lineas_adicionales });
+    const d1 = filas.slice(filas.findIndex((f) => f.tipo === "seccion" && f.titulo === "DORMITORIO 1"));
+    expect(d1[0]).toMatchObject({ tipo: "seccion", item: "1.0", titulo: "DORMITORIO 1" });
+    expect(d1[1]).toMatchObject({ tipo: "seccion", item: "1.1", titulo: "Muro", nivel: 2 });
+    expect(d1[2]).toMatchObject({ tipo: "linea", item: "1.1.1" });
+  });
+  it("con presupuesto solo se agregan las estancias de la evidencia que el presupuesto no trae", async () => {
+    const a = await acta();
+    const recl = { ...reclVacia, secciones: [{ numero: "1.0", titulo: "DORMITORIO 1" }, { numero: "2.0", titulo: "LIVING" }] };
+    const s = salidaBase(a, { reclamacion: recl });
+    const estancias = new Set(s.lineas_adicionales.map((p) => p.seccion));
+    expect(estancias.has("DORMITORIO 1")).toBe(false);
+    expect(estancias.has("LIVING COMEDOR")).toBe(false); // «Living» del presupuesto ya cubre «Living Comedor»
+    expect(estancias.has("DORMITORIO 2")).toBe(true);
+    expect(estancias.has("CAJA ESCALA")).toBe(true);
   });
 });

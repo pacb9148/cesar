@@ -12,6 +12,7 @@ import { PROMPT_VERSION, SYSTEM_CLASIFICAR, SYSTEM_NARRATIVA } from "./prompt";
 import { SinProveedores } from "./rotacion";
 import { validarSalida, type ResultadoValidacion } from "./validadores";
 import { vinetaDeDano } from "../caso/parrafo-inmueble";
+import { aprendidoVacio, baremoSugerido, type Aprendido } from "../conocimiento";
 
 export type FotoModelo = { id: string; recinto: string; mime: string; base64: string };
 
@@ -23,6 +24,8 @@ export type EntradaAgente = {
   reclamacion: Reclamacion;
   fotos: FotoModelo[];
   preciosMercado: { fuente: string; descripcion: string; pu: number }[];
+  /** Memoria del sistema (lo aprendido de los ajustes del usuario): sugiere qué partida de la hoja Datos corresponde a cada descripción. */
+  memoria?: Aprendido;
 };
 
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -81,6 +84,7 @@ export function textoDePartida(e: EntradaAgente, l: LineaReclamacion): string {
       dano_en_acta: dano ? { tipo: dano.tipoDano, descripcion: dano.descripcion } : null,
       medidas_recinto: c.cub ? { muro_neto: c.cub.muroNeto, pano: c.cub.pano, cielo: c.cub.cielo, piso: c.cub.piso, ml: c.cub.ml } : null,
       baremo_candidatos: candidatos(l.descripcion, 4),
+      baremo_id_segun_memoria: baremoSugerido(e.memoria ?? aprendidoVacio(), l.descripcion),
     },
   };
   return `PARTIDA A CLASIFICAR (JSON):\n${JSON.stringify(datos)}`;
@@ -309,7 +313,10 @@ export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm, almacen
   const lineas: DecisionLinea[] = [];
   let porDefecto = 0;
   for (const l of e.modo === "reclamacion" ? e.reclamacion.lineas : []) {
-    const c = clasif.get(l.item) ?? (porDefecto++, clasificacionPorDefecto(l));
+    const c0 = clasif.get(l.item) ?? (porDefecto++, clasificacionPorDefecto(l));
+    // Sin partida de baremo decidida, manda la memoria: lo que ya se asignó antes a una descripción igual.
+    const sugerido = c0.baremo_id == null ? baremoSugerido(e.memoria ?? aprendidoVacio(), l.descripcion) : null;
+    const c = sugerido != null ? { ...c0, baremo_id: sugerido } : c0;
     const r = decidirLinea(l, c, contextoDe(e, l));
     if (r.aviso) aviso(acu, r.aviso);
     lineas.push(r.decision);

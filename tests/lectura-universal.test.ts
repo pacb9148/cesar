@@ -31,8 +31,8 @@ describe("párrafo del inmueble y evidencia desde la inspección", () => {
     const a = parsearActa(await textoPdf(readFileSync(ACTA_PDF)));
     expect(a.tipoInmueble).toBe("Casa");
     const p = parrafoInmueble(a);
-    expect(p).toMatch(/^Casa de 2 pisos con 90 m² construidos, 3 dormitorios y 2 baños, edificio con 7 años de antigüedad\./);
-    expect(p).toMatch(/estructura de madera, techumbre de cerchas de madera/);
+    expect(p).toMatch(/^Vivienda de 2 pisos con una superficie construida de 90 m², que consta de 3 dormitorios y 2 baños, y tiene una antigüedad de 7 años[.] Su construcción es de estructura de madera, con techumbre/);
+    expect(p).toMatch(/techumbre de cerchas de madera, cubierta de planchas de zinc alum y pavimentos de losa de hormigón armado/);
     expect(vinetaDeDano(a.danos[1])).toBe("Cielo y muro afectado por humedad.");
     expect(vinetaDeDano(a.danos[2])).toBe("Muro afectado por humedad.");
   });

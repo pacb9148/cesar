@@ -10,7 +10,7 @@ export function parrafoEvidenciaXml(ev: Pick<EvidenciaRecinto, "recinto" | "vine
   const sufijo = ev.atribuible ? "" : " No atribuible al siniestro.";
   return (
     `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:spacing w:before="0" w:after="0"/><w:ind w:left="720" w:hanging="360"/><w:jc w:val="both"/></w:pPr>` +
-    (ev.recinto ? `<w:r>${rpr('<w:i/><w:u w:val="single"/>')}<w:t xml:space="preserve">${escXml(ev.recinto)}:</w:t></w:r>` : "") +
+    (ev.recinto ? `<w:r>${rpr('<w:b/><w:i/><w:u w:val="single"/>')}<w:t xml:space="preserve">${escXml(ev.recinto)}:</w:t></w:r>` : "") +
     `<w:r>${rpr("")}<w:t xml:space="preserve">${ev.recinto ? " " : ""}${escXml(ev.vineta)}${sufijo}</w:t></w:r></w:p>`
   );
 }

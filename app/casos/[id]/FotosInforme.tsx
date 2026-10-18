@@ -58,14 +58,16 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
     router.refresh();
   }
 
-  async function guardarPie(recinto: string) {
-    setOcupado(`grupo:${recinto}`);
-    setError(null);
-    const r = await fetch(`/api/casos/${casoId}/fotos-grupos`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recinto, leyenda: pies[recinto] ?? "" }) });
-    setOcupado(null);
-    if (!r.ok) return setError(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar la leyenda");
+  /** La leyenda del grupo se guarda sola al salir del campo; los documentos se rehacen después con «Actualizar informe». */
+  async function guardarPie(recinto: string, texto: string): Promise<boolean> {
+    const r = await fetch(`/api/casos/${casoId}/fotos-grupos`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recinto, leyenda: texto, diferir: true }) });
+    if (!r.ok) {
+      setError(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar la leyenda");
+      return false;
+    }
     marcarTocado(recinto);
     router.refresh();
+    return true;
   }
 
   if (fotos.length === 0) return null;
@@ -96,16 +98,13 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
   };
   const alternar = (recinto: string, id: string) => editarBorrador(recinto, (ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
-  /** Aplica el borrador de una estancia: qué fotos van y en qué orden; rehace informe, anexo, PDF y ZIP. */
-  async function actualizar(recinto: string): Promise<boolean> {
+  /** Guarda el borrador de una estancia (qué fotos van y en qué orden) sin rehacer todavía los documentos. */
+  async function guardarBorrador(recinto: string): Promise<boolean> {
     const ids = actualDe(recinto);
     const quitar = baseDe(recinto).filter((id) => !ids.includes(id));
-    setOcupado(`grupo:${recinto}`);
-    setError(null);
-    const r = await fetch(`/api/casos/${casoId}/fotos-orden`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, quitar }) });
-    setOcupado(null);
+    const r = await fetch(`/api/casos/${casoId}/fotos-orden`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, quitar, diferir: true }) });
     if (!r.ok) {
-      setError(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo actualizar el informe");
+      setError(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar el orden de las fotos");
       return false;
     }
     setBorrador((b) => {
@@ -114,12 +113,16 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
       return resto;
     });
     marcarTocado(recinto);
-    router.refresh();
     return true;
   }
 
-  async function regenerar(recinto: string) {
-    if (hayBorrador(recinto) && !(await actualizar(recinto))) return;
+  /** Un solo botón: guarda todo lo pendiente (orden y selección de todas las estancias y las leyendas) y rehace el informe, el anexo, el PDF y el ZIP en cascada. */
+  async function actualizarInforme() {
+    setOcupado("cascada");
+    setError(null);
+    for (const recinto of pendientes) if (!(await guardarBorrador(recinto))) return setOcupado(null);
+    for (const [recinto, texto] of Object.entries(pies)) if ((leyendasGrupos[recinto] ?? "") !== texto.trim() && !(await guardarPie(recinto, texto))) return setOcupado(null);
+    setOcupado(null);
     await onRegenerar();
   }
 
@@ -134,7 +137,7 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
           Desmarca las que no quieras, marca otras y arrastra cada foto a su lugar (o usa las flechas ← →) para cambiar su posición dentro de la estancia (1, 2, 3… de izquierda a derecha).
         </p>
         <p>
-          Esos cambios quedan en un borrador: el botón «Actualizar» de cada estancia los aplica al informe, al anexo, al PDF y al ZIP. Si sales sin actualizar, se descartan. Recortar una foto con el lápiz y guardar la leyenda del grupo se aplican al momento.
+          Esos cambios quedan en un borrador: el botón «Actualizar informe» los aplica todos juntos (con las leyendas y las fotos editadas) al informe, al anexo, al PDF y al ZIP. Si sales sin actualizar, el orden y la selección se descartan; la leyenda del grupo se guarda sola al salir del campo.
           Cada grupo lleva el nombre de su estancia y puedes escribirle una leyenda al pie. El anexo lleva las mismas fotos del informe, en el mismo orden. La leyenda de cada foto es opcional: sin texto no sale ninguna.
         </p>
       </TituloAyuda>
@@ -143,8 +146,13 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
       </p>
       {pendientes.length > 0 && (
         <p role="status" className="aviso aviso-alerta">
-          Hay cambios sin aplicar en {pendientes.join(", ")}. El informe todavía no los refleja: pulsa «Actualizar» en cada estancia o se descartarán al salir.
+          Hay cambios sin aplicar en {pendientes.join(", ")}. El informe todavía no los refleja: pulsa «Actualizar informe» o se descartarán al salir.
         </p>
+      )}
+      {(pendientes.length > 0 || (hayInforme && !alDia) || !hayInforme) && (
+        <button type="button" className="btn" disabled={generando || !!ocupado || !puedeGenerar} onClick={() => void actualizarInforme()}>
+          {generando || ocupado === "cascada" ? "Actualizando…" : hayInforme ? "Actualizar informe con todos los cambios" : "Generar informe"}
+        </button>
       )}
       {error && <p role="alert" className="aviso aviso-error">{error}</p>}
       {ocupado && <p role="status" className="aviso aviso-ok">Actualizando el informe, el anexo y el PDF con tus cambios… puede tardar unos segundos.</p>}
@@ -169,28 +177,20 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
               {pieGuardado && <span className="marca marca-sin !ml-0">con leyenda de grupo</span>}
               {conBorrador && <span className="marca marca-error !ml-0">Cambios sin aplicar</span>}
               {mostrarAcciones && (
-                <span className="ml-auto flex flex-wrap items-center gap-2">
-                  {conBorrador && (
-                    <button type="button" className="btn !px-3 !py-1 text-xs" disabled={ocupadoGrupo} onClick={(e) => { e.preventDefault(); void actualizar(recinto); }} title="Guarda el orden y la selección de esta estancia en el informe y el anexo">
-                      {ocupadoGrupo ? "Actualizando…" : "Actualizar"}
-                    </button>
-                  )}
-                  <button type="button" className="btn btn-sec !px-3 !py-1 text-xs" disabled={generando || ocupadoGrupo || !puedeGenerar} onClick={(e) => { e.preventDefault(); void regenerar(recinto); }} title="Rehace todo el informe con la versión final de los datos, las fotos y el ajuste">
-                    {generando ? "Generando…" : "Volver a generar el informe"}
-                  </button>
-                </span>
+                <button type="button" className="btn ml-auto !px-3 !py-1 text-xs" disabled={generando || !!ocupado || !puedeGenerar} onClick={(ev) => { ev.preventDefault(); void actualizarInforme(); }} title="Guarda todos los cambios de fotos y leyendas y rehace el informe, el anexo, el PDF y el ZIP">
+                  {generando || ocupado === "cascada" ? "Actualizando…" : "Actualizar informe"}
+                </button>
               )}
             </summary>
             {mostrarAcciones && (
               <p className="px-2 pb-1 text-xs text-[color:var(--texto)]" role="status">
-                {conBorrador ? "Hay cambios sin aplicar en esta estancia: «Actualizar» los guarda en el informe; si sales sin actualizar, se descartan." : "El informe no se ha regenerado con los últimos cambios: usa «Volver a generar el informe» para entregar la versión final."}
+                {conBorrador ? "Hay cambios de orden o selección sin aplicar en esta estancia: «Actualizar informe» los guarda y rehace todo; si sales sin actualizar, se descartan." : "El informe no se ha regenerado con los últimos cambios: usa «Actualizar informe» para entregar la versión final."}
               </p>
             )}
             <div className="space-y-1 p-2">
-              <label className="etiqueta" htmlFor={`pie-${recinto}`}>Leyenda al pie del grupo «{recinto}» (opcional)</label>
+              <label className="etiqueta" htmlFor={`pie-${recinto}`}>Leyenda al pie del grupo «{recinto}» (opcional, se guarda sola)</label>
               <div className="flex flex-wrap gap-2">
-                <input id={`pie-${recinto}`} className="campo min-w-64 flex-1 px-2 py-1 text-sm" maxLength={300} placeholder="Descripción breve de las fotos de este grupo" value={pie} onChange={(e) => setPies((p) => ({ ...p, [recinto]: e.target.value }))} />
-                <button type="button" className="btn btn-sec !px-3 !py-1 text-sm" disabled={pie.trim() === pieGuardado || ocupadoGrupo} onClick={() => void guardarPie(recinto)}>Guardar leyenda</button>
+                <input id={`pie-${recinto}`} className="campo min-w-64 flex-1 px-2 py-1 text-sm" maxLength={300} placeholder="Descripción breve de las fotos de este grupo" value={pie} onChange={(e) => setPies((p) => ({ ...p, [recinto]: e.target.value }))} onBlur={() => pie.trim() !== pieGuardado && void guardarPie(recinto, pie)} />
               </div>
             </div>
             <ul className="grid grid-cols-2 gap-3 p-2 sm:grid-cols-3 lg:grid-cols-4">

@@ -12,11 +12,17 @@ const unir = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, 
  * características de la construcción). Solo dice lo que consta: lo que falta no se menciona. Devuelve «» si no hay nada que decir.
  */
 export function parrafoInmueble(a: ConExtras): string {
-  const tipo = mayus((a.tipoInmueble ?? "").trim() || "vivienda");
+  // «Casa» se redacta siempre como «Vivienda»; otros tipos (departamento, local…) se conservan.
+  const bruto = (a.tipoInmueble ?? "").trim().toLowerCase();
+  const tipo = mayus(!bruto || bruto === "casa" ? "vivienda" : bruto);
   const base = `${tipo}${a.pisos ? ` de ${en(a.pisos, "piso", "pisos")}` : ""}`;
-  const detalles = [a.superficieM2 ? `${m2(a.superficieM2)} m² construidos` : "", a.dormitorios ? en(a.dormitorios, "dormitorio", "dormitorios") : "", a.banos ? en(a.banos, "baño", "baños") : ""].filter(Boolean);
-  const antiguedad = a.antiguedad ? `edificio con ${en(a.antiguedad, "año", "años")} de antigüedad` : "";
-  const primera = [detalles.length ? `${base} con ${unir(detalles)}` : base, antiguedad].filter(Boolean).join(", ");
+  const superficie = a.superficieM2 ? `con una superficie construida de ${m2(a.superficieM2)} m²` : "";
+  const recintos = [a.dormitorios ? en(a.dormitorios, "dormitorio", "dormitorios") : "", a.banos ? en(a.banos, "baño", "baños") : ""].filter(Boolean);
+  const consta = recintos.length ? `que consta de ${unir(recintos)}` : "";
+  const antiguedad = a.antiguedad ? `tiene una antigüedad de ${en(a.antiguedad, "año", "años")}` : "";
+  // «Vivienda de 2 pisos con una superficie construida de 90 m², que consta de 3 dormitorios y 2 baños, y tiene una antigüedad de 7 años.»
+  const partes = [superficie ? `${base} ${superficie}` : base, consta].filter(Boolean);
+  const primera = antiguedad ? `${partes.join(", ")}, y ${antiguedad}` : partes.join(", ");
   const construccion = [
     a.sistemaEstructural ? `estructura ${a.sistemaEstructural.replace(/^estructura( de)?\s*/i, "de ").replace(/^de de /, "de ").trim().toLowerCase()}` : "",
     a.estructuraTechumbre ? `techumbre de ${a.estructuraTechumbre.replace(/^(estructura|techumbre)( de)?\s*/i, "").trim().toLowerCase()}` : "",
@@ -24,7 +30,7 @@ export function parrafoInmueble(a: ConExtras): string {
     a.pavimentos ? `pavimentos de ${a.pavimentos.replace(/^pavimentos?( de)?\s*/i, "").trim().toLowerCase()}` : "",
   ].filter(Boolean);
   if (!a.pisos && !a.dormitorios && !a.banos && !a.antiguedad && !a.superficieM2 && construccion.length === 0 && !a.tipoInmueble) return "";
-  return `${primera}.${construccion.length ? ` Construcción con ${unir(construccion)}.` : ""}`;
+  return `${primera}.${construccion.length ? ` Su construcción es de ${construccion[0]}${construccion.length > 1 ? `, con ${unir(construccion.slice(1))}` : ""}.` : ""}`;
 }
 
 const ELEMENTOS: [RegExp, string][] = [

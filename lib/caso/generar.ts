@@ -7,6 +7,7 @@ import { generarAnexo } from "../docs/anexo";
 import { verificarPresupuestoGenerado } from "../docs/verificar-presupuesto";
 import { armarFilas } from "../engine/filas";
 import { textosDelInforme } from "./textos-informe";
+import { aprenderDeAjuste, leerAprendido } from "../conocimiento/repo";
 import { reparosDeOrigenPrecio } from "../engine/auditoria";
 import { CALIDAD_POR_DEFECTO } from "../fotos/calidad";
 import { seleccionarFotosInforme } from "../docs/fotos-seleccion";
@@ -90,7 +91,7 @@ async function prepararAjuste(casoId: string, usuarioId: string): Promise<Entrad
   const fotos = await fotosParaModelo(casoId);
   const kbFotos = Math.round(fotos.reduce((t, f) => t + f.base64.length, 0) / 1024);
   emitir("ok", "fotos", `${fotos.length} fotografías preparadas para el modelo (reducidas a 768 px, ${kbFotos} KB en total)`);
-  return { modo, fechaSiniestro: datos.fechas.ocurrencia, valorUF, acta, reclamacion: recl ?? reclamacionVacia(), fotos, preciosMercado: [] };
+  return { modo, fechaSiniestro: datos.fechas.ocurrencia, valorUF, acta, reclamacion: recl ?? reclamacionVacia(), fotos, preciosMercado: [], memoria: await leerAprendido(usuarioId) };
 }
 
 /** Qué se le enviará a la IA, sin llamarla: lotes, tamaños, cantidad de fotos y proveedores que se usarán, para revisarlo antes de ejecutar. */
@@ -140,6 +141,7 @@ export async function ejecutarAjuste(casoId: string, usuarioId: string, cliente?
       guardar: (item, res) => guardarResultado(casoId, huella, item, res),
     });
     const version = await guardarAjuste(casoId, r.salida, "agente", r.modelo, r.promptVersion);
+    await aprenderDeAjuste(usuarioId, { reclamacion: entrada.modo === "reclamacion" ? entrada.reclamacion : null, salida: r.salida });
     await registrarLlm({ casoId, tarea: "ajuste", modelo: r.modelo, promptVersion: r.promptVersion, tin: r.tokensEntrada, tout: r.tokensSalida, ok: r.validacion.errores.length === 0 });
     await actualizarCaso(casoId, { estado: "ajustado" });
     await limpiarAnalisis(casoId); // el ajuste ya quedó consolidado en un solo documento: los resultados temporales sobran
@@ -228,7 +230,7 @@ export async function generarSalidas(casoId: string, usuarioId: string): Promise
   if (!aj) {
     // Sin ajuste guardado (ni de la IA ni manual) pero con presupuesto: se parte de «sin ajustar», así el informe no depende de la IA.
     // Con presupuesto: «sin ajustar». Sin presupuesto: plantilla base con las partidas que salen de la evidencia de la inspección.
-    await guardarAjuste(casoId, salidaBase(acta, { conPartidas: !recl }), "manual");
+    await guardarAjuste(casoId, salidaBase(acta, { conPartidas: !recl, reclamacion: recl, aprendido: await leerAprendido(usuarioId) }), "manual");
     emitir("info", "informe", recl ? "No había ajuste guardado: se usa el presupuesto tal como se reclamó («sin ajustar»)" : "No había ajuste guardado ni presupuesto: se usan las partidas generadas desde la evidencia de la inspección");
     aj = await ultimoAjuste(casoId);
   }

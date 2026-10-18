@@ -3,6 +3,7 @@ import { listarProveedores, MAX_PROVEEDORES } from "@/lib/ia/repo-proveedores";
 import { PRESETS, TIPOS } from "@/lib/ia/proveedores";
 import Shell from "@/components/Shell";
 import GestorIA from "./GestorIA";
+import MemoriaSistema from "./MemoriaSistema";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,6 +20,7 @@ export default async function Ajustes() {
           Cada una se guarda cifrada y se prueba al agregarla; solo entra en servicio si la prueba sale bien. Si un proveedor deja de responder, el sistema salta solo al siguiente por orden de prioridad.
         </p>
         <GestorIA inicial={proveedores} tipos={tipos} max={MAX_PROVEEDORES} />
+        <MemoriaSistema />
     </Shell>
   );
 }

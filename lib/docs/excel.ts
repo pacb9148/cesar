@@ -122,14 +122,18 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
         /* ya estaba suelta */
       }
     }
-    set("C10", "Valor ajustado");
+    // Sin presupuesto no hay «Reclamación» ni «Valor ajustado» ni OBS: «Partida determinada» ocupa el lugar de la Reclamación.
+    set("C10", "Partida determinada");
     ws.mergeCells("C10:F10");
     for (const a of ["G10", "H10", "I10", "J10", "K10", "L10", "M10", "K11", "L11", "M11", "G11", "H11", "I11", "J11"]) set(a, null);
-    set("G10", "OBS");
-    ws.mergeCells("G10:G11");
   }
 
   pintarEncabezado(ws);
+  if (!dosColumnas)
+    for (const rr of [10, 11])
+      for (let cc = 7; cc <= COLS; cc++) {
+        ws.getRow(rr).getCell(cc).style = {};
+      }
   for (const [c, w] of Object.entries(ANCHOS)) ws.getColumn(Number(c)).width = w;
   ws.views = [{ state: "frozen", ySplit: 11, xSplit: 2 }];
 
@@ -140,7 +144,8 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
   for (const fila of filas) {
     if (fila.tipo === "seccion") {
       aplicar(ws, r, P.seccion);
-      pintarSeccion(ws, r);
+      if (fila.nivel !== 2) pintarSeccion(ws, r);
+      else ws.getCell(r, 2).font = { ...ws.getCell(r, 2).font, bold: false, italic: true };
       ws.getCell(r, 1).value = fila.item;
       ws.getCell(r, 2).value = fila.titulo;
       r++;
@@ -162,15 +167,15 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
         ws.getCell(r, 9).value = fila.aj.pu;
         ws.getCell(r, 10).value = f(`+I${r}*H${r}`, fila.aj.cantidad * fila.aj.pu);
       }
-      ws.getCell(r, 11).value = fila.obs[0] ?? null;
-      ws.getCell(r, 12).value = fila.obs[1] ?? null;
+      // Una partida sin cambios (letra F) queda sin observación, como en los ajustes de referencia.
+      const letras = fila.obs.filter((o) => o !== "F");
+      ws.getCell(r, 11).value = letras[0] ?? null;
+      ws.getCell(r, 12).value = letras[1] ?? null;
     } else if (fila.aj) {
       ws.getCell(r, 3).value = fila.aj.um;
       ws.getCell(r, 4).value = fila.aj.cantidad;
       ws.getCell(r, 5).value = fila.aj.pu;
       ws.getCell(r, 6).value = f(`+E${r}*D${r}`, fila.aj.cantidad * fila.aj.pu);
-      ws.getCell(r, 7).value = fila.obs.join(", ") || null;
-      ws.getCell(r, 7).style = structuredClone(P.linea[10]) as ExcelJS.Style;
     }
     formatearLinea(ws, r, fila.descripcion);
     ultima = r;
@@ -250,14 +255,18 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
   });
   if (fila - 1 !== filaUF) throw new Error(`Indicador FDP quedó en la fila ${fila - 1}, se esperaba ${filaUF}`);
   fila++;
-  aplicar(ws, fila, P.obsTitulo);
-  ws.getCell(fila, 2).value = "Observaciones";
-  fila++;
-  for (const L of LETRAS_OBS) {
-    aplicar(ws, fila, P.obsLinea);
-    ws.getCell(fila, 1).value = L;
-    ws.getCell(fila, 2).value = LEYENDA[L];
+  // La leyenda lista solo las observaciones usadas (y solo con presupuesto: la «Partida determinada» no lleva OBS).
+  const usadas = LETRAS_OBS.filter((l) => l !== "F" && filas.some((x) => x.tipo === "linea" && x.obs.includes(l)));
+  if (dosColumnas) {
+    aplicar(ws, fila, P.obsTitulo);
+    ws.getCell(fila, 2).value = "Observaciones";
     fila++;
+    for (const L of usadas) {
+      aplicar(ws, fila, P.obsLinea);
+      ws.getCell(fila, 1).value = L;
+      ws.getCell(fila, 2).value = LEYENDA[L];
+      fila++;
+    }
   }
   ws.pageSetup.printArea = `A1:M${fila}`;
   agregarResumen(wb, { siniestro: e.caso.siniestro, reclamacion: e.reclamacion, filas, valorUF: e.valorUF, deducibleUF: e.caso.poliza.deducibleUF, dosColumnas, refs });

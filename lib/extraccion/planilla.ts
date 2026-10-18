@@ -62,7 +62,7 @@ export async function leerPlanilla(ruta: string | Buffer): Promise<PlanillaLeida
     const row = ws.getRow(r);
     const a = txt(row.getCell(1));
     const b = txt(row.getCell(2));
-    if (/^\d+\.\d+$/.test(a) && b) {
+    if (/^\d+(\.[0-9]+)+$/.test(a) && b) {
       const esSeccion = a.endsWith(".0");
       if (esSeccion) {
         seccionActual = b;

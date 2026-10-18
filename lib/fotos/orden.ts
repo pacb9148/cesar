@@ -65,3 +65,10 @@ export function soltarFoto(ids: string[], arrastrada: string, destino: string): 
   const idx = desde >= 0 && desde < ids.indexOf(destino) ? k + 1 : k;
   return [...sin.slice(0, idx), arrastrada, ...sin.slice(idx)];
 }
+
+/** ¿Son la misma estancia? Igual sin mayúsculas ni tildes, o una contiene a la otra («Living» y «Living Comedor»). */
+export function coincideEstancia(a: string, b: string): boolean {
+  const x = normaliza(a);
+  const y = normaliza(b);
+  return x !== "" && y !== "" && (x === y || x.includes(y) || y.includes(x));
+}

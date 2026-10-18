@@ -12,6 +12,8 @@ const cuerpo = z.object({
   ids: z.array(z.string().uuid()).max(200),
   /** Fotos del grupo que el usuario sacó del informe. */
   quitar: z.array(z.string().uuid()).max(200).default([]),
+  /** Solo guardar: los documentos se rehacen después con todos los cambios juntos. */
+  diferir: z.boolean().optional(),
 });
 
 /** Aplica de una vez los cambios de un grupo (qué fotos van y en qué orden, de izquierda a derecha) y rehace el informe y el anexo. */
@@ -28,7 +30,7 @@ export const PUT = conUsuario<{ id: string }>(async (req, u, { id }) => {
       void _orden;
       await guardarEdicionFoto(fid, id, { ...resto, incluir: false, excluir: true });
     }
-  });
+  }, { diferir: p.data.diferir });
   await auditar(u.id, id, "fotos.orden", { fotos: p.data.ids.length, quitadas: p.data.quitar.length });
   return json({ ok: true, avisos });
 });

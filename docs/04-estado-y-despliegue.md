@@ -114,3 +114,8 @@ npx tsx scripts/e2e.mts 1981023
 ## Cambios del 18/10/2026
 - Giro de fotos de 360°; ordenar fotos arrastrando; textos del informe (características y evidencia) editables en «Datos» con «Guardar e insertar»; el editor del informe ya no dibuja líneas de tabla donde el Word no las tiene; el anexo repite las fotos del informe con su misma disposición; y sin presupuesto se parte de una plantilla base con las partidas que salen de la evidencia de la inspección.
 - Sin cambios de variables de entorno ni de migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 18/10/2026 (2.ª tanda)
+- Formato del ajuste según los ajustes de referencia: estancia → elemento → partidas, todas las estancias de la evidencia, y «Partida determinada» (sin reclamación, valor ajustado ni OBS) cuando no hay presupuesto.
+- «Datos» solo muestra las características del bien y la evidencia observada; un único botón «Actualizar informe» en «Fotos»; memoria del sistema con panel en «Ajustes de IA».
+- **Nueva migración 0006** (`conocimiento`): se aplica sola al arrancar. El push a `main` dispara el despliegue automático en Coolify.

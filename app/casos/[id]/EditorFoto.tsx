@@ -289,7 +289,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
           <button type="button" className="btn !px-3 !py-1.5 text-sm" disabled={guardando} onClick={() => void guardar(true)} title="Guarda el recorte, marca la foto para el informe y actualiza el documento">
             <Icono nombre="check" tam={18} /> Insertar en el informe
           </button>
-          <BotonIcono icono="check" etiqueta={ed.incluir ? "Va al informe (clic para quitarla)" : "Marcar para el informe"} activo={!!ed.incluir} onClick={() => setEd((e) => ({ ...e, incluir: !e.incluir, excluir: false }))} />
+
           <BotonIcono icono="papelera" etiqueta={ed.excluir ? "Quitada del informe (guarda para aplicar)" : "Quitar esta foto del informe"} activo={!!ed.excluir} onClick={() => setEd((e) => ({ ...e, incluir: false, excluir: !e.excluir }))} />
           <BotonIcono icono="reiniciar" etiqueta="Restablecer todo" onClick={() => setEd({ ...EDICION_INICIAL, incluir: ed.incluir, excluir: ed.excluir })} />
           <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar edición"} deshabilitado={guardando} onClick={() => void guardar()} />

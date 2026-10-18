@@ -195,8 +195,10 @@ export async function guardarEdicion(casoId: string, usuarioId: string, aid: str
  * Cambio en las fotos o en las leyendas de grupo: se aplica y el informe y el anexo se rehacen con la nueva disposición. El informe NO queda
  * «al día»: cualquier cambio activa «Volver a generar el informe», que es el paso que entrega la última versión completa de todo.
  */
-export async function aplicarCambioFotos(casoId: string, usuarioId: string, cambio: () => Promise<unknown>): Promise<string[]> {
+export async function aplicarCambioFotos(casoId: string, usuarioId: string, cambio: () => Promise<unknown>, opciones: { diferir?: boolean } = {}): Promise<string[]> {
   await cambio();
+  // Con `diferir` el cambio solo se guarda: los documentos se rehacen después, de una vez, con todos los cambios (regeneración en cascada).
+  if (opciones.diferir) return [];
   return sincronizarFotos(casoId, usuarioId).catch((e: unknown) => [`No se pudo actualizar los documentos: ${e instanceof Error ? e.message : "error"}`]);
 }
 

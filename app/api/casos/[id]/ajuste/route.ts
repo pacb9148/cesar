@@ -1,6 +1,7 @@
 import { conUsuario, fallo, json } from "@/lib/api";
 import { salidaAgenteSchema } from "@/lib/domain/tipos";
 import { actualizarCaso, auditar, guardarAjuste, leerReclamacion, obtenerCaso, ultimoAjuste } from "@/lib/caso/repositorio";
+import { aprenderDeAjuste } from "@/lib/conocimiento/repo";
 import { completarConRespeto } from "@/lib/ia/motor-ajuste";
 import { validarSalida } from "@/lib/ia/validadores";
 
@@ -30,6 +31,8 @@ export const PUT = conUsuario<{ id: string }>(async (req, u, { id }) => {
   if (v.errores.length) return json({ errores: v.errores }, 422);
   const version = await guardarAjuste(id, salida, "manual");
   await actualizarCaso(id, { estado: "revisado" });
+  // La memoria aprende de lo que el usuario deja guardado (qué partida corresponde a cada descripción, qué agrega por elemento).
+  await aprenderDeAjuste(u.id, { reclamacion: caso.modo === "reclamacion" ? (recl ?? null) : null, salida });
   await auditar(u.id, id, "ajuste.editar", { version });
   return json({ version, advertencias: v.advertencias });
 });

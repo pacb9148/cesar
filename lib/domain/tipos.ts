@@ -62,6 +62,8 @@ export type DecisionLinea = z.infer<typeof decisionLineaSchema>;
 /** Partida propia del perito: daño visto en la inspección que el contratista no cobró. Sin columna de Reclamación. */
 export const lineaAdicionalSchema = z.object({
   seccion: z.string(), // recinto o sección donde se agrega
+  /** Elemento afectado dentro del recinto (Cielo, Muro, Piso…): en una estancia nueva las partidas se agrupan por elemento, como en los ajustes de referencia. */
+  elemento: z.string().max(60).optional(),
   descripcion: z.string(),
   um: unidadSchema,
   cantidad: z.number().min(0),
