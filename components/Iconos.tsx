@@ -48,6 +48,7 @@ export const ICONOS = {
   alinDer: D("M4 6h16M10 10h10M4 14h16M10 18h10"),
   alinJust: D("M4 6h16M4 10h16M4 14h16M4 18h16"),
   insertar: D("M12 5v14M5 12h14"),
+  copiar: <><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></>,
   papelera: D("M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"),
   filas: D("M3 3h18v18H3zM3 9h18M3 15h18"),
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5h.01" /></>,

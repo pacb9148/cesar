@@ -254,3 +254,11 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - **Imagen «Copiar todo»:** salía con una franja sobrante a la derecha porque la hoja medía más que la tabla; ahora la hoja mide exactamente lo que la tabla.
 - **Verificado:** 213 pruebas, tsc, lint, e2e sin FALLA y navegador (datos → títulos → partidas, sin líneas, hoja = ancho de la tabla). La copia real al portapapeles en Chrome sigue sin probarse.
 - **Aprendizaje:** un `thead` siempre se dibuja arriba de su tabla; si hay contenido que debe ir antes de los títulos, va en otra tabla con el mismo `colgroup`.
+
+## Vista de impresión como el ajuste de referencia, OBS en pérdida determinada y «Copiar imagen editada» (18/10/2026, 8.ª tanda)
+- **Editor de fotos:** botón «Copiar imagen editada» (foto recortada, girada y con brillo/contraste/saturación aplicados, sin la cuadrícula guía). `lib/docs/portapapeles.ts` (`copiarImagen`) es común con «Copiar todo» de la vista de impresión: copia al portapapeles y, si el navegador no deja, descarga.
+- **Vista de impresión (hoja EDIFICIO):** sin el bloque de datos del siniestro, sin sombreados, títulos de la tabla en recuadro, líneas solo en el bloque de totales (encima de «Total directo», debajo de «Equivalente…», doble bajo «Valor a indemnizar») y verticales al inicio de cada grupo de valores; columnas sin texto no se imprimen; margen de 0,19 cm arriba/izquierda de la hoja y relleno izquierdo de 0,19 cm en celdas.
+- **OBS en «Partida determinada»:** por pedido del dueño el Excel y el cuadro del Word sin presupuesto llevan ahora la columna OBS y la leyenda (antes no, siguiendo su referencia). En el Excel las columnas G–J (valor ajustado) quedan ocultas.
+- **0,19 cm en el Word:** solo en la tabla del cuadro (márgenes de celda superior e izquierdo). Las tablas de fotos siguen con margen cero, porque el dueño pidió antes «margen cero» y la foto debe llenar la celda.
+- **Verificado:** 214 pruebas, tsc, lint, e2e sin FALLA, navegador (formato, OBS con B/C, totales con líneas, botón del editor con descarga de respaldo). La copia real al portapapeles en Chrome sigue sin probarse.
+- **Aprendizaje:** una columna que desaparece entre modos (sin presupuesto) se oculta, no se borra, y la vista de impresión debe omitir las columnas vacías en vez de dejar huecos.

@@ -22,7 +22,7 @@ const caso = (modo: "reclamacion" | "perdida_determinada") =>
 const recl = { secciones: [], lineas: [], totalDirectoDeclarado: null, ggPct: 0.25, utilidadPct: 0, ivaPct: 0.19 };
 
 describe("«Partida determinada» (sin presupuesto)", () => {
-  it("el Excel lleva «Partida determinada» en lugar de Reclamación, sin valor ajustado ni OBS ni leyenda, con estancia → elemento → partidas", async () => {
+  it("el Excel lleva «Partida determinada» en lugar de Reclamación, sin valor ajustado, con OBS y leyenda, con estancia → elemento → partidas", async () => {
     const a = parsearActa(await textoPdf(readFileSync(ACTA)));
     const s = salidaBase(a, { conPartidas: true });
     const buf = await generarExcel({ caso: caso("perdida_determinada"), reclamacion: recl, decisiones: [], adicionales: s.lineas_adicionales, valorUF: 40844.79, recintos: [], siniestrosAnteriores: [] });
@@ -30,7 +30,9 @@ describe("«Partida determinada» (sin presupuesto)", () => {
     await wb.xlsx.load(buf as never);
     const ws = wb.getWorksheet("EDIFICIO")!;
     expect(String(ws.getCell("C10").value)).toBe("Partida determinada");
-    for (const c of ["G10", "H10", "K10", "G11", "K11"]) expect(ws.getCell(c).value ?? null).toBeNull();
+    for (const c of ["G10", "H10", "G11"]) expect(ws.getCell(c).value ?? null).toBeNull();
+    expect(String(ws.getCell("K10").value)).toBe("OBS");
+    expect(ws.getColumn(7).hidden).toBe(true);
     const items: string[] = [];
     const textos: string[] = [];
     ws.eachRow((r) => {
@@ -40,7 +42,7 @@ describe("«Partida determinada» (sin presupuesto)", () => {
     expect(items).toContain("1.0");
     expect(items).toContain("1.1");
     expect(items).toContain("1.1.1");
-    expect(textos).not.toContain("Observaciones");
+    expect(textos).toContain("Observaciones");
   });
   it("con presupuesto la leyenda lista solo las observaciones usadas y una partida sin cambios queda sin letra", async () => {
     const a = parsearActa(await textoPdf(readFileSync(ACTA)));
@@ -59,13 +61,15 @@ describe("«Partida determinada» (sin presupuesto)", () => {
     expect(leyenda).not.toContain("F");
     expect(leyenda.length).toBeLessThan(6);
   });
-  it("el cuadro del Word sin presupuesto no lleva columna OBS ni leyenda", async () => {
+  it("el cuadro del Word sin presupuesto lleva OBS y leyenda pero no «Valor ajustado»", async () => {
     const a = parsearActa(await textoPdf(readFileSync(ACTA)));
     const s = salidaBase(a, { conPartidas: true });
     const [t] = cuadroTablaXml({ caso: caso("perdida_determinada"), reclamacion: recl, decisiones: [], adicionales: s.lineas_adicionales, valorUF: 40844.79, recintos: [], siniestrosAnteriores: [] });
     expect(t).toContain("Partida determinada");
-    expect(t).not.toContain(">OBS<");
-    expect(t).not.toContain("Observaciones");
+    expect(t).toContain(">OBS<");
+    expect(t).toContain("Observaciones");
+    expect(t).toContain('<w:top w:w="108"');
+    expect(t).toContain('<w:left w:w="108"');
     expect(t).not.toContain("Valor ajustado");
   });
 });

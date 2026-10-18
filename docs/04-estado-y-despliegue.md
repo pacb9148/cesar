@@ -137,3 +137,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 18/10/2026 (7.ª tanda)
 - Vista de impresión del ajuste con el formato de salida: sin rejilla ni resaltado, datos encima de los títulos y títulos sobre la primera partida; «Copiar todo» sin franja sobrante. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 18/10/2026 (8.ª tanda)
+- Editor de fotos con «Copiar imagen editada». Vista de impresión del ajuste con el formato de referencia (sin datos del siniestro ni sombreado, títulos en recuadro, líneas en totales, margen 0,19 cm). Excel y cuadro del Word sin presupuesto con columna OBS y leyenda; cuadro con margen de celda 0,19 cm arriba e izquierda. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.

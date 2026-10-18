@@ -38,6 +38,8 @@ export function resumenCuadro(e: EntradaExcel): ResumenCuadro {
 }
 
 export const MARCA_CUADRO = "cuadro-de-perdida";
+/** 0,19 cm en twips: margen superior e izquierdo de las celdas del cuadro. */
+const MARGEN_CELDA = 108;
 const FUENTE = '<w:rFonts w:ascii="Arial Narrow" w:hAnsi="Arial Narrow" w:cs="Arial Narrow"/>';
 
 /**
@@ -52,8 +54,8 @@ export function cuadroTablaXml(e: EntradaExcel): string[] {
   const recNeto = r.recDirecto * (1 + rc.ggPct + rc.utilidadPct);
   const ajNeto = r.ajDirecto * (1 + rc.ggPct + rc.utilidadPct);
   const bloque = [420, 560, 760, 900];
-  // Sin presupuesto: una sola columna de valores («Partida determinada») y sin OBS.
-  const W = dos ? [480, 3848, ...bloque, ...bloque, 480] : [480, 6968, ...bloque];
+  // Sin presupuesto: una sola columna de valores («Partida determinada»), más OBS.
+  const W = dos ? [480, 3848, ...bloque, ...bloque, 480] : [480, 6488, ...bloque, 480];
   const rpr = (b: boolean) => `<w:rPr>${FUENTE}${b ? "<w:b/>" : ""}<w:sz w:val="14"/></w:rPr>`;
   type Op = { span?: number; jc?: "left" | "center" | "right"; b?: boolean; borde?: boolean; vm?: "restart" | "cont" };
   const tc = (txt: string, w: number, o: Op = {}) =>
@@ -66,9 +68,9 @@ export function cuadroTablaXml(e: EntradaExcel): string[] {
   const cab1 = [tc("Ítem", W[0], { jc: "center", borde: true, vm: "restart" }), tc("Descripción de trabajos", W[1], { jc: "center", borde: true, vm: "restart" })];
   if (dos) cab1.push(tc("Reclamación", sumaW(2, 4), { span: 4, jc: "center", borde: true }));
   cab1.push(tc(dos ? "Valor ajustado" : "Partida determinada", sumaW(iniAj, 4), { span: 4, jc: "center", borde: true }));
-  if (dos) cab1.push(tc("OBS", W[W.length - 1], { jc: "center", borde: true, vm: "restart" }));
+  cab1.push(tc("OBS", W[W.length - 1], { jc: "center", borde: true, vm: "restart" }));
   const sub = (ini: number) => ["u/m", "Cant.", "P. Unit. ($)", "Total ($)"].map((t, i) => tc(t, W[ini + i], { jc: "center", borde: true }));
-  const cab2 = [tc("", W[0], { vm: "cont", borde: true }), tc("", W[1], { vm: "cont", borde: true }), ...(dos ? sub(2) : []), ...sub(iniAj), ...(dos ? [tc("", W[W.length - 1], { vm: "cont", borde: true })] : [])];
+  const cab2 = [tc("", W[0], { vm: "cont", borde: true }), tc("", W[1], { vm: "cont", borde: true }), ...(dos ? sub(2) : []), ...sub(iniAj), tc("", W[W.length - 1], { vm: "cont", borde: true })];
 
   const valores = (v: { um: string; cantidad: number; pu: number } | null, ini: number) =>
     v
@@ -78,7 +80,7 @@ export function cuadroTablaXml(e: EntradaExcel): string[] {
   const cuerpo = filas.map((f) =>
     f.tipo === "seccion"
       ? fila([tc(f.item, W[0], { jc: "center", b: f.nivel !== 2 }), tc(f.titulo, sumaW(1, W.length - 1), { span: W.length - 1, b: f.nivel !== 2 })])
-      : fila([tc(f.item, W[0], { jc: "center" }), tc(f.descripcion, W[1]), ...(dos ? valores(f.rec, 2) : []), ...valores(f.aj, iniAj), ...(dos ? [tc(f.obs.filter((o) => o !== "F").join(" "), W[W.length - 1], { jc: "center" })] : [])]),
+      : fila([tc(f.item, W[0], { jc: "center" }), tc(f.descripcion, W[1]), ...(dos ? valores(f.rec, 2) : []), ...valores(f.aj, iniAj), tc(f.obs.filter((o) => o !== "F").join(" "), W[W.length - 1], { jc: "center" })]),
   );
 
   const total = (et: string, a: string, b: string, fin = false) =>
@@ -87,7 +89,7 @@ export function cuadroTablaXml(e: EntradaExcel): string[] {
       tc(et, W[1], { b: fin }),
       ...(dos ? [tc(a, sumaW(2, 4), { span: 4, jc: "right", b: fin })] : []),
       tc(b, sumaW(iniAj, 4), { span: 4, jc: "right", b: fin }),
-      ...(dos ? [tc("", W[W.length - 1])] : []),
+      tc("", W[W.length - 1]),
     ]);
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   const totales = [
@@ -107,14 +109,13 @@ export function cuadroTablaXml(e: EntradaExcel): string[] {
   const filaTexto = (t: string, b = false) => fila([tc(t, sumaW(0, nCols), { span: nCols, b })]);
   const leyenda = [
     filaTexto(`Moneda de Póliza: UF  ·  Fecha de Pérdida: ${fecha}  ·  Indicador para FDP: ${nf2(e.valorUF)}`),
-    ...(dos
-      ? [filaTexto("Observaciones", true), ...LETRAS_OBS.filter((l) => l !== "F" && filas.some((x) => x.tipo === "linea" && x.obs.includes(l))).map((l) => filaTexto(`${l}   ${LEYENDA[l]}`))]
-      : []),
+    filaTexto("Observaciones", true),
+    ...LETRAS_OBS.filter((l) => l !== "F" && filas.some((x) => x.tipo === "linea" && x.obs.includes(l))).map((l) => filaTexto(`${l}   ${LEYENDA[l]}`)),
   ];
   // `tblCaption` marca la tabla: al editar el Excel se reemplaza por una nueva con los valores actualizados.
   const tabla =
     `<w:tbl><w:tblPr><w:tblW w:w="${sumaW(0, nCols)}" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/>` +
-    `<w:tblCellMar><w:left w:w="40" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tblCellMar><w:tblCaption w:val="${MARCA_CUADRO}"/></w:tblPr>` +
+    `<w:tblCellMar><w:top w:w="${MARGEN_CELDA}" w:type="dxa"/><w:left w:w="${MARGEN_CELDA}" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tblCellMar><w:tblCaption w:val="${MARCA_CUADRO}"/></w:tblPr>` +
     `<w:tblGrid>${W.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>${fila(cab1, true)}${fila(cab2, true)}${cuerpo.join("")}${totales.join("")}${leyenda.join("")}</w:tbl>`;
   return [tabla];
 }

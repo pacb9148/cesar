@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { hojaAHtml, type Orientacion } from "@/lib/docs/impresion-html";
 import { instantaneaPng } from "@/lib/docs/instantanea";
+import { copiarImagen } from "@/lib/docs/portapapeles";
 import type { HojaVista } from "@/lib/docs/vista-xlsx";
 
 /** Vista de impresión de una hoja del Excel: cómo saldría en papel (A4, ajustada a lo ancho, con los títulos repetidos en cada página) y botón para imprimirla. */
@@ -18,19 +19,8 @@ export default function VistaImpresion({ hoja, alto }: { hoja: HojaVista; alto: 
     if (!doc) return;
     setEstado({ ok: true, texto: "Generando la imagen…" });
     try {
-      // La imagen se entrega como promesa: así el navegador no pierde el gesto del usuario mientras se genera una hoja grande.
-      const generada = instantaneaPng(doc);
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": generada })]);
-        setEstado({ ok: true, texto: "Imagen copiada: pégala donde la necesites." });
-      } catch {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(await generada);
-        a.download = `vista-de-impresion-${hoja.nombre}.png`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        setEstado({ ok: true, texto: "Tu navegador no permite copiar imágenes: se descargó como archivo." });
-      }
+      const r = await copiarImagen(instantaneaPng(doc), `vista-de-impresion-${hoja.nombre}.png`);
+      setEstado({ ok: true, texto: r === "copiada" ? "Imagen copiada: pégala donde la necesites." : "Tu navegador no permite copiar imágenes: se descargó como archivo." });
     } catch (e) {
       setEstado({ ok: false, texto: e instanceof Error ? e.message : "No se pudo generar la imagen." });
     }

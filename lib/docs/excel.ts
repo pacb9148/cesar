@@ -115,23 +115,24 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
 
   if (!dosColumnas) {
     // Pérdida determinada: una sola columna de valores, como en la planilla emitida del caso 2.
-    for (const m of ["C10:F10", "G10:J10", "K10:M11"]) {
+    for (const m of ["C10:F10", "G10:J10"]) {
       try {
         ws.unMergeCells(m);
       } catch {
         /* ya estaba suelta */
       }
     }
-    // Sin presupuesto no hay «Reclamación» ni «Valor ajustado» ni OBS: «Partida determinada» ocupa el lugar de la Reclamación.
+    // Sin presupuesto no hay «Reclamación» ni «Valor ajustado»: «Partida determinada» ocupa el lugar de la Reclamación, las columnas G–J se ocultan y OBS se conserva.
     set("C10", "Partida determinada");
     ws.mergeCells("C10:F10");
-    for (const a of ["G10", "H10", "I10", "J10", "K10", "L10", "M10", "K11", "L11", "M11", "G11", "H11", "I11", "J11"]) set(a, null);
+    for (const a of ["G10", "H10", "I10", "J10", "G11", "H11", "I11", "J11"]) set(a, null);
+    for (let cc = 7; cc <= 10; cc++) ws.getColumn(cc).hidden = true;
   }
 
   pintarEncabezado(ws);
   if (!dosColumnas)
     for (const rr of [10, 11])
-      for (let cc = 7; cc <= COLS; cc++) {
+      for (let cc = 7; cc <= 10; cc++) {
         ws.getRow(rr).getCell(cc).style = {};
       }
   for (const [c, w] of Object.entries(ANCHOS)) ws.getColumn(Number(c)).width = w;
@@ -176,6 +177,9 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
       ws.getCell(r, 4).value = fila.aj.cantidad;
       ws.getCell(r, 5).value = fila.aj.pu;
       ws.getCell(r, 6).value = f(`+E${r}*D${r}`, fila.aj.cantidad * fila.aj.pu);
+      const letras = fila.obs.filter((o) => o !== "F");
+      ws.getCell(r, 11).value = letras[0] ?? null;
+      ws.getCell(r, 12).value = letras[1] ?? null;
     }
     formatearLinea(ws, r, fila.descripcion);
     ultima = r;
@@ -255,9 +259,9 @@ export async function generarExcel(e: EntradaExcel): Promise<Buffer> {
   });
   if (fila - 1 !== filaUF) throw new Error(`Indicador FDP quedó en la fila ${fila - 1}, se esperaba ${filaUF}`);
   fila++;
-  // La leyenda lista solo las observaciones usadas (y solo con presupuesto: la «Partida determinada» no lleva OBS).
+  // La leyenda lista solo las observaciones usadas.
   const usadas = LETRAS_OBS.filter((l) => l !== "F" && filas.some((x) => x.tipo === "linea" && x.obs.includes(l)));
-  if (dosColumnas) {
+  {
     aplicar(ws, fila, P.obsTitulo);
     ws.getCell(fila, 2).value = "Observaciones";
     fila++;

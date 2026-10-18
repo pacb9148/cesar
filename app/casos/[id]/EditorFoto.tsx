@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BotonIcono, Icono, type NombreIcono } from "@/components/Iconos";
 import VentanaModal from "@/components/VentanaModal";
+import { copiarImagen } from "@/lib/docs/portapapeles";
 import { FOTO_TAMANO_TEXTO, LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
 import { ANGULO_MAX, EDICION_INICIAL, PROPORCION_FOTO, ZOOM_MAX, centroValido, dimensionesGiradas, encuadreDeRectangulo, girar, lienzoRotado, ventanaBase, ventanaDeRecorte, type EdicionFoto } from "@/lib/fotos/recorte";
@@ -93,6 +94,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [copiado, setCopiado] = useState<string | null>(null);
   const lienzo = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
   const escenario = useRef<HTMLDivElement>(null);
@@ -245,6 +247,26 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
     cambiar({ zoom: base.w / w, cx: (a.ax + (a.sx * w) / 2) / prep.width, cy: (a.ay + (a.sy * h) / 2) / prep.height });
   }
 
+  /** Copia la foto tal como quedó: recortada, girada y con brillo, contraste y saturación aplicados (sin la cuadrícula, que es solo una guía). */
+  async function copiarEditada() {
+    const c = lienzo.current;
+    if (!c) return;
+    setCopiado(null);
+    const salida = document.createElement("canvas");
+    salida.width = c.width;
+    salida.height = c.height;
+    const g = salida.getContext("2d")!;
+    g.filter = `brightness(${1 + ed.brillo / 100}) contrast(${1 + ed.contraste / 100}) saturate(${1 + ed.saturacion / 100})`;
+    g.drawImage(c, 0, 0);
+    const png = new Promise<Blob>((ok, mal) => salida.toBlob((b) => (b ? ok(b) : mal(new Error("No se pudo generar la imagen."))), "image/png"));
+    try {
+      const r = await copiarImagen(png, `${foto.nombre.replace(/\.[^.]+$/, "")}-editada.png`);
+      setCopiado(r === "copiada" ? "Imagen editada copiada." : "Tu navegador no permite copiar imágenes: se descargó como archivo.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo copiar la imagen.");
+    }
+  }
+
   async function guardar(insertar = false) {
     setGuardando(true);
     setError(null);
@@ -292,6 +314,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
 
           <BotonIcono icono="papelera" etiqueta={ed.excluir ? "Quitada del informe (guarda para aplicar)" : "Quitar esta foto del informe"} activo={!!ed.excluir} onClick={() => setEd((e) => ({ ...e, incluir: false, excluir: !e.excluir }))} />
           <BotonIcono icono="reiniciar" etiqueta="Restablecer todo" onClick={() => setEd({ ...EDICION_INICIAL, incluir: ed.incluir, excluir: ed.excluir })} />
+          <BotonIcono icono="copiar" etiqueta="Copiar imagen editada" onClick={() => void copiarEditada()} />
           <BotonIcono icono="guardar" etiqueta={guardando ? "Guardando…" : "Guardar edición"} deshabilitado={guardando} onClick={() => void guardar()} />
         </>
       }
@@ -299,6 +322,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
       {({ maximizada }) => (
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
         {error && <p role="alert" className="aviso aviso-error">{error}</p>}
+        {copiado && <p role="status" className="aviso aviso-ok">{copiado}</p>}
         {guardando && <p role="status" className="aviso aviso-ok">Guardando y actualizando el informe, el anexo y el PDF con tu recorte… puede tardar unos segundos.</p>}
 
         <div className={`grid gap-3 ${maximizada ? "lg:grid-cols-[13rem_1fr_13rem]" : "lg:grid-cols-[15rem_1fr_15rem]"}`}>
