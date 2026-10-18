@@ -40,9 +40,11 @@ describe("partidas de liquidación desde la evidencia (sin presupuesto)", () => 
     const filas = armarFilas({ caso: { modo: "perdida_determinada" }, reclamacion: { secciones: [], lineas: [], totalDirectoDeclarado: null, ggPct: 0.25, utilidadPct: 0, ivaPct: 0.19 }, decisiones: [], adicionales: s.lineas_adicionales });
     expect(auditarAjuste(filas, { secciones: [], lineas: [], totalDirectoDeclarado: null, ggPct: 0.25, utilidadPct: 0, ivaPct: 0.19 }).cumple).toBe(true);
     expect(salidaBase(a).lineas_adicionales).toEqual([]);
-    const raro = partidasDeEvidencia({ danos: [{ recinto: "Cubierta", alto: 0, ancho: 0, largo: 0, descripcion: "Levantamiento de planchas", tipoDano: "Roto", um: "m2", cantidad: 4 }] });
+    const cub = partidasDeEvidencia({ danos: [{ recinto: "Cubierta", alto: 0, ancho: 0, largo: 0, descripcion: "Levantamiento de planchas", tipoDano: "Roto", um: "m2", cantidad: 4 }] });
+    expect(cub.partidas.map((p) => [p.elemento, p.pu_origen, p.cantidad])).toEqual([["Cubierta", "baremo:266", 4], ["Cubierta", "baremo:267", 4]]);
+    const raro = partidasDeEvidencia({ danos: [{ recinto: "Zona", alto: 0, ancho: 0, largo: 0, descripcion: "Qwxz", tipoDano: "Zzzq", um: "m2", cantidad: 4 }] });
     expect(raro.partidas).toEqual([]);
-    expect(raro.sinPartida[0]).toMatch(/Cubierta/);
+    expect(raro.sinPartida[0]).toMatch(/Zona/);
   });
 });
 
@@ -50,7 +52,7 @@ describe("textos del informe editables", () => {
   it("las líneas «Recinto: texto» van y vuelven, y lo editado manda sobre lo automático", async () => {
     const a = await acta();
     const auto = textosDelInforme({}, a, salidaBase(a));
-    expect(auto.caracteristicas).toMatch(/^Vivienda de 2 pisos/);
+    expect(auto.caracteristicas).toMatch(/^Vivienda de 2 pisos de uso exclusivo habitacional/);
     expect(textoDeEvidencia(auto.evidencia).split("\n")[0]).toBe("Dormitorio 1: Muro y cielo afectado por humedad.");
     const ev = evidenciaDeTexto("Dormitorio 1: Cielo con mancha\nSolo una nota sin recinto\n\n");
     expect(ev).toHaveLength(2);
@@ -62,10 +64,12 @@ describe("textos del informe editables", () => {
   });
   it("«Guardar e insertar» cambia solo el párrafo de características y la lista de evidencia del informe", () => {
     const buf = readFileSync("plantillas/informe.docx");
-    const r = reemplazarTextosDatos(buf, { caracteristicas: "Casa de 2 pisos con 3 dormitorios.", evidencia: evidenciaDeTexto("Dormitorio 1: Cielo y muro afectado por humedad.\nLiving: Muro afectado por humedad.") });
+    const r = reemplazarTextosDatos(buf, { caracteristicas: "Casa de 2 pisos con 3 dormitorios.\n\nEdificación de madera.", evidencia: evidenciaDeTexto("Dormitorio 1: Cielo y muro afectado por humedad.\nLiving: Muro afectado por humedad.") });
     expect(r.caracteristicas && r.evidencia).toBe(true);
     const xml = new PizZip(r.buffer).file("word/document.xml")!.asText();
     expect(xml).toContain("Casa de 2 pisos con 3 dormitorios.");
+    expect(xml).toContain("Edificación de madera.");
+    expect((xml.match(/<w:br[/]>/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(xml).not.toContain(">xxxxx<");
     expect(xml).toContain("Cielo y muro afectado por humedad.");
     expect(xml).toContain("Las siguientes imágenes dan cuenta");
@@ -112,5 +116,24 @@ describe("formato del ajuste según los ajustes de referencia", () => {
     expect(estancias.has("LIVING COMEDOR")).toBe(false); // «Living» del presupuesto ya cubre «Living Comedor»
     expect(estancias.has("DORMITORIO 2")).toBe(true);
     expect(estancias.has("CAJA ESCALA")).toBe(true);
+  });
+});
+
+describe("todas las estancias de la inspección", () => {
+  it("cada recinto del acta aparece con partidas, también los de cubierta, piso, ventanas y puertas", async () => {
+    const a = await acta();
+    const s = salidaBase(a, { conPartidas: true });
+    const con = new Set(s.lineas_adicionales.map((p) => p.seccion));
+    for (const d of a.danos) expect(con.has(d.recinto.trim().toUpperCase())).toBe(true);
+    const varios = partidasDeEvidencia({
+      danos: [
+        { recinto: "Terraza", alto: 0, ancho: 0, largo: 0, descripcion: "Piso flotante levantado", tipoDano: "Afectado por agua", um: "m2", cantidad: 5 },
+        { recinto: "Baño", alto: 2.4, ancho: 2, largo: 1.6, descripcion: "Ventana con filtración y muro", tipoDano: "Afectado por agua", um: "m2", cantidad: 3 },
+      ],
+    }).partidas;
+    expect(varios.filter((p) => p.seccion === "TERRAZA").map((p) => p.elemento)).toEqual(["Piso", "Piso"]);
+    const banio = varios.filter((p) => p.seccion === "BAÑO");
+    expect(new Set(banio.map((p) => p.elemento))).toEqual(new Set(["Ventana", "Muro"]));
+    expect(banio.filter((p) => p.elemento === "Ventana").every((p) => p.um === "un" && p.cantidad === 1)).toBe(true);
   });
 });

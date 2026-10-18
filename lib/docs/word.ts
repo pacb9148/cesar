@@ -23,6 +23,7 @@ import {
   xmlImagen,
   type Doc,
   type Reemplazo,
+  ponerTextoParrafo,
 } from "./docx-xml";
 
 export type FotoInforme = FotoOrigen & { leyenda?: string };
@@ -230,7 +231,7 @@ export async function generarInforme(e: EntradaInforme): Promise<Buffer> {
       datoOFalta(k.cubierta),
       datoOFalta(k.pavimentos),
     ];
-    if (e.caracteristicasTexto?.trim()) reemplazarEnParrafo(pCar, /^[\s\S]+$/, () => e.caracteristicasTexto!.trim());
+    if (e.caracteristicasTexto?.trim()) ponerTextoParrafo(doc, pCar, e.caracteristicasTexto.trim());
     else reemplazarEnParrafo(pCar, /x{2,}/, (_m, i) => vals[i] ?? FALTA);
   }
 

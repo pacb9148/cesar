@@ -9,6 +9,7 @@ import VentanaModal from "@/components/VentanaModal";
 import EditorFoto from "./EditorFoto";
 import type { CambioFormato } from "@/lib/docs/vista-xlsx";
 import HojaExcel, { type CambioHoja } from "./HojaExcel";
+import VistaImpresion from "./VistaImpresion";
 
 const FUENTES = ["Times New Roman", "Arial", "Calibri", "Cambria", "Georgia", "Verdana", "Tahoma", "Courier New"];
 const TAMANOS = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28];
@@ -177,6 +178,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
   const [imgCambios, setImgCambios] = useState<Map<number, { w: number; h: number }>>(new Map()); // tamaño en px de pantalla
   const [imgQuitar, setImgQuitar] = useState<Set<number>>(new Set());
   const [proporcion, setProporcion] = useState(true);
+  const [impresion, setImpresion] = useState(false);
   const [alineados, setAlineados] = useState<Map<number, Alineacion>>(new Map());
   const rango = useRef<Range | null>(null); // última selección dentro del documento: los selectores de fuente y tamaño la pierden al abrirse
   const [fuenteSel, setFuenteSel] = useState("");
@@ -555,8 +557,10 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
                   {h.nombre}
                 </button>
               ))}
-              <span className="ml-auto">{controlesZoom}</span>
+              <button type="button" className={`btn ${impresion ? "" : "btn-sec"} ml-auto !px-3 !py-1 text-sm`} aria-pressed={impresion} onClick={() => setImpresion((v) => !v)}>Vista de impresión</button>
+              {!impresion && <span>{controlesZoom}</span>}
             </div>
+            {impresion ? <VistaImpresion hoja={hojaActual} alto={maximizada ? "70vh" : "58vh"} /> : (
             <HojaExcel
               key={`${hojaActual.nombre}-${version}`}
               h={hojaActual}
@@ -575,6 +579,7 @@ export default function VistaDocumento({ casoId, archivoId, nombre, onCerrar, on
                 })
               }
             />
+            )}
           </>
         )}
       </>

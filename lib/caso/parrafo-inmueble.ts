@@ -2,35 +2,38 @@ import type { ActaInspeccion, DanoActa } from "../extraccion/acta";
 
 type ConExtras = ActaInspeccion & { tipoInmueble?: string | null; causa?: string | null };
 
-const en = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
-const m2 = (n: number) => n.toLocaleString("es-CL", { maximumFractionDigits: 2 });
 const mayus = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const unir = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
 
+export type ValoresInmueble = { pisos?: unknown; superficie?: unknown; antiguedad?: unknown; dormitorios?: unknown; banos?: unknown; sistema?: unknown; techumbre?: unknown; cubierta?: unknown; pavimentos?: unknown };
+
+const FALTA = "[FALTA DATO: Rellenar con XXX]";
+const vacio = (v: unknown) => v == null || String(v).trim() === "";
+const texto = (v: unknown) => (vacio(v) ? FALTA : String(v).trim());
+const cuenta = (v: unknown, uno: string, varios: string) => (vacio(v) ? `${FALTA} ${varios}` : `${texto(v)} ${Number(v) === 1 ? uno : varios}`);
+/** Quita el encabezado repetido de un valor del acta («Estructura de madera» → «madera»), en minúsculas. */
+const sin = (v: unknown, re: RegExp) => (vacio(v) ? FALTA : String(v).trim().replace(re, "").toLowerCase());
+
 /**
- * Párrafo con la descripción del inmueble a partir de los puntos de la inspección que lo describen (tipo, pisos, dormitorios, baños, antigüedad y
- * características de la construcción). Solo dice lo que consta: lo que falta no se menciona. Devuelve «» si no hay nada que decir.
+ * Párrafo «Características del bien en riesgo» con la redacción de la plantilla del informe, ya con los valores de la inspección:
+ * «Vivienda de 2 pisos de uso exclusivo habitacional con una superficie construida de 90 m² y una antigüedad de 7 años. Consta de 3 dormitorios,
+ * 2 baños, cocina, living comedor, entre otras dependencias.» y, en otro párrafo, «Edificación de madera, techumbre soportada por cerchas de madera, …».
+ * Lo que no consta queda marcado como [FALTA DATO]. Los dos párrafos van separados por una línea en blanco.
  */
+export function parrafoPlantilla(v: ValoresInmueble): string {
+  const primero =
+    `Vivienda de ${cuenta(v.pisos, "piso", "pisos")} de uso exclusivo habitacional con una superficie construida de ${texto(v.superficie)} m² y una antigüedad de ${cuenta(v.antiguedad, "año", "años")}. ` +
+    `Consta de ${cuenta(v.dormitorios, "dormitorio", "dormitorios")}, ${cuenta(v.banos, "baño", "baños")}, cocina, living comedor, entre otras dependencias.`;
+  const segundo =
+    `Edificación de ${sin(v.sistema, /^estructura( de)?\s*/i)}, techumbre soportada por ${sin(v.techumbre, /^(estructura|techumbre)( de)?\s*/i)}, cubierta de ${sin(v.cubierta, /^cubierta( de)?\s*/i)}, ` +
+    `revestimientos en muros y cielo con pinturas y pavimentos de ${sin(v.pavimentos, /^pavimentos?( de)?\s*/i)}.`;
+  return `${primero}\n\n${segundo}`;
+}
+
+/** Lo mismo, directamente desde la inspección (cuando aún no hay un ajuste con las características). Devuelve «» si la inspección no trae nada del inmueble. */
 export function parrafoInmueble(a: ConExtras): string {
-  // «Casa» se redacta siempre como «Vivienda»; otros tipos (departamento, local…) se conservan.
-  const bruto = (a.tipoInmueble ?? "").trim().toLowerCase();
-  const tipo = mayus(!bruto || bruto === "casa" ? "vivienda" : bruto);
-  const base = `${tipo}${a.pisos ? ` de ${en(a.pisos, "piso", "pisos")}` : ""}`;
-  const superficie = a.superficieM2 ? `con una superficie construida de ${m2(a.superficieM2)} m²` : "";
-  const recintos = [a.dormitorios ? en(a.dormitorios, "dormitorio", "dormitorios") : "", a.banos ? en(a.banos, "baño", "baños") : ""].filter(Boolean);
-  const consta = recintos.length ? `que consta de ${unir(recintos)}` : "";
-  const antiguedad = a.antiguedad ? `tiene una antigüedad de ${en(a.antiguedad, "año", "años")}` : "";
-  // «Vivienda de 2 pisos con una superficie construida de 90 m², que consta de 3 dormitorios y 2 baños, y tiene una antigüedad de 7 años.»
-  const partes = [superficie ? `${base} ${superficie}` : base, consta].filter(Boolean);
-  const primera = antiguedad ? `${partes.join(", ")}, y ${antiguedad}` : partes.join(", ");
-  const construccion = [
-    a.sistemaEstructural ? `estructura ${a.sistemaEstructural.replace(/^estructura( de)?\s*/i, "de ").replace(/^de de /, "de ").trim().toLowerCase()}` : "",
-    a.estructuraTechumbre ? `techumbre de ${a.estructuraTechumbre.replace(/^(estructura|techumbre)( de)?\s*/i, "").trim().toLowerCase()}` : "",
-    a.cubierta ? `cubierta de ${a.cubierta.replace(/^cubierta( de)?\s*/i, "").trim().toLowerCase()}` : "",
-    a.pavimentos ? `pavimentos de ${a.pavimentos.replace(/^pavimentos?( de)?\s*/i, "").trim().toLowerCase()}` : "",
-  ].filter(Boolean);
-  if (!a.pisos && !a.dormitorios && !a.banos && !a.antiguedad && !a.superficieM2 && construccion.length === 0 && !a.tipoInmueble) return "";
-  return `${primera}.${construccion.length ? ` Su construcción es de ${construccion[0]}${construccion.length > 1 ? `, con ${unir(construccion.slice(1))}` : ""}.` : ""}`;
+  if (!a.pisos && !a.dormitorios && !a.banos && !a.antiguedad && !a.superficieM2 && !a.sistemaEstructural && !a.estructuraTechumbre && !a.cubierta && !a.pavimentos) return "";
+  return parrafoPlantilla({ pisos: a.pisos, superficie: a.superficieM2, antiguedad: a.antiguedad, dormitorios: a.dormitorios, banos: a.banos, sistema: a.sistemaEstructural, techumbre: a.estructuraTechumbre, cubierta: a.cubierta, pavimentos: a.pavimentos });
 }
 
 const ELEMENTOS: [RegExp, string][] = [

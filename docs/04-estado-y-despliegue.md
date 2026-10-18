@@ -119,3 +119,9 @@ npx tsx scripts/e2e.mts 1981023
 - Formato del ajuste según los ajustes de referencia: estancia → elemento → partidas, todas las estancias de la evidencia, y «Partida determinada» (sin reclamación, valor ajustado ni OBS) cuando no hay presupuesto.
 - «Datos» solo muestra las características del bien y la evidencia observada; un único botón «Actualizar informe» en «Fotos»; memoria del sistema con panel en «Ajustes de IA».
 - **Nueva migración 0006** (`conocimiento`): se aplica sola al arrancar. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 18/10/2026 (3.ª tanda)
+- El ajuste generado desde la evidencia incluye todas las estancias de la inspección con las partidas de cada elemento dañado (cielo, muros, cubierta, piso, ventanas, puertas); aviso en Ajustes si falta alguna.
+- Párrafo de características con la redacción de plantilla en dos párrafos.
+- Previsualización del Excel con «Vista de impresión» (A4, títulos repetidos, imprimir).
+- Sin migraciones nuevas. El push a `main` dispara el despliegue automático en Coolify.

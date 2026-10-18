@@ -7,6 +7,7 @@ import { LEYENDA, LETRAS_OBS } from "@/lib/domain/constantes";
 import { BAREMO } from "@/lib/engine/baremo";
 import { partidasDeEvidencia, type ExtrasMemoria } from "@/lib/caso/partidas-evidencia";
 import TituloAyuda from "@/components/Ayuda";
+import { coincideEstancia } from "@/lib/fotos/orden";
 
 const UNIDADES = ["m2", "ml", "gl", "un", "m3", "kg"] as const;
 const n0 = (n: number) => Math.round(n).toLocaleString("es-CL");
@@ -49,6 +50,8 @@ export default function PartidasLiquidador({ salida, setSalida, acta, secciones,
     setAviso(`${nuevas.length} partida(s) agregada(s) desde la evidencia de la inspección.${g.sinPartida.length ? ` ${g.sinPartida.join(" ")}` : ""}`);
   }
 
+  // Estancias de la inspección que todavía no están en el ajuste ni en el presupuesto.
+  const faltan = [...new Set((acta?.danos ?? []).map((d) => d.recinto.trim().toUpperCase()))].filter((r) => !filas.some((a) => coincideEstancia(a.seccion, r)) && !secciones.some((s) => coincideEstancia(s, r)));
   const total = filas.reduce((t, a) => t + a.cantidad * a.pu, 0);
 
   return (
@@ -67,6 +70,7 @@ export default function PartidasLiquidador({ salida, setSalida, acta, secciones,
         )}
         <span className="ml-auto text-sm text-[color:var(--texto)]">Total directo: <strong>${n0(total)}</strong></span>
       </div>
+      {faltan.length > 0 && <p role="alert" className="aviso aviso-alerta text-sm">Faltan {faltan.length} estancia(s) de la inspección en el ajuste: {faltan.join(", ")}. Usa «Generar desde la evidencia» para agregarlas con sus partidas.</p>}
       {aviso && <p role="status" className="aviso aviso-ok text-sm">{aviso}</p>}
       <datalist id="lista-baremo">{BAREMO.map((b) => (<option key={b.id} value={b.descripcion} />))}</datalist>
       <datalist id="lista-elementos">{["Cielo", "Muro", "Piso", "Cubierta", "Cornisa", "Guardapolvo"].map((x) => (<option key={x} value={x} />))}</datalist>

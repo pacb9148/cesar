@@ -5,7 +5,7 @@ import { baseDeRpr, parrafoEvidenciaXml } from "./evidencia-xml";
 import { fotoFinal, type FotoOrigen } from "../fotos/procesar";
 import { CALIDAD_POR_DEFECTO, type Calidad } from "../fotos/calidad";
 import { MARCA_CUADRO } from "./cuadro";
-import { crearEl, hijos, NS_W, parse, porTag, reemplazarEnParrafo, serializar, textoDe, type Doc } from "./docx-xml";
+import { crearEl, hijos, NS_W, parse, ponerTextoParrafo, porTag, reemplazarEnParrafo, serializar, textoDe, type Doc } from "./docx-xml";
 import { bloquesPorGrupo, ESTILO_PIE_FOTOS, ESTILO_TITULO_FOTOS, type FotoCelda } from "./fotos-xml";
 
 /**
@@ -162,7 +162,7 @@ export function reemplazarTextosDatos(docx: Buffer, t: { caracteristicas?: strin
     const i = ps.findIndex((e) => e.localName === "p" && /Caracter[ií]sticas del bien en riesgo/.test(textoDe(e)));
     const p = i >= 0 ? ps.slice(i + 1).find((e) => e.localName === "p" && textoDe(e).trim() !== "") : undefined;
     if (p) {
-      reemplazarEnParrafo(p, /^[\s\S]+$/, () => t.caracteristicas!.trim());
+      ponerTextoParrafo(doc, p, t.caracteristicas.trim());
       car = true;
     }
   }

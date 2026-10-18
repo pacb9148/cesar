@@ -31,13 +31,14 @@ describe("párrafo del inmueble y evidencia desde la inspección", () => {
     const a = parsearActa(await textoPdf(readFileSync(ACTA_PDF)));
     expect(a.tipoInmueble).toBe("Casa");
     const p = parrafoInmueble(a);
-    expect(p).toMatch(/^Vivienda de 2 pisos con una superficie construida de 90 m², que consta de 3 dormitorios y 2 baños, y tiene una antigüedad de 7 años[.] Su construcción es de estructura de madera, con techumbre/);
-    expect(p).toMatch(/techumbre de cerchas de madera, cubierta de planchas de zinc alum y pavimentos de losa de hormigón armado/);
+    expect(p).toContain("Vivienda de 2 pisos de uso exclusivo habitacional con una superficie construida de 90 m² y una antigüedad de 7 años. Consta de 3 dormitorios, 2 baños, cocina, living comedor, entre otras dependencias.");
+    expect(p).toContain("Edificación de madera, techumbre soportada por cerchas de madera, cubierta de planchas de zinc alum, revestimientos en muros y cielo con pinturas y pavimentos de losa de hormigón armado.");
+    expect(p).toContain("\n\n"); // dos párrafos separados por una línea en blanco
     expect(vinetaDeDano(a.danos[1])).toBe("Cielo y muro afectado por humedad.");
     expect(vinetaDeDano(a.danos[2])).toBe("Muro afectado por humedad.");
   });
   it("solo dice lo que consta y no toca viñetas escritas por una persona", () => {
-    expect(parrafoInmueble({ pisos: 1, tipoInmueble: null } as never)).toBe("Vivienda de 1 piso.");
+    expect(parrafoInmueble({ pisos: 1 } as never)).toContain("Vivienda de 1 piso de uso exclusivo habitacional con una superficie construida de [FALTA DATO");
     expect(parrafoInmueble({} as never)).toBe("");
     const out = modernizarEvidencia(
       [

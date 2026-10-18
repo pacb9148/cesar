@@ -1,80 +1,115 @@
 import type { LineaAdicional } from "../domain/tipos";
-import type { ActaInspeccion } from "../extraccion/acta";
-import { porId } from "../engine/baremo";
+import type { ActaInspeccion, DanoActa } from "../extraccion/acta";
+import { candidatos, porId } from "../engine/baremo";
 import { cubicar } from "../engine/cubicacion";
 import { coincideEstancia } from "../fotos/orden";
 import { extrasDeElemento, type Aprendido } from "../conocimiento";
 
-/** Partidas del baremo (hoja Datos) que reparan cada elemento afectado: preparación de superficie, empaste y lijado, y pintura. */
-const POR_ELEMENTO: Record<"cielo" | "muro", { ids: number[]; etiqueta: string }> = {
-  cielo: { ids: [2, 3, 37], etiqueta: "cielo" },
-  muro: { ids: [6, 7, 46], etiqueta: "muros" },
+type Elem = "cielo" | "muro" | "cubierta" | "piso" | "ventana" | "puerta";
+type Conjunto = { etiqueta: string; elemento: string; ids: number[]; um: "m2" | "un" };
+
+/**
+ * Partidas del baremo (hoja Datos) que reparan cada elemento afectado. Cielo y muros: preparación de superficie, empaste y lijado, y pintura.
+ * Cubierta: retiro e instalación de cubierta. Piso: preparación y reparación. Ventanas y puertas: reparación de fisuras y sellos (por unidad).
+ */
+const CONJUNTOS: Record<Elem, Conjunto> = {
+  cielo: { etiqueta: "cielo", elemento: "Cielo", ids: [2, 3, 37], um: "m2" },
+  muro: { etiqueta: "muros", elemento: "Muro", ids: [6, 7, 46], um: "m2" },
+  cubierta: { etiqueta: "cubierta", elemento: "Cubierta", ids: [266, 267], um: "m2" },
+  piso: { etiqueta: "piso", elemento: "Piso", ids: [247, 283], um: "m2" },
+  ventana: { etiqueta: "ventanas", elemento: "Ventana", ids: [273, 184], um: "un" },
+  puerta: { etiqueta: "puertas", elemento: "Puerta", ids: [181, 182], um: "un" },
 };
+const CON_AREA: Elem[] = ["cielo", "muro", "cubierta", "piso"];
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Elementos afectados que nombra la descripción del daño, en el orden en que aparecen. */
-function elementosDe(descripcion: string): ("cielo" | "muro")[] {
-  const d = descripcion.toLowerCase();
-  return (
-    [
-      ["cielo", d.search(/cielo/)],
-      ["muro", d.search(/pared|muro|tabique/)],
-    ] as const
-  )
+const PATRONES: [Elem, RegExp][] = [
+  ["cielo", /cielo/],
+  ["muro", /pared|muro|tabique/],
+  ["cubierta", /cubierta|techumbre|techo|zinc|plancha|teja|hojalater|caballete|alero/],
+  ["piso", /piso|pavimento|radier|alfombra|flotante|cer[aá]mic/],
+  ["ventana", /ventana|vidrio/],
+  ["puerta", /puerta/],
+];
+
+/** Elementos afectados que nombra el recinto o la descripción del daño, en el orden en que aparecen. */
+function elementosDe(texto: string): Elem[] {
+  const d = texto.toLowerCase();
+  return PATRONES.map(([e, re]) => [e, d.search(re)] as const)
     .filter(([, pos]) => pos >= 0)
     .sort((a, b) => a[1] - b[1])
     .map(([e]) => e);
 }
 
+/** Variantes de partida según el material que nombra el daño (teja en vez de zinc, piso flotante o cerámico). */
+function idsDe(e: Elem, texto: string): number[] {
+  const d = texto.toLowerCase();
+  if (e === "cubierta") return [.../teja/.test(d) ? [89, 90] : CONJUNTOS.cubierta.ids, ...(/hojalater|sello/.test(d) ? [270] : [])];
+  if (e === "piso") return /flotante/.test(d) ? [261, 262] : /cer[aá]mic/.test(d) ? [81, 248] : CONJUNTOS.piso.ids;
+  return CONJUNTOS[e].ids;
+}
+
 /** Partidas extra por elemento que la memoria sugiere (se calcula en el servidor y viaja a la pantalla como datos simples). */
 export type ExtrasMemoria = Record<string, { id: number; um: string }[]>;
-export const extrasDeMemoria = (a: Aprendido): ExtrasMemoria => ({
-  cielo: extrasDeElemento(a, "cielo", POR_ELEMENTO.cielo.ids),
-  muro: extrasDeElemento(a, "muro", POR_ELEMENTO.muro.ids),
-});
+export const extrasDeMemoria = (a: Aprendido): ExtrasMemoria =>
+  Object.fromEntries((Object.keys(CONJUNTOS) as Elem[]).map((e) => [e, extrasDeElemento(a, e, CONJUNTOS[e].ids)]));
 
 export type PartidasDeEvidencia = { partidas: LineaAdicional[]; sinPartida: string[] };
 
+const partida = (seccion: string, elemento: string, b: { id: number; descripcion: string; pu: number }, um: LineaAdicional["um"], cantidad: number, justificacion: string): LineaAdicional => ({
+  seccion,
+  elemento,
+  descripcion: b.descripcion,
+  um,
+  cantidad,
+  pu: b.pu,
+  pu_origen: `baremo:${b.id}`,
+  obs: um === "m2" ? ["B", "C"] : ["B"],
+  justificacion,
+});
+
 /**
- * Convierte la evidencia de la inspección (tabla «Daños y perjuicios») en partidas de liquidación a precio de baremo: por cada elemento afectado
- * (cielo, muros) la preparación de superficie, el empaste y lijado y la pintura, con la cantidad de la medición del acta (si el daño toca
- * cielo y muros, se reparte según la cubicación del recinto). Los daños de otro tipo no tienen partida automática y quedan en `sinPartida`.
+ * Convierte la evidencia de la inspección (tabla «Daños y perjuicios») en partidas de liquidación a precio de baremo: TODAS las estancias que menciona,
+ * cada una con las partidas imputables a sus daños (cielo, muros, cubierta, piso, ventanas, puertas) y la cantidad de la medición del acta (si el daño toca
+ * varios elementos, se reparte según la cubicación del recinto). Un daño que no encaja en ninguno busca la partida más parecida de la hoja Datos; solo si
+ * tampoco hay ninguna queda en `sinPartida`.
  */
 export function partidasDeEvidencia(acta: Pick<ActaInspeccion, "danos">, opciones: { omitirEstancias?: string[]; aprendido?: Aprendido; extras?: ExtrasMemoria } = {}): PartidasDeEvidencia {
   const partidas: LineaAdicional[] = [];
   const sinPartida: string[] = [];
-  for (const d of acta.danos) {
+  for (const d of acta.danos as DanoActa[]) {
     // Con presupuesto solo se agregan las estancias de la evidencia que el presupuesto no trae.
     if ((opciones.omitirEstancias ?? []).some((s) => coincideEstancia(s, d.recinto))) continue;
-    const elementos = elementosDe(d.descripcion);
+    const seccion = d.recinto.trim().toUpperCase();
+    const texto = `${d.recinto} ${d.descripcion}`;
+    const elementos = elementosDe(texto);
     if (elementos.length === 0) {
-      sinPartida.push(`${d.recinto}: «${d.descripcion}» no tiene partida automática; agrégala a mano.`);
+      const b = candidatos(`${d.tipoDano} ${d.descripcion}`, 1)[0] ?? candidatos(d.descripcion, 1)[0];
+      if (!b) {
+        sinPartida.push(`${d.recinto}: «${d.descripcion}» no tiene partida automática; agrégala a mano.`);
+        continue;
+      }
+      const um = (["m2", "ml", "gl", "un", "m3", "kg"] as const).find((u) => u === d.um) ?? "m2";
+      partidas.push(partida(seccion, "Otros", b, um, Math.max(1, d.cantidad), `Daño descrito en el acta («${d.descripcion}», ${d.cantidad} ${d.um}), a precio de baremo a todo costo.`));
       continue;
     }
     const cub = cubicar({ alto: d.alto, largo: d.largo, ancho: d.ancho });
-    const peso = (e: "cielo" | "muro") => (e === "cielo" ? cub.cielo : cub.muroNeto);
-    const total = elementos.reduce((s, e) => s + peso(e), 0);
-    const seccion = d.recinto.trim().toUpperCase();
+    const peso = (e: Elem) => (e === "muro" ? cub.muroNeto : e === "piso" ? cub.piso : cub.cielo);
+    const conArea = elementos.filter((e) => CON_AREA.includes(e));
+    const total = conArea.reduce((s, e) => s + peso(e), 0);
     for (const e of elementos) {
-      const cantidad = Math.max(1, r2(elementos.length === 1 || total <= 0 ? d.cantidad : (d.cantidad * peso(e)) / total));
+      const c = CONJUNTOS[e];
+      const unitario = c.um === "un";
+      const cantidad = unitario ? 1 : Math.max(1, r2(conArea.length === 1 ? d.cantidad : total > 0 ? (d.cantidad * peso(e)) / total : d.cantidad / conArea.length));
       // Además de las de base, las partidas que el usuario suele agregar en este elemento (memoria del sistema).
-      const extras = opciones.extras?.[e] ?? (opciones.aprendido ? extrasDeElemento(opciones.aprendido, e, POR_ELEMENTO[e].ids) : []);
-      for (const id of [...POR_ELEMENTO[e].ids, ...extras.map((x) => x.id)]) {
+      const extras = opciones.extras?.[e] ?? (opciones.aprendido ? extrasDeElemento(opciones.aprendido, e, c.ids) : []);
+      const ids = [...idsDe(e, texto), ...extras.map((x) => x.id)];
+      for (const id of ids) {
         const b = porId(id);
         if (!b) continue;
-        const um = extras.find((x) => x.id === id)?.um ?? "m2";
-        partidas.push({
-          seccion,
-          elemento: e === "cielo" ? "Cielo" : "Muro",
-          descripcion: b.descripcion,
-          um: um as LineaAdicional["um"],
-          cantidad: um === "m2" ? cantidad : 1,
-          pu: b.pu,
-          pu_origen: `baremo:${b.id}`,
-          obs: ["B", "C"],
-          justificacion: `Reparación del daño observado en ${POR_ELEMENTO[e].etiqueta} del recinto (${d.cantidad} m² según acta), a precio de baremo a todo costo.`,
-        });
+        const um = (extras.find((x) => x.id === id)?.um ?? (id === 270 ? "gl" : c.um)) as LineaAdicional["um"];
+        partidas.push(partida(seccion, c.elemento, b, um, um === "m2" ? cantidad : 1, `Reparación del daño observado en ${c.etiqueta} del recinto (${d.cantidad} m² según acta), a precio de baremo a todo costo.`));
       }
     }
   }

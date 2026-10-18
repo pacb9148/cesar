@@ -56,6 +56,23 @@ export type Reemplazo = { texto: string; negrita?: boolean } | string;
  * Reemplaza coincidencias de `re` en un párrafo aunque estén partidas entre runs.
  * Las coincidencias se resuelven en orden: `fn` recibe el índice para asignar valores en secuencia.
  */
+/** Deja un párrafo con este texto (los saltos de línea «\n» pasan a ser saltos de Word), conservando el formato de su primer tramo de texto. */
+export function ponerTextoParrafo(doc: Doc, p: Element, texto: string): void {
+  const runs = hijos(p).filter((c) => c.localName === "r");
+  const modelo = runs.find((r) => porTag(r, "t").length > 0) ?? runs[0];
+  const rpr = modelo ? hijos(modelo).find((c) => c.localName === "rPr") : undefined;
+  for (const c of hijos(p)) if (c.localName !== "pPr") p.removeChild(c);
+  const run = crearEl(doc, "<w:r></w:r>");
+  if (rpr) run.appendChild(rpr.cloneNode(true));
+  texto.split("\n").forEach((linea, i) => {
+    if (i > 0) run.appendChild(crearEl(doc, "<w:br/>"));
+    const t = crearEl(doc, '<w:t xml:space="preserve"></w:t>');
+    t.textContent = linea;
+    run.appendChild(t);
+  });
+  p.appendChild(run);
+}
+
 export function reemplazarEnParrafo(p: Element, re: RegExp, fn: (m: RegExpExecArray, i: number) => Reemplazo): number {
   normalizarRuns(p);
   const ts = porTag(p, "t");

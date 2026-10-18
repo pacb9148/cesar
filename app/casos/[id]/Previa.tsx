@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import VentanaModal from "@/components/VentanaModal";
 import type { VistaDocumento as Vista } from "@/lib/caso/edicion-documentos";
 import HojaExcel from "./HojaExcel";
+import VistaImpresion from "./VistaImpresion";
 import { Bloques, type Contexto } from "./VistaDocumento";
 
 const SIN_EDICION: Contexto = { alCambiar: () => {}, alFoco: () => {}, alClicFoto: () => {}, alClicImagen: () => {}, eliminados: new Set(), soloLectura: true };
@@ -13,6 +14,7 @@ export default function Previa({ casoId, cuerpo, titulo, onCerrar }: { casoId: s
   const [vista, setVista] = useState<Vista | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoja, setHoja] = useState(0);
+  const [impresion, setImpresion] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -41,8 +43,9 @@ export default function Previa({ casoId, cuerpo, titulo, onCerrar }: { casoId: s
                 {vista.hojas.map((h, i) => (
                   <button key={h.nombre} type="button" role="tab" aria-selected={hoja === i} className={`btn ${hoja === i ? "" : "btn-sec"} !px-3 !py-1 text-sm`} onClick={() => setHoja(i)}>{h.nombre}</button>
                 ))}
+                <button type="button" className={`btn ${impresion ? "" : "btn-sec"} ml-auto !px-3 !py-1 text-sm`} aria-pressed={impresion} onClick={() => setImpresion((v) => !v)}>Vista de impresión</button>
               </div>
-              <HojaExcel key={vista.hojas[hoja].nombre} h={vista.hojas[hoja]} zoom={1} maximizada={maximizada} soloLectura pendiente={{}} ediciones={new Map()} alEditar={() => {}} alFormato={() => {}} />
+              {impresion ? <VistaImpresion hoja={vista.hojas[hoja]} alto={maximizada ? "70vh" : "58vh"} /> : <HojaExcel key={vista.hojas[hoja].nombre} h={vista.hojas[hoja]} zoom={1} maximizada={maximizada} soloLectura pendiente={{}} ediciones={new Map()} alEditar={() => {}} alFormato={() => {}} />}
             </>
           )}
           {vista?.tipo === "docx" && (
