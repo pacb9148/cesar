@@ -16,6 +16,7 @@ const PX_CARACTER = 6.4;
 const PX_NEGRITA = 7;
 const RELLENO = 14;
 const ANCHO_MINIMO = 30;
+const FONDO_TITULOS = "#e7e7e7";
 
 function anchoDeContenido(h: HojaVista, col: number): number | null {
   const combinadas = new Set(h.combinadas.filter((m) => m.c2 > m.c1).map((m) => `${m.r1},${m.c1}`));
@@ -49,6 +50,7 @@ export function hojaAHtml(h: HojaVista, opciones: { orientacion?: Orientacion } 
 
   // En la planilla del ajuste los títulos de la tabla (filas 10 y 11) se repiten en cada página.
   const repetir = h.nombre === "EDIFICIO" ? [10, 11] : [];
+  const plano = repetir.length > 0;
   const fila = (r: number) => {
     const tds: string[] = [];
     for (let c = 1; c <= ultimaCol; c++) {
@@ -59,7 +61,9 @@ export function hojaAHtml(h: HojaVista, opciones: { orientacion?: Orientacion } 
       const span = m ? ` colspan="${Math.min(m.c2, ultimaCol) - m.c1 + 1}" rowspan="${m.r2 - m.r1 + 1}"` : "";
       const al = x?.al ?? (x && NUMERO.test(x.txt) ? "right" : "left");
       const corta = porContenido[c - 1] !== null;
-      const estilo = [corta ? "white-space:nowrap" : "", x?.fondo ? `background:${x.fondo}` : "", `color:${colorSobre(x?.fondo)}`, x?.b ? "font-weight:700" : "", `text-align:${al}`].filter(Boolean).join(";");
+      // Planilla del ajuste: sin rejilla ni resaltado de filas; solo los títulos de la tabla llevan un fondo gris suave.
+      const fondo = plano ? (repetir.includes(r) ? FONDO_TITULOS : undefined) : x?.fondo;
+      const estilo = [corta ? "white-space:nowrap" : "", fondo ? `background:${fondo}` : "", `color:${colorSobre(fondo)}`, x?.b ? "font-weight:700" : "", `text-align:${al}`].filter(Boolean).join(";");
       tds.push(`<td${span} style="${estilo}">${x ? esc(x.txt) : ""}</td>`);
     }
     const alto = h.altos[r - 1];
@@ -72,15 +76,19 @@ export function hojaAHtml(h: HojaVista, opciones: { orientacion?: Orientacion } 
   const cabecera = filas.filter((r) => repetir.includes(r)).map(fila);
   const cuerpo = filas.filter((r) => !repetir.length || r > repetir[repetir.length - 1]).map(fila);
 
+  // Los datos del siniestro van en su propia tabla, encima de los títulos (si fueran la misma tabla, el thead los pasaría por delante).
+  const colgroup = `<colgroup>${anchos.map((w) => `<col style="width:${w}px">`).join("")}</colgroup>`;
+  const tabla = (contenido: string) => (contenido.replace(/<\/?(tbody|thead)>/g, "") === "" ? "" : `<table>${colgroup}${contenido}</table>`);
+
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(h.nombre)}</title><style>
     @page { size: A4 ${orientacion === "horizontal" ? "landscape" : "portrait"}; margin: 10mm; }
     * { box-sizing: border-box; }
     body { margin: 0; background: #6b7280; font: 11px Arial, Helvetica, sans-serif; color: #000; }
-    .hoja { background: #fff; width: ${disponible}px; margin: 16px auto; padding: 0; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
+    .hoja { background: #fff; width: ${Math.ceil(total * escala)}px; margin: 16px auto; padding: 0; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
     table { border-collapse: collapse; table-layout: fixed; width: ${total}px; zoom: ${escala}; }
-    td { padding: 1px 4px; border: 1px solid #d4d4d8; overflow: hidden; white-space: pre-wrap; vertical-align: middle; word-break: break-word; }
+    td { padding: ${plano ? "2px" : "1px"} 4px; ${plano ? "border: 0;" : "border: 1px solid #d4d4d8;"} overflow: hidden; white-space: pre-wrap; vertical-align: middle; word-break: break-word; }
     thead { display: table-header-group; }
     tr { page-break-inside: avoid; }
-    @media print { body { background: #fff; } .hoja { margin: 0; box-shadow: none; width: auto; } }
-  </style></head><body><div class="hoja"><table><colgroup>${anchos.map((w) => `<col style="width:${w}px">`).join("")}</colgroup>${repetir.length ? `<tbody>${antes.join("")}</tbody><thead>${cabecera.join("")}</thead>` : ""}<tbody>${cuerpo.join("")}</tbody></table></div></body></html>`;
+    @media print { body { background: #fff; } .hoja { margin: 0; box-shadow: none; } }
+  </style></head><body><div class="hoja">${tabla(plano ? `<tbody>${antes.join("")}</tbody>` : "")}${tabla(`${plano ? `<thead>${cabecera.join("")}</thead>` : ""}<tbody>${cuerpo.join("")}</tbody>`)}</div></body></html>`;
 }

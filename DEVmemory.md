@@ -246,3 +246,11 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - **«Copiar todo»** (`lib/docs/instantanea.ts`): imagen PNG de la hoja completa tal como se imprimirá (SVG con `foreignObject` en un canvas, sin librerías), copiada al portapapeles; si el navegador no deja, la descarga. La imagen se pasa como promesa al `ClipboardItem` para no perder el gesto del usuario.
 - **Verificado:** 212 pruebas, tsc, lint, e2e y navegador (columnas y fecha en una línea; la imagen se genera con contenido, 1047×1281 px). El portapapeles del panel de pruebas niega el permiso, así que la copia real en Chrome no se probó: se probó la descarga de respaldo.
 - **Aprendizaje:** el ancho de columnas heredado de una plantilla no sirve para imprimir; medir el contenido de las celdas cortas.
+
+## Vista de impresión con el formato de salida del ajuste (18/10/2026, 7.ª tanda)
+- **Pedido:** sin líneas de filas ni columnas, estancias en negrita sin resaltar la fila, datos del siniestro encima de los títulos y títulos de la tabla justo sobre la primera partida, como el ajuste de salida (imagen de referencia).
+- **Causa del orden mal puesto:** los datos y los títulos iban en la misma tabla y un `thead` se pinta SIEMPRE antes que el `tbody`, aunque esté escrito después; los títulos salían arriba del todo. Ahora los datos son una tabla propia encima y los títulos son el `thead` de la tabla de partidas (se repiten en cada página impresa).
+- **Estilo (hoja EDIFICIO):** sin bordes, sin los fondos de la plantilla; solo los títulos de la tabla llevan un gris suave (`#e7e7e7`). Las demás hojas (Datos, etc.) conservan su rejilla.
+- **Imagen «Copiar todo»:** salía con una franja sobrante a la derecha porque la hoja medía más que la tabla; ahora la hoja mide exactamente lo que la tabla.
+- **Verificado:** 213 pruebas, tsc, lint, e2e sin FALLA y navegador (datos → títulos → partidas, sin líneas, hoja = ancho de la tabla). La copia real al portapapeles en Chrome sigue sin probarse.
+- **Aprendizaje:** un `thead` siempre se dibuja arriba de su tabla; si hay contenido que debe ir antes de los títulos, va en otra tabla con el mismo `colgroup`.

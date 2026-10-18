@@ -134,3 +134,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 18/10/2026 (6.ª tanda)
 - Vista de impresión del Excel: columnas cortas ajustadas al contenido y botón «Copiar todo» (imagen de la hoja tal como se imprimirá). Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 18/10/2026 (7.ª tanda)
+- Vista de impresión del ajuste con el formato de salida: sin rejilla ni resaltado, datos encima de los títulos y títulos sobre la primera partida; «Copiar todo» sin franja sobrante. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.

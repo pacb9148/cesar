@@ -23,7 +23,7 @@ const hoja: HojaVista = {
 describe("vista de impresión del Excel", () => {
   it("recorta al área con contenido, repite los títulos de la tabla y no parte filas", () => {
     const h = hojaAHtml(hoja);
-    expect((h.match(/<col /g) ?? []).length).toBe(6); // solo hasta la última columna con texto
+    expect((h.match(/<col /g) ?? []).length).toBe(12); // dos tablas (datos y partidas) con 6 columnas cada una: solo hasta la última con texto
     expect(h).toContain("<thead>");
     const thead = /<thead>([^]*?)<[/]thead>/.exec(h)![1];
     expect(thead).toContain("Partida determinada");
@@ -43,7 +43,7 @@ describe("vista de impresión del Excel", () => {
   it("las cifras van a la derecha y las celdas con fondo mantienen texto legible", () => {
     const h = hojaAHtml(hoja);
     expect(h).toMatch(/text-align:right">7,8</);
-    expect(h).toMatch(/background:#d9d9d9;color:#[0-9a-f]{3,6};font-weight:700/i);
+    expect(h).toMatch(/background:#e7e7e7;color:#[0-9a-f]{3,6};font-weight:700/i);
   });
   it("ajusta al contenido las columnas cortas (u/m, cantidad, precio, total) y no parte fechas ni cifras", () => {
     const h: HojaVista = {
@@ -61,5 +61,14 @@ describe("vista de impresión del Excel", () => {
     expect(col(6)).toBeLessThan(200);
     expect(col(2)).toBe(500); // la descripción conserva su ancho y puede partirse
     expect(html).toContain("white-space:nowrap");
+  });
+  it("sin rejilla ni resaltado de filas, con los datos encima de los títulos y los títulos sobre la primera partida", () => {
+    const h = hojaAHtml(hoja);
+    expect(h).toContain("border: 0;");
+    expect(h).not.toContain("border: 1px solid");
+    expect(h.indexOf("Temporal")).toBeLessThan(h.indexOf("Partida determinada")); // datos → títulos
+    expect(h.indexOf("Partida determinada")).toBeLessThan(h.indexOf("DORMITORIO 1")); // títulos → primera estancia
+    const fila = /<tr[^>]*>(?:(?!<[/]tr>)[^])*DORMITORIO 1[^]*?<[/]tr>/.exec(h)![0];
+    expect(fila).not.toContain("background"); // la estancia va en negrita pero sin resaltar
   });
 });
