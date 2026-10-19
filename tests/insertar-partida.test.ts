@@ -4,8 +4,9 @@ import { generarExcel } from "../lib/docs/excel";
 import { datosCasoSchema, type LineaAdicional } from "../lib/domain/tipos";
 import { armarFilas } from "../lib/engine/filas";
 import { calcularTotales } from "../lib/engine/totales";
-import { asociadasDe, insertarDespuesDelRecinto, obsPorDefecto, partidaNueva, umDe } from "../lib/caso/asociadas";
-import { BAREMO, porId } from "../lib/engine/baremo";
+import { insertarDespuesDelRecinto, obsPorDefecto, partidaNueva, umDe } from "../lib/caso/asociadas";
+import { aplicablesDe, buscarPartidas, complementosDe, etiquetasDe, MAX_SUGERENCIAS } from "../lib/caso/relacion-partidas";
+import { BAREMO } from "../lib/engine/baremo";
 
 const lin = (seccion: string, descripcion = "x", extra: Partial<LineaAdicional> = {}): LineaAdicional => ({ seccion, elemento: "Cielo", descripcion, um: "m2", cantidad: 2, pu: 1000, pu_origen: "mercado:manual", obs: ["B"], justificacion: "", ...extra });
 
@@ -31,30 +32,61 @@ describe("insertar partida en el ajuste", () => {
     expect(t.directo).toBe(3500);
   });
 
-  it("la U/M sale de lo aprendido o de la descripción y las asociadas comparten siempre la U/M de la partida", () => {
+  it("la U/M sale de lo aprendido o de la descripción", () => {
     expect(umDe(2)).toBe("m2"); // Preparación de superficie cielo
     const guardapolvo = BAREMO.find((b) => /guardapolvo/i.test(b.descripcion))!;
     expect(umDe(guardapolvo.id)).toBe("ml");
     const puerta = BAREMO.find((b) => /^Retiro de puerta/i.test(b.descripcion))!;
     expect(umDe(puerta.id)).toBe("un");
-    let probadas = 0;
-    for (const b of BAREMO.slice(0, 120)) {
-      for (const a of asociadasDe(b.id)) {
-        expect(a.um).toBe(umDe(b.id));
-        expect(a.id).not.toBe(b.id);
-        expect(porId(a.id)).toBeTruthy();
-        probadas++;
-      }
-    }
-    expect(probadas).toBeGreaterThan(20);
-  });
-
-  it("una partida de un conjunto de reparación trae sus complementos (empaste y pintura del cielo)", () => {
-    const ids = asociadasDe(2).map((a) => a.id);
-    expect(ids).toContain(3);
-    expect(ids).toContain(37);
     expect(obsPorDefecto("m2")).toEqual(["B", "C"]);
     expect(obsPorDefecto("un")).toEqual(["B"]);
+  });
+});
+
+describe("sugerencias de partidas", () => {
+  const nombres = (l: { descripcion: string }[]) => l.map((x) => x.descripcion.toLowerCase());
+
+  it("entiende qué hace una partida y sobre qué", () => {
+    expect(etiquetasDe("Retiro cielo yeso cartón")).toMatchObject({ accion: "retiro" });
+    expect([...etiquetasDe("Retiro cielo yeso cartón").objetos]).toEqual(["cielo"]);
+    expect(etiquetasDe("Pintura y Sellos Cornisas.").accion).toBe("pintura");
+    expect([...etiquetasDe("Reposición volcanita yeso cartón").objetos].sort()).toEqual(["cielo", "muro"]);
+  });
+
+  it("un cielo con humedad: la partida aplicable es retirar el yeso cartón, y son como máximo 5 trabajos distintos", () => {
+    const l = aplicablesDe({ elemento: "Cielo", dano: "Escurrimiento de agua y humedad en el cielo del baño" });
+    expect(l.length).toBeLessThanOrEqual(MAX_SUGERENCIAS);
+    expect(nombres(l)[0]).toMatch(/retiro cielo.*yeso cart/);
+    expect(new Set(l.map((x) => etiquetasDe(x.descripcion).accion)).size).toBe(l.length);
+    expect(aplicablesDe({ elemento: "" })).toEqual([]);
+  });
+
+  it("«retiro de yeso cartón» trae empaste y lijado, pintura, reposición y la cornisa (retiro y reposición) como complementos", () => {
+    const id = BAREMO.find((b) => /^Retiro cielo yeso cart/i.test(b.descripcion))!.id;
+    const l = complementosDe(id, { elemento: "Cielo" });
+    expect(l.length).toBeLessThanOrEqual(MAX_SUGERENCIAS);
+    const t = nombres(l).join(" | ");
+    expect(t).toMatch(/empaste/);
+    expect(t).toMatch(/pintura/);
+    expect(t).toMatch(/reposici[oó]n (volcanita|cielo)/);
+    expect(t).toMatch(/retiro cornisa/);
+    expect(t).toMatch(/reposici[oó]n cornisa/);
+    expect(l.some((x) => x.id === id)).toBe(false);
+    // Sin trabajos repetidos y sin ruido de otros elementos (papel mural, cierres…).
+    expect(new Set(nombres(l)).size).toBe(l.length);
+    expect(t).not.toMatch(/papel mural|pandereta|flexit/);
+  });
+
+  it("la preparación de un cielo trae el resto de su conjunto de reparación", () => {
+    const ids = complementosDe(2, { elemento: "Cielo" }).map((a) => a.id);
+    expect(ids).toContain(3);
+    expect(ids).toContain(37);
+  });
+
+  it("la búsqueda libre encuentra cualquier partida de la hoja Datos por partes de palabras", () => {
+    expect(nombres(buscarPartidas("cornisa repo")).join(" ")).toMatch(/reposici[oó]n cornisa/);
+    expect(buscarPartidas("zzzz")).toEqual([]);
+    expect(buscarPartidas("a")).toEqual([]);
   });
 });
 

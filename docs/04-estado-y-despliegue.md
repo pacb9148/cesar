@@ -146,3 +146,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 19/10/2026 (2.ª tanda)
 - Copia de imágenes con respaldo para páginas sin HTTPS. Ventana «Insertar partida» con partidas asociadas (misma U/M). Semilla con U/M y asociaciones. Fórmulas del Excel verificadas. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify. Pendiente de fondo: servir la app con HTTPS.
+
+## Cambios del 19/10/2026 (3.ª tanda)
+- «Insertar partida»: 5 partidas aplicables por elemento y daño, 5 complementarias opcionales (check, U/M y cantidad editables) y buscadores para ir más allá. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.

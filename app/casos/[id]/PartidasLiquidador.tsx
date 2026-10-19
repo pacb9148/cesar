@@ -75,7 +75,7 @@ export default function PartidasLiquidador({ salida, setSalida, acta, secciones,
         )}
         <span className="ml-auto text-sm text-[color:var(--texto)]">Total directo: <strong>${n0(total)}</strong></span>
       </div>
-      {insertando && <InsertarPartida recintos={recintos} extras={extras} onInsertar={insertar} onCerrar={() => setInsertando(false)} />}
+      {insertando && <InsertarPartida recintos={recintos} danos={acta?.danos} extras={extras} onInsertar={insertar} onCerrar={() => setInsertando(false)} />}
       {faltan.length > 0 && <p role="alert" className="aviso aviso-alerta text-sm">Faltan {faltan.length} estancia(s) de la inspección en el ajuste: {faltan.join(", ")}. Usa «Generar desde la evidencia» para agregarlas con sus partidas.</p>}
       {aviso && <p role="status" className="aviso aviso-ok text-sm">{aviso}</p>}
       <datalist id="lista-baremo">{BAREMO.map((b) => (<option key={b.id} value={b.descripcion} />))}</datalist>

@@ -2,7 +2,6 @@ import type { LineaAdicional, Unidad } from "../domain/tipos";
 import { porId } from "../engine/baremo";
 import { SEMILLA } from "../conocimiento";
 import { coincideEstancia } from "../fotos/orden";
-import { conjuntosQueContienen, type ExtrasMemoria } from "./partidas-evidencia";
 
 const UNIDADES: readonly Unidad[] = ["m2", "ml", "gl", "un", "m3", "kg"];
 const esUnidad = (x: string): x is Unidad => (UNIDADES as readonly string[]).includes(x);
@@ -26,29 +25,6 @@ export function umDe(id: number): Unidad {
 
 /** Observaciones con que se agrega una partida de la hoja Datos: precio de baremo (B) y, si se mide por superficie, cantidad según el acta (C). */
 export const obsPorDefecto = (um: Unidad): LineaAdicional["obs"] => (um === "m2" ? ["B", "C"] : ["B"]);
-
-export type Asociada = { id: number; descripcion: string; um: Unidad; pu: number; origen: "complemento" | "conjunto" | "aprendido"; veces: number };
-
-/**
- * Partidas que suelen ir junto a otra (prelación o complemento), todas con LA MISMA unidad de medida: las que los ajustes de referencia usaron juntas en la
- * misma estancia y elemento, las del mismo conjunto de reparación (preparación, empaste, pintura…) y las que el usuario suele agregar en ese elemento.
- */
-export function asociadasDe(id: number, o: { um?: Unidad; elemento?: string; extras?: ExtrasMemoria } = {}): Asociada[] {
-  const um = o.um ?? umDe(id);
-  const mapa = new Map<number, Asociada>();
-  const poner = (otro: number, origen: Asociada["origen"], veces: number, umPropia?: string) => {
-    const b = porId(otro);
-    if (otro === id || mapa.has(otro) || !b) return;
-    const u = umPropia && esUnidad(umPropia) ? umPropia : umDe(otro);
-    if (u !== um) return;
-    mapa.set(otro, { id: otro, descripcion: b.descripcion, um: u, pu: b.pu, origen, veces });
-  };
-  for (const [k, n] of Object.entries(SEMILLA.asociaciones?.[String(id)] ?? {}).sort((a, b) => b[1] - a[1])) poner(Number(k), "complemento", n);
-  for (const otro of conjuntosQueContienen(id)) poner(otro, "conjunto", 0);
-  const elemento = sinTildes(o.elemento ?? "").trim();
-  for (const x of o.extras?.[elemento] ?? []) poner(x.id, "aprendido", 0, x.um);
-  return [...mapa.values()].slice(0, 12);
-}
 
 /** Partida lista para el ajuste a partir de lo elegido en la ventana de inserción; con `baremoId` toma el precio de la hoja Datos como origen. */
 export function partidaNueva(p: { recinto: string; elemento?: string; descripcion: string; um: Unidad; cantidad: number; pu: number; obs: LineaAdicional["obs"]; baremoId?: number | null }): LineaAdicional {
