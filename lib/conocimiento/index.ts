@@ -11,6 +11,10 @@ export type Semilla = {
   estancias: Record<string, number>;
   lineas: number;
   asociadas: number;
+  /** Unidad de medida con que los ajustes de referencia usaron cada partida de la hoja Datos (id → u/m). */
+  um?: Record<string, string>;
+  /** Partidas que aparecen juntas en la misma estancia y elemento (id → { id complementario → veces }). */
+  asociaciones?: Record<string, Record<string, number>>;
 };
 export const SEMILLA = semillaJson as unknown as Semilla;
 

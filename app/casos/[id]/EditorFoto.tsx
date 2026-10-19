@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BotonIcono, Icono, type NombreIcono } from "@/components/Iconos";
 import VentanaModal from "@/components/VentanaModal";
-import { copiarImagen } from "@/lib/docs/portapapeles";
+import { copiarImagen, ErrorPortapapeles } from "@/lib/docs/portapapeles";
+import ImagenParaCopiar from "@/components/ImagenParaCopiar";
 import { pxDeCalidad } from "@/lib/fotos/calidad";
 import { conResolucion } from "@/lib/fotos/png-resolucion";
 import { FOTO_ANCHO_CM, FOTO_TAMANO_TEXTO, LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
@@ -99,6 +100,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [respaldo, setRespaldo] = useState<Blob | null>(null);
   const lienzo = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
   const escenario = useRef<HTMLDivElement>(null);
@@ -258,6 +260,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
   async function copiarEditada() {
     if (!prep) return;
     setCopiado(null);
+    setRespaldo(null);
     setError(null);
     const { ancho, alto } = pxDeCalidad("300");
     const v = ventanaDeRecorte(base0.ancho, base0.alto, ed);
@@ -275,7 +278,8 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
       await copiarImagen(png);
       setCopiado(`Recorte copiado (${FOTO_TAMANO_TEXTO}): pégalo donde lo necesites.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo copiar la imagen.");
+      if (e instanceof ErrorPortapapeles && e.imagen) setRespaldo(e.imagen);
+      else setError(e instanceof Error ? e.message : "No se pudo copiar la imagen.");
     }
   }
 
@@ -335,6 +339,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
         {error && <p role="alert" className="aviso aviso-error">{error}</p>}
         {copiado && <p role="status" className="aviso aviso-ok">{copiado}</p>}
+        {respaldo && <ImagenParaCopiar imagen={respaldo} />}
         {guardando && <p role="status" className="aviso aviso-ok">Guardando y actualizando el informe, el anexo y el PDF con tu recorte… puede tardar unos segundos.</p>}
 
         <div className={`grid gap-3 ${maximizada ? "lg:grid-cols-[13rem_1fr_13rem]" : "lg:grid-cols-[15rem_1fr_15rem]"}`}>

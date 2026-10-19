@@ -8,6 +8,8 @@ import { BAREMO } from "@/lib/engine/baremo";
 import { ordenarAdicionales, partidasDeEvidencia, type ExtrasMemoria } from "@/lib/caso/partidas-evidencia";
 import TituloAyuda from "@/components/Ayuda";
 import { coincideEstancia } from "@/lib/fotos/orden";
+import { insertarDespuesDelRecinto } from "@/lib/caso/asociadas";
+import InsertarPartida from "./InsertarPartida";
 
 const UNIDADES = ["m2", "ml", "gl", "un", "m3", "kg"] as const;
 const n0 = (n: number) => Math.round(n).toLocaleString("es-CL");
@@ -19,15 +21,18 @@ const clave = (a: Pick<LineaAdicional, "seccion" | "descripcion">) => `${a.secci
  */
 export default function PartidasLiquidador({ salida, setSalida, acta, secciones, extras, orden }: { extras?: ExtrasMemoria; orden?: string[]; salida: SalidaAgente; setSalida: (f: (s: SalidaAgente | null) => SalidaAgente | null) => void; acta: ActaInspeccion | null; secciones: string[] }) {
   const [aviso, setAviso] = useState<string | null>(null);
+  const [insertando, setInsertando] = useState(false);
   const filas = salida.lineas_adicionales;
   const recintos = useMemo(() => [...new Set([...secciones, ...(acta?.danos ?? []).map((d) => d.recinto.trim().toUpperCase())])], [secciones, acta]);
 
   const cambiar = (i: number, p: Partial<LineaAdicional>) => setSalida((s) => (s ? { ...s, lineas_adicionales: s.lineas_adicionales.map((a, k) => (k === i ? { ...a, ...p } : a)) } : s));
   const quitar = (i: number) => setSalida((s) => (s ? { ...s, lineas_adicionales: s.lineas_adicionales.filter((_, k) => k !== i) } : s));
-  const agregar = () =>
-    setSalida((s) =>
-      s ? { ...s, lineas_adicionales: [...s.lineas_adicionales, { seccion: recintos[0] ?? "GENERAL", descripcion: "", um: "m2", cantidad: 1, pu: 1, pu_origen: "mercado:manual", obs: ["B"], justificacion: "Partida agregada por el liquidador." }] } : s,
-    );
+  /** Las partidas de la ventana «Insertar partida» entran a continuación de la última del recinto elegido; los totales del ajuste las suman solos. */
+  function insertar(nuevas: LineaAdicional[]) {
+    setSalida((x) => (x ? { ...x, lineas_adicionales: insertarDespuesDelRecinto(x.lineas_adicionales, nuevas) } : x));
+    setInsertando(false);
+    setAviso(`${nuevas.length} partida(s) insertada(s) en ${nuevas[0].seccion}, a continuación de la última partida del recinto.`);
+  }
 
   /** Al escribir o elegir una descripción del baremo, la partida toma su precio y su origen. */
   function elegirDescripcion(i: number, texto: string) {
@@ -59,24 +64,25 @@ export default function PartidasLiquidador({ salida, setSalida, acta, secciones,
       <TituloAyuda titulo="Partidas del liquidador" nivel={3}>
         <p>
           Sin presupuesto del contratista, esta es la base de la liquidación: «Generar desde la evidencia» convierte los daños de la inspección en partidas a precio de la hoja Datos (preparación de superficie, empaste y lijado, y pintura de cada cielo y muro afectado).
-          Edita cantidades y precios, quita lo que no corresponda y agrega las partidas que falten (al elegir una descripción del baremo toma su precio). Luego guarda el ajuste.
+          Edita cantidades y precios, quita lo que no corresponda y inserta las partidas que falten (al elegir una descripción del baremo toma su precio). Luego guarda el ajuste.
         </p>
       </TituloAyuda>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="btn" onClick={desdeEvidencia} disabled={!acta}>Generar desde la evidencia</button>
-        <button type="button" className="btn btn-sec" onClick={agregar}>Agregar partida</button>
+        <button type="button" className="btn btn-sec" onClick={() => setInsertando(true)}>Insertar partida</button>
         {filas.length > 0 && (
           <button type="button" className="btn btn-sec" onClick={() => window.confirm("¿Quitar todas las partidas del liquidador?") && setSalida((s) => (s ? { ...s, lineas_adicionales: [] } : s))}>Quitar todas</button>
         )}
         <span className="ml-auto text-sm text-[color:var(--texto)]">Total directo: <strong>${n0(total)}</strong></span>
       </div>
+      {insertando && <InsertarPartida recintos={recintos} extras={extras} onInsertar={insertar} onCerrar={() => setInsertando(false)} />}
       {faltan.length > 0 && <p role="alert" className="aviso aviso-alerta text-sm">Faltan {faltan.length} estancia(s) de la inspección en el ajuste: {faltan.join(", ")}. Usa «Generar desde la evidencia» para agregarlas con sus partidas.</p>}
       {aviso && <p role="status" className="aviso aviso-ok text-sm">{aviso}</p>}
       <datalist id="lista-baremo">{BAREMO.map((b) => (<option key={b.id} value={b.descripcion} />))}</datalist>
       <datalist id="lista-elementos">{["Cielo", "Muro", "Piso", "Cubierta", "Cornisa", "Guardapolvo"].map((x) => (<option key={x} value={x} />))}</datalist>
       <datalist id="lista-recintos">{recintos.map((r) => (<option key={r} value={r} />))}</datalist>
       {filas.length === 0 ? (
-        <p className="texto-suave text-sm">Aún no hay partidas. Usa «Generar desde la evidencia» o «Agregar partida».</p>
+        <p className="texto-suave text-sm">Aún no hay partidas. Usa «Generar desde la evidencia» o «Insertar partida».</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="tabla">

@@ -36,6 +36,9 @@ const partidas: Record<string, Record<number, number>> = {};
 const elementos: Record<string, Record<number, number>> = {};
 const secciones: Record<string, number> = {};
 const estancias: Record<string, number> = {};
+// Unidad de medida con que se usó cada partida de la hoja Datos, y qué partidas van juntas (misma estancia y elemento): la hoja Datos no trae U/M ni complementos.
+const unidades: Record<number, Record<string, number>> = {};
+const juntas: Record<number, Record<number, number>> = {};
 let lineas = 0;
 let asociadas = 0;
 
@@ -47,6 +50,7 @@ for (const f of readdirSync(carpeta).filter((x) => /\.xlsx$/i.test(x))) {
   let elementoActual: Elemento = "otros";
   let seccionElemento: string | null = null;
   const vistos = new Set<string>();
+  const grupos = new Map<string, Set<number>>();
   for (let r = 12; r <= ws.rowCount; r++) {
     const row = ws.getRow(r);
     const item = String(val(row.getCell(1)) ?? "");
@@ -71,6 +75,12 @@ for (const f of readdirSync(carpeta).filter((x) => /\.xlsx$/i.test(x))) {
     const id = baremoDe(desc, puAj);
     if (id === null) continue;
     asociadas++;
+    if (um) {
+      unidades[id] ??= {};
+      unidades[id][um] = (unidades[id][um] ?? 0) + 1;
+    }
+    const padre = item.split(".").slice(0, -1).join(".");
+    grupos.set(padre, (grupos.get(padre) ?? new Set<number>()).add(id));
     const k = normClave(desc);
     partidas[k] ??= {};
     partidas[k][id] = (partidas[k][id] ?? 0) + 1;
@@ -85,7 +95,21 @@ for (const f of readdirSync(carpeta).filter((x) => /\.xlsx$/i.test(x))) {
       }
     }
   }
+  for (const ids of grupos.values())
+    for (const a of ids)
+      for (const b of ids)
+        if (a !== b) {
+          juntas[a] ??= {};
+          juntas[a][b] = (juntas[a][b] ?? 0) + 1;
+        }
 }
-const salida = { version: 1, origen: carpeta, lineas, asociadas, partidas, elementos, secciones, estancias };
+const um: Record<number, string> = Object.fromEntries(Object.entries(unidades).map(([id, c]) => [id, Object.entries(c).sort((a, b) => b[1] - a[1])[0][0]]));
+// Complementos: las partidas que aparecen juntas en al menos 2 grupos (estancia o elemento), las 10 más frecuentes de cada una.
+const asociaciones: Record<number, Record<number, number>> = {};
+for (const [id, otros] of Object.entries(juntas)) {
+  const top = Object.entries(otros).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0])).slice(0, 10);
+  if (top.length) asociaciones[Number(id)] = Object.fromEntries(top.map(([k, n]) => [Number(k), n]));
+}
+const salida = { version: 2, origen: carpeta, lineas, asociadas, partidas, elementos, secciones, estancias, um, asociaciones };
 writeFileSync("lib/conocimiento/semilla.json", JSON.stringify(salida, null, 1));
 console.log(`líneas con precio: ${lineas}; asociadas a la hoja Datos: ${asociadas}; descripciones: ${Object.keys(partidas).length}; elementos:`, Object.fromEntries(Object.entries(elementos).map(([k, v]) => [k, Object.keys(v).length])), "secciones:", secciones);

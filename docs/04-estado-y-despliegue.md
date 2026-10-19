@@ -143,3 +143,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 19/10/2026
 - Editor de fotos: lienzo con la proporción exacta 8,66 × 6,70 cm; «Copiar imagen editada» copia solo el recorte (1024 × 792, con resolución anotada) al portapapeles, sin descargar. Copia de la vista de impresión limitada a 512 KB y solo al portapapeles. Margen superior de celda del cuadro: 0,05 cm. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 19/10/2026 (2.ª tanda)
+- Copia de imágenes con respaldo para páginas sin HTTPS. Ventana «Insertar partida» con partidas asociadas (misma U/M). Semilla con U/M y asociaciones. Fórmulas del Excel verificadas. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify. Pendiente de fondo: servir la app con HTTPS.

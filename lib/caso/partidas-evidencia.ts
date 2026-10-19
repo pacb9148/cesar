@@ -20,6 +20,9 @@ const CONJUNTOS: Record<Elem, Conjunto> = {
   ventana: { etiqueta: "ventanas", elemento: "Ventana", ids: [273, 184], um: "un" },
   puerta: { etiqueta: "puertas", elemento: "Puerta", ids: [181, 182], um: "un" },
 };
+/** Partidas que forman un mismo conjunto de reparación con la dada (preparación, empaste y pintura de un cielo, por ejemplo). */
+export const conjuntosQueContienen = (id: number): number[] => Object.values(CONJUNTOS).flatMap((c) => (c.ids.includes(id) ? c.ids : []));
+
 const CON_AREA: Elem[] = ["cielo", "muro", "cubierta", "piso"];
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
