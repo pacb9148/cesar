@@ -140,3 +140,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 18/10/2026 (8.ª tanda)
 - Editor de fotos con «Copiar imagen editada». Vista de impresión del ajuste con el formato de referencia (sin datos del siniestro ni sombreado, títulos en recuadro, líneas en totales, margen 0,19 cm). Excel y cuadro del Word sin presupuesto con columna OBS y leyenda; cuadro con margen de celda 0,19 cm arriba e izquierda. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 19/10/2026
+- Editor de fotos: lienzo con la proporción exacta 8,66 × 6,70 cm; «Copiar imagen editada» copia solo el recorte (1024 × 792, con resolución anotada) al portapapeles, sin descargar. Copia de la vista de impresión limitada a 512 KB y solo al portapapeles. Margen superior de celda del cuadro: 0,05 cm. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.

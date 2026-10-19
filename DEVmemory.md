@@ -262,3 +262,11 @@ Ver `docs/04-estado-y-despliegue.md` (qué cambió frente al plan y por qué).
 - **0,19 cm en el Word:** solo en la tabla del cuadro (márgenes de celda superior e izquierdo). Las tablas de fotos siguen con margen cero, porque el dueño pidió antes «margen cero» y la foto debe llenar la celda.
 - **Verificado:** 214 pruebas, tsc, lint, e2e sin FALLA, navegador (formato, OBS con B/C, totales con líneas, botón del editor con descarga de respaldo). La copia real al portapapeles en Chrome sigue sin probarse.
 - **Aprendizaje:** una columna que desaparece entre modos (sin presupuesto) se oculta, no se borra, y la vista de impresión debe omitir las columnas vacías en vez de dejar huecos.
+
+## Recorte fijo de 8,66 × 6,70 cm, copiar solo al portapapeles y márgenes de celda (19/10/2026)
+- **Editor de fotos:** el marco ya tenía la proporción 8,66 × 6,70 (`PROPORCION_FOTO`), pero el lienzo de vista previa era de 936 × 780 (proporción 1,2) y deformaba el recorte; ahora mide `1040 × round(1040 / PROPORCION_FOTO)`. «Copiar imagen editada» copia SOLO el recorte, a 1024 × 792 px (300 ppp, medidas exactas de la foto del informe), con brillo/contraste/saturación y sin cuadrícula. Se le anota la resolución (bloque PNG `pHYs`, `lib/fotos/png-resolucion.ts`) para que al pegar en Word mida 8,66 × 6,70 cm.
+- **Portapapeles:** `copiarImagen` ya NO descarga nunca; si el navegador lo impide, muestra el motivo («Revisa el permiso del sitio para el portapapeles»).
+- **Copia de la vista de impresión:** la imagen se reduce por escalas (1 → 0,25) hasta pesar ≤ 512 KB (`MAX_BYTES_COPIA`); el aviso dice cuántos KB pesa. En la prueba: 141 KB.
+- **Márgenes de celda:** cuadro del Word: izquierda 0,19 cm (108 twips) y arriba 0,05 cm (28 twips); vista de impresión: arriba 0,05 cm (2 px), izquierda 0,19 cm.
+- **Verificado:** 215 pruebas, tsc, lint, e2e sin FALLA y navegador (copia del editor 1024 × 792, proporción 1,2929 ≈ 1,2925; copia de impresión 141 KB; sin descarga cuando el portapapeles falla). La copia real al portapapeles en Chrome sigue sin probarse (en la prueba se interceptó `navigator.clipboard.write`).
+- **Aprendizaje:** un canvas de vista previa debe tener la proporción del resultado final, no solo el contenedor CSS; y un PNG de canvas no lleva resolución física: hay que escribir `pHYs` para que el tamaño al pegar sea el correcto.

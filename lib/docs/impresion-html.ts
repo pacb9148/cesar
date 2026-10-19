@@ -18,6 +18,8 @@ const RELLENO = 14;
 const ANCHO_MINIMO = 30;
 // 0,19 cm en px: margen superior e izquierdo de la hoja y relleno izquierdo de las celdas.
 const MARGEN_PX = 7;
+// Margen superior de las celdas: 0,05 cm (≈ 2 px).
+const MARGEN_SUP_PX = 2;
 const LINEA = "1px solid #000";
 
 function anchoDeContenido(h: HojaVista, col: number): number | null {
@@ -108,7 +110,7 @@ export function hojaAHtml(h: HojaVista, opciones: { orientacion?: Orientacion } 
     body { margin: 0; background: #6b7280; font: 11px Arial, Helvetica, sans-serif; color: #000; }
     .hoja { background: #fff; width: ${Math.ceil(total * escala) + MARGEN_PX}px; margin: 16px auto; padding: ${MARGEN_PX}px 0 0 ${MARGEN_PX}px; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
     table { border-collapse: collapse; table-layout: fixed; width: ${total}px; zoom: ${escala}; }
-    td { padding: ${plano ? "2px" : "1px"} 4px ${plano ? "2px" : "1px"} ${MARGEN_PX}px; ${plano ? "border: 0;" : "border: 1px solid #d4d4d8;"} overflow: hidden; white-space: pre-wrap; vertical-align: middle; word-break: break-word; }
+    td { padding: ${plano ? MARGEN_SUP_PX : 1}px 4px ${plano ? 2 : 1}px ${MARGEN_PX}px; ${plano ? "border: 0;" : "border: 1px solid #d4d4d8;"} overflow: hidden; white-space: pre-wrap; vertical-align: middle; word-break: break-word; }
     thead { display: table-header-group; }
     tr { page-break-inside: avoid; }
     @media print { body { background: #fff; } .hoja { margin: 0; box-shadow: none; } }

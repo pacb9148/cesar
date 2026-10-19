@@ -38,8 +38,9 @@ export function resumenCuadro(e: EntradaExcel): ResumenCuadro {
 }
 
 export const MARCA_CUADRO = "cuadro-de-perdida";
-/** 0,19 cm en twips: margen superior e izquierdo de las celdas del cuadro. */
-const MARGEN_CELDA = 108;
+/** Márgenes de las celdas del cuadro, en twips: 0,19 cm a la izquierda y 0,05 cm arriba. */
+const MARGEN_IZQ = 108;
+const MARGEN_SUP = 28;
 const FUENTE = '<w:rFonts w:ascii="Arial Narrow" w:hAnsi="Arial Narrow" w:cs="Arial Narrow"/>';
 
 /**
@@ -115,7 +116,7 @@ export function cuadroTablaXml(e: EntradaExcel): string[] {
   // `tblCaption` marca la tabla: al editar el Excel se reemplaza por una nueva con los valores actualizados.
   const tabla =
     `<w:tbl><w:tblPr><w:tblW w:w="${sumaW(0, nCols)}" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/>` +
-    `<w:tblCellMar><w:top w:w="${MARGEN_CELDA}" w:type="dxa"/><w:left w:w="${MARGEN_CELDA}" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tblCellMar><w:tblCaption w:val="${MARCA_CUADRO}"/></w:tblPr>` +
+    `<w:tblCellMar><w:top w:w="${MARGEN_SUP}" w:type="dxa"/><w:left w:w="${MARGEN_IZQ}" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tblCellMar><w:tblCaption w:val="${MARCA_CUADRO}"/></w:tblPr>` +
     `<w:tblGrid>${W.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>${fila(cab1, true)}${fila(cab2, true)}${cuerpo.join("")}${totales.join("")}${leyenda.join("")}</w:tbl>`;
   return [tabla];
 }

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BotonIcono, Icono, type NombreIcono } from "@/components/Iconos";
 import VentanaModal from "@/components/VentanaModal";
 import { copiarImagen } from "@/lib/docs/portapapeles";
-import { FOTO_TAMANO_TEXTO, LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
+import { pxDeCalidad } from "@/lib/fotos/calidad";
+import { conResolucion } from "@/lib/fotos/png-resolucion";
+import { FOTO_ANCHO_CM, FOTO_TAMANO_TEXTO, LEYENDA_FOTO_MAX } from "@/lib/domain/constantes";
 import type { ArchivoMeta } from "@/lib/caso/repositorio";
 import { ANGULO_MAX, EDICION_INICIAL, PROPORCION_FOTO, ZOOM_MAX, centroValido, dimensionesGiradas, encuadreDeRectangulo, girar, lienzoRotado, ventanaBase, ventanaDeRecorte, type EdicionFoto } from "@/lib/fotos/recorte";
 
@@ -15,6 +17,8 @@ const CUADRICULA_INICIAL: Cuadricula = { visible: true, cols: 3, filas: 3, cuadr
 const COLORES: Record<ColorCuadricula, string> = { negro: "#000000", blanco: "#ffffff", gris: "#808080" };
 const CLAVE_LS = "cesar.cuadricula.v1";
 const MAX_LADO = 2400;
+// El lienzo del editor tiene la proporción exacta de la foto del informe (8,66 × 6,70 cm); si no, el recorte se vería deformado.
+const LIENZO_ANCHO = 1040;
 
 const leerPrefs = (): Cuadricula => {
   try {
@@ -247,21 +251,29 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
     cambiar({ zoom: base.w / w, cx: (a.ax + (a.sx * w) / 2) / prep.width, cy: (a.ay + (a.sy * h) / 2) / prep.height });
   }
 
-  /** Copia la foto tal como quedó: recortada, girada y con brillo, contraste y saturación aplicados (sin la cuadrícula, que es solo una guía). */
+  /**
+   * Copia SOLO el recorte (no la imagen completa) al portapapeles, con el tamaño exacto de la foto del informe (8,66 × 6,70 cm a 300 ppp) y con brillo, contraste
+   * y saturación aplicados; sin la cuadrícula, que es solo una guía. No descarga nada: el usuario la pega donde quiera.
+   */
   async function copiarEditada() {
-    const c = lienzo.current;
-    if (!c) return;
+    if (!prep) return;
     setCopiado(null);
-    const salida = document.createElement("canvas");
-    salida.width = c.width;
-    salida.height = c.height;
-    const g = salida.getContext("2d")!;
-    g.filter = `brightness(${1 + ed.brillo / 100}) contrast(${1 + ed.contraste / 100}) saturate(${1 + ed.saturacion / 100})`;
-    g.drawImage(c, 0, 0);
-    const png = new Promise<Blob>((ok, mal) => salida.toBlob((b) => (b ? ok(b) : mal(new Error("No se pudo generar la imagen."))), "image/png"));
+    setError(null);
+    const { ancho, alto } = pxDeCalidad("300");
+    const v = ventanaDeRecorte(base0.ancho, base0.alto, ed);
+    const png = (async () => {
+      const salida = document.createElement("canvas");
+      salida.width = ancho;
+      salida.height = alto;
+      const g = salida.getContext("2d")!;
+      g.filter = `brightness(${1 + ed.brillo / 100}) contrast(${1 + ed.contraste / 100}) saturate(${1 + ed.saturacion / 100})`;
+      g.drawImage(prep, v.x, v.y, v.w, v.h, 0, 0, ancho, alto);
+      const blob = await new Promise<Blob>((ok, mal) => salida.toBlob((x) => (x ? ok(x) : mal(new Error("No se pudo generar la imagen."))), "image/png"));
+      return conResolucion(blob, ancho / (FOTO_ANCHO_CM / 100));
+    })();
     try {
-      const r = await copiarImagen(png, `${foto.nombre.replace(/\.[^.]+$/, "")}-editada.png`);
-      setCopiado(r === "copiada" ? "Imagen editada copiada." : "Tu navegador no permite copiar imágenes: se descargó como archivo.");
+      await copiarImagen(png);
+      setCopiado(`Recorte copiado (${FOTO_TAMANO_TEXTO}): pégalo donde lo necesites.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo copiar la imagen.");
     }
@@ -415,7 +427,7 @@ export default function EditorFoto({ casoId, foto, enInforme = true, onCerrar, o
               role="img"
               aria-label="Vista del recorte. Arrastra para mover la imagen; la rueda amplía y reduce; en el modo selección, dibuja un rectángulo para ampliar esa zona."
             >
-              <canvas ref={lienzo} width={936} height={780} className="block h-full w-full" style={{ filter: `brightness(${1 + ed.brillo / 100}) contrast(${1 + ed.contraste / 100}) saturate(${1 + ed.saturacion / 100})` }} />
+              <canvas ref={lienzo} width={LIENZO_ANCHO} height={Math.round(LIENZO_ANCHO / PROPORCION_FOTO)} className="block h-full w-full" style={{ filter: `brightness(${1 + ed.brillo / 100}) contrast(${1 + ed.contraste / 100}) saturate(${1 + ed.saturacion / 100})` }} />
               {gr.visible && (
                 <>
                   <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" stroke={color} strokeOpacity={gr.opacidad} strokeWidth={gr.grosor} fill="none" aria-hidden="true">

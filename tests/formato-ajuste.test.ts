@@ -68,7 +68,7 @@ describe("«Partida determinada» (sin presupuesto)", () => {
     expect(t).toContain("Partida determinada");
     expect(t).toContain(">OBS<");
     expect(t).toContain("Observaciones");
-    expect(t).toContain('<w:top w:w="108"');
+    expect(t).toContain('<w:top w:w="28"'); // 0,05 cm arriba
     expect(t).toContain('<w:left w:w="108"');
     expect(t).not.toContain("Valor ajustado");
   });

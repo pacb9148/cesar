@@ -19,10 +19,11 @@ export default function VistaImpresion({ hoja, alto }: { hoja: HojaVista; alto: 
     if (!doc) return;
     setEstado({ ok: true, texto: "Generando la imagen…" });
     try {
-      const r = await copiarImagen(instantaneaPng(doc), `vista-de-impresion-${hoja.nombre}.png`);
-      setEstado({ ok: true, texto: r === "copiada" ? "Imagen copiada: pégala donde la necesites." : "Tu navegador no permite copiar imágenes: se descargó como archivo." });
+      const png = instantaneaPng(doc);
+      await copiarImagen(png);
+      setEstado({ ok: true, texto: `Imagen copiada (${Math.max(1, Math.round((await png).size / 1024))} KB, máximo 512 KB): pégala donde la necesites.` });
     } catch (e) {
-      setEstado({ ok: false, texto: e instanceof Error ? e.message : "No se pudo generar la imagen." });
+      setEstado({ ok: false, texto: e instanceof Error ? e.message : "No se pudo copiar la imagen." });
     }
   }
 
