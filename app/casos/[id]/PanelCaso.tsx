@@ -13,6 +13,7 @@ import type { ExtrasMemoria } from "@/lib/caso/partidas-evidencia";
 import Informe, { type Gen } from "./Informe";
 import Fotos from "./Fotos";
 import Descargas from "./Descargas";
+import TituloAyuda from "@/components/Ayuda";
 import { useFlujo } from "@/components/useFlujo";
 import { useRouter } from "next/navigation";
 
@@ -52,7 +53,12 @@ export default function PanelCaso(p: { extrasMemoria: ExtrasMemoria; acta: ActaI
       </div>
       {alertas.length > 0 && tab !== "documentos" && (
         <div className="aviso aviso-alerta">
-          <strong>{alertas.length} aviso(s) del procesamiento.</strong> Revísalos en «Documentos» del menú.
+          <TituloAyuda titulo={`${alertas.length} aviso(s) del procesamiento`}>
+            <ul className="list-disc space-y-1 pl-5">
+              {alertas.map((a, i) => (<li key={i}>{a}</li>))}
+            </ul>
+            <p className="texto-suave text-xs">También los ves en «Documentos» del menú.</p>
+          </TituloAyuda>
         </div>
       )}
       {tab === "documentos" && <Documentos {...p} />}

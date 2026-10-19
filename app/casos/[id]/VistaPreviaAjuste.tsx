@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 type Vista = {
   modo: string;
@@ -16,7 +16,7 @@ type Vista = {
 const n = (x: number) => x.toLocaleString("es-CL");
 
 /** Lo que se le enviará a la IA, calculado sin llamarla: permite revisar tamaños y proveedores antes de gastar una llamada. */
-export default function VistaPreviaAjuste({ casoId }: { casoId: string }) {
+export default function VistaPreviaAjuste({ casoId, acciones }: { casoId: string; acciones?: ReactNode }) {
   const [v, setV] = useState<Vista | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -39,9 +39,12 @@ export default function VistaPreviaAjuste({ casoId }: { casoId: string }) {
   const activos = v?.proveedores.filter((p) => p.activo) ?? [];
   return (
     <div className="space-y-2">
-      <button type="button" className="btn btn-sec" onClick={ver} disabled={cargando}>
-        {cargando ? "Calculando…" : v ? "Actualizar vista previa" : "Ver qué se enviará a la IA"}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="btn btn-sec" onClick={ver} disabled={cargando}>
+          {cargando ? "Calculando…" : v ? "Actualizar vista previa" : "Ver qué se enviará a la IA"}
+        </button>
+        {acciones}
+      </div>
       {error && <p role="alert" className="aviso aviso-error">{error}</p>}
       {v && (
         <div className="space-y-3 rounded-lg border border-[color:var(--borde)] bg-[color:var(--panel-2)] p-3 text-sm text-[color:var(--texto)]">

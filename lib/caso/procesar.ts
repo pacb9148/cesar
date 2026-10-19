@@ -186,7 +186,7 @@ export async function procesarCaso(casoId: string, usuarioId: string): Promise<I
 
   emitir("info", "uf", `Consultando el valor de la UF del ${datos.fechas.ocurrencia || "(fecha sin definir)"} en mindicador.cl`);
   const uf = datos.fechas.ocurrencia ? await valorUF(datos.fechas.ocurrencia) : null;
-  if (uf == null && !caso.valor_uf) alertas.push("No se pudo obtener la UF de la fecha del siniestro (el servicio mindicador.cl no respondió): vuelve a leer los documentos o ingrésala a mano en «Datos».");
+  if (uf == null && !caso.valor_uf) alertas.push("No se pudo obtener la UF de la fecha del siniestro (el servicio mindicador.cl no respondió): vuelve a leer los documentos o ingrésala con «Agregar/Modificar UF» en el paso «Ajuste».");
 
   emitir(uf == null ? "error" : "ok", "uf", uf == null ? "No se obtuvo la UF" : `UF de la fecha: ${uf}`);
   emitir("ok", "documentos", `Lectura terminada: ${leidos.length} documento(s) leído(s), ${alertas.length} aviso(s)`);

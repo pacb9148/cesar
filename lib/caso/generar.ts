@@ -57,7 +57,7 @@ async function cargar(casoId: string, usuarioId: string) {
   const acta = await leerExtraccion<ActaInspeccion>(casoId, "acta");
   if (!acta) throw new Error("Primero procesa los documentos del caso (falta el acta).");
   const datos = datosCasoSchema.parse(caso.datos);
-  if (!caso.valor_uf) throw new Error("Falta el valor de la UF de la fecha del siniestro (pestaña «Datos»).");
+  if (!caso.valor_uf) throw new Error("Falta el valor de la UF de la fecha del siniestro: ingrésala con «Agregar/Modificar UF» en el paso «Ajuste».");
   const recl = (await leerReclamacion(casoId))?.datos ?? null;
   return { caso, acta, datos, valorUF: Number(caso.valor_uf), recl };
 }

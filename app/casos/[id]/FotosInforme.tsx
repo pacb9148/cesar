@@ -9,6 +9,8 @@ import { soltarFoto } from "@/lib/fotos/orden";
 import { FOTO_TAMANO_TEXTO, FOTO_ALTO_CM, FOTO_ANCHO_CM } from "@/lib/domain/constantes";
 import EditorFoto from "./EditorFoto";
 import TituloAyuda from "@/components/Ayuda";
+import ImagenParaCopiar from "@/components/ImagenParaCopiar";
+import { copiarImagen, ErrorPortapapeles } from "@/lib/docs/portapapeles";
 
 type Props = {
   casoId: string;
@@ -41,12 +43,32 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
   const [editando, setEditando] = useState<ArchivoMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState<string | null>(null);
+  const [respaldo, setRespaldo] = useState<Blob | null>(null);
   const [pies, setPies] = useState<Record<string, string>>(leyendasGrupos);
   const [borrador, setBorrador] = useState<Record<string, string[]>>({});
   const [arrastre, setArrastre] = useState<{ id: string; recinto: string } | null>(null); // foto que se está arrastrando para cambiar su posición
   const [sobre, setSobre] = useState<string | null>(null);
   const [tocados, setTocados] = useState<string[]>([]); // estancias con fotos editadas o leyenda guardada en esta sesión
   const marcarTocado = (recinto: string) => setTocados((t) => (t.includes(recinto) ? t : [...t, recinto]));
+
+  /** Copia la foto tal como irá al informe (recorte de ${FOTO_TAMANO_TEXTO}, con su edición) al portapapeles, sin descargar nada. */
+  async function copiarFoto(f: ArchivoMeta) {
+    setCopiado(null);
+    setRespaldo(null);
+    setError(null);
+    const png = fetch(`/api/casos/${casoId}/archivos/${f.id}?copia=1`).then(async (r) => {
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo preparar la foto");
+      return r.blob();
+    });
+    try {
+      await copiarImagen(png);
+      setCopiado(`Foto copiada (${FOTO_TAMANO_TEXTO}): pégala donde la necesites.`);
+    } catch (e) {
+      if (e instanceof ErrorPortapapeles && e.imagen) setRespaldo(e.imagen);
+      else setError(e instanceof Error ? e.message : "No se pudo copiar la foto");
+    }
+  }
 
   async function descartarEdicion(f: ArchivoMeta) {
     setOcupado(f.id);
@@ -155,6 +177,8 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
         </button>
       )}
       {error && <p role="alert" className="aviso aviso-error">{error}</p>}
+      {copiado && <p role="status" className="aviso aviso-ok">{copiado}</p>}
+      {respaldo && <ImagenParaCopiar imagen={respaldo} />}
       {ocupado && <p role="status" className="aviso aviso-ok">Actualizando el informe, el anexo y el PDF con tus cambios… puede tardar unos segundos.</p>}
       {[...porRecinto.entries()].map(([recinto, listaOriginal]) => {
         const ids = actualDe(recinto);
@@ -249,6 +273,9 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
                         <BotonIcono icono="check" etiqueta={incluida ? `Quitar ${f.nombre} del informe (se aplica con Actualizar)` : `Poner ${f.nombre} en el informe (se aplica con Actualizar)`} activo={incluida} deshabilitado={ocupadoGrupo} onClick={() => alternar(recinto, f.id)} />
                         <BotonIcono icono="lapiz" etiqueta={`Editar ${f.nombre}`} onClick={() => setEditando(f)} />
                         {f.edicion && <BotonIcono icono="reiniciar" etiqueta={`Descartar la edición de ${f.nombre}`} deshabilitado={ocupado === f.id} onClick={() => void descartarEdicion(f)} />}
+                        <span className="ml-auto">
+                          <BotonIcono icono="copiar" etiqueta={`Copiar ${f.nombre} (${FOTO_TAMANO_TEXTO})`} onClick={() => void copiarFoto(f)} />
+                        </span>
                       </div>
                     </div>
                   </li>

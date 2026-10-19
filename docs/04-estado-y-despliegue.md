@@ -149,3 +149,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 19/10/2026 (3.ª tanda)
 - «Insertar partida»: 5 partidas aplicables por elemento y daño, 5 complementarias opcionales (check, U/M y cantidad editables) y buscadores para ir más allá. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 19/10/2026 (4.ª tanda)
+- Botón «Copiar» en las miniaturas (foto de 8,66 × 6,70 cm). Botón «Agregar/Modificar UF» con búsqueda en mindicador.cl y previsualización del Excel sin bloqueo. Pantalla de Ajuste: resumen en el encabezado, información en iconos ⓘ y cumplimiento desplegable. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.

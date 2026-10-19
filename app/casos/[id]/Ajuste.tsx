@@ -23,6 +23,7 @@ import Previa from "./Previa";
 import { redactarEvidencia } from "@/lib/caso/evidencia-parrafo";
 import type { AjusteGuardado } from "./PanelCaso";
 import TituloAyuda from "@/components/Ayuda";
+import ValorUF from "./ValorUF";
 
 const ETIQUETAS: Record<(typeof CLAVES_CARACTERISTICAS)[number], string> = {
   pisos: "Pisos", superficie_m2: "Superficie (m²)", antiguedad_anios: "Antigüedad (años)", dormitorios: "Dormitorios", banos: "Baños",
@@ -45,6 +46,9 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
   const [borrador, setBorrador] = useState<Record<string, string>>({});
   const [cerradas, setCerradas] = useState<string[]>([]);
   const [previa, setPrevia] = useState<{ tipo: "excel"; salida: SalidaAgente } | null>(null);
+  // Ventana de la UF: «previa» cuando se abrió porque faltaba para previsualizar el Excel (al guardarla, la previsualización continúa).
+  const [ufAbierta, setUfAbierta] = useState<"editar" | "previa" | null>(null);
+  const [cumplimientoAbierto, setCumplimientoAbierto] = useState(false);
   const recl = reclamacion ?? reclamacionVacia;
   const valorUF = Number(caso.valor_uf ?? 0);
   const ufTxt = (n: number) => (valorUF > 0 ? `UF ${uf(n)}` : "UF —");
@@ -118,18 +122,46 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
   // Ejecutar y guardar viven en el menú lateral; aquí se revisan y editan las partidas.
   useAccionesMenu([
     { id: "ejecutar-ajuste", etiqueta: ia.cargando ? "Analizando con el agente…" : ajuste ? "Volver a ejecutar el agente" : "Ejecutar ajuste con IA", icono: "ejecutar", primaria: !salida, deshabilitado: ia.cargando || !puedeAjustar, onClick: () => void ia.ejecutar().then((r) => r && setTimeout(() => router.refresh(), 100)) },
-    { id: "previa-excel", etiqueta: "Previsualizar Excel del ajuste", icono: "ojo", deshabilitado: !salida || !valorUF, onClick: () => salida && setPrevia({ tipo: "excel", salida }) },
+    { id: "previa-excel", etiqueta: "Previsualizar Excel del ajuste", icono: "ojo", deshabilitado: !salida, onClick: () => salida && (valorUF ? setPrevia({ tipo: "excel", salida }) : setUfAbierta("previa")) },
     { id: "guardar-ajuste", etiqueta: guardando ? "Guardando…" : "Guardar ajuste como nueva versión", icono: "guardar", primaria: !!salida, deshabilitado: !salida || guardando, onClick: () => void guardar() },
   ]);
+
+  const porRevisar = calc ? calc.auditoria.verificaciones.filter((v) => !v.ok).length : 0;
+  const botonUF = (
+    <button type="button" className={`btn ${valorUF ? "btn-sec" : ""}`} onClick={() => setUfAbierta("editar")}>
+      Agregar/Modificar UF
+    </button>
+  );
 
   return (
     <section className="space-y-4">
       <div className="panel space-y-3 p-5">
-        <TituloAyuda titulo="Ajuste de pérdida" nivel={2}>
-          <p>
-          El agente decide cada partida con las reglas de oro; el sistema valida y calcula los totales. La reclamación del contratista no se modifica nunca. Ejecuta el agente y guarda tus cambios desde el menú lateral; puede tardar unos minutos.
-        </p>
-        </TituloAyuda>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 basis-80 space-y-3">
+            <TituloAyuda titulo="Ajuste de pérdida" nivel={2}>
+              <p>
+                El agente decide cada partida con las reglas de oro; el sistema valida y calcula los totales. La reclamación del contratista no se modifica nunca. Ejecuta el agente y guarda tus cambios desde el menú lateral; puede tardar unos minutos.
+              </p>
+              {!valorUF && (
+                <p>
+                  <strong>Falta la UF de la fecha del siniestro.</strong> Los importes en pesos ya se ven, pero la UF, el Excel y el informe la necesitan: usa «Agregar/Modificar UF» (puedes buscarla en mindicador.cl o escribirla).
+                </p>
+              )}
+              {salida && !ajuste && !dos && <p>No subiste un presupuesto: la plantilla base parte de las partidas que salen de la evidencia de la inspección, a precio de la hoja Datos. Edítalas, inserta las que falten y guarda para fijar esta versión.</p>}
+              {salida && !ajuste && dos && <p>Partida a partida el presupuesto está <strong>sin ajustar</strong> (tal como lo reclamó el contratista). Ajusta a mano lo que corresponda, o ejecuta el ajuste con IA desde el menú; luego guarda para fijar esta versión.</p>}
+            </TituloAyuda>
+            {ia.cargando ? botonUF : <VistaPreviaAjuste casoId={caso.id} acciones={botonUF} />}
+          </div>
+          {salida && calc && (
+            <Resumen
+              items={[
+                { t: "Reclamado", v: dos ? ufTxt(calc.rec.uf) : "—", s: dos ? `$${n0(calc.rec.total)}` : "sin presupuesto" },
+                { t: dos ? "Ajustado" : "Partida determinada", v: ufTxt(calc.aj.uf), s: `$${n0(calc.aj.total)}` },
+                { t: "A indemnizar", v: ufTxt(calc.aj.uf - (caso.datos.poliza?.deducibleUF ?? 0)), s: dos && calc.rec.uf > 0 ? `${Math.round((calc.aj.uf / calc.rec.uf) * 100)} % de lo reclamado` : "" },
+              ]}
+            />
+          )}
+        </div>
         {!puedeAjustar && <p className="aviso aviso-alerta">Lee primero los documentos (paso «Documentos» del menú).</p>}
         {!iaConfigurada && (
           <p className="aviso aviso-alerta">
@@ -138,7 +170,6 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
         )}
         {ia.error && <p role="alert" className="aviso aviso-error">{ia.error}</p>}
         <PanelTraza eventos={ia.eventos} cargando={ia.cargando} titulo="Qué está haciendo el ajuste" />
-        {!ia.cargando && <VistaPreviaAjuste casoId={caso.id} />}
         {ia.resultado && ia.resultado.errores.length > 0 && (
           <div role="alert" className="aviso aviso-error">
             <strong>El agente dejó {ia.resultado.errores.length} observación(es) sin corregir tras {ia.resultado.intentos} intentos:</strong>
@@ -149,36 +180,37 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
 
       {salida && calc && (
         <>
-          {!valorUF && <p className="aviso aviso-alerta">Falta el valor de la UF de la fecha del siniestro: los importes en pesos ya se ven, pero la UF y el informe la necesitan. Ingrésala en el paso «Datos».</p>}
-          {!ajuste && !dos && <p className="aviso aviso-ok">No subiste un presupuesto: la plantilla base parte de las partidas que salen de la evidencia de la inspección, a precio de la hoja Datos. Edítalas, agrega las que falten y guarda para fijar esta versión.</p>}
-          {!ajuste && dos && <p className="aviso aviso-ok">Partida a partida el presupuesto está <strong>sin ajustar</strong> (tal como lo reclamó el contratista). Ajusta a mano lo que corresponda, o ejecuta el ajuste con IA desde el menú; luego guarda para fijar esta versión.</p>}
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Kpi t="Reclamado" v={dos ? ufTxt(calc.rec.uf) : "—"} s={dos ? `$${n0(calc.rec.total)}` : "sin presupuesto"} />
-            <Kpi t={dos ? "Ajustado" : "Partida determinada"} v={ufTxt(calc.aj.uf)} s={`$${n0(calc.aj.total)}`} />
-            <Kpi t="A indemnizar" v={ufTxt(calc.aj.uf - (caso.datos.poliza?.deducibleUF ?? 0))} s={dos && calc.rec.uf > 0 ? `${Math.round((calc.aj.uf / calc.rec.uf) * 100)} % de lo reclamado` : ""} />
-          </div>
-
           {!dos && <PartidasLiquidador extras={extrasMemoria} salida={salida} setSalida={setSalida} acta={acta} orden={orden} secciones={recl.secciones.map((s) => s.titulo)} />}
 
-          <div className="panel space-y-3 p-5" aria-labelledby="cumplimiento-titulo">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 id="cumplimiento-titulo" className="font-semibold">Cumplimiento de las reglas del ajuste</h3>
-              <span className="texto-suave text-sm">{calc.auditoria.partidasReclamadas} partida(s) leída(s) del presupuesto · {calc.auditoria.partidasAjustadas} ajustada(s)</span>
-            </div>
-            <ul className="space-y-1 text-sm">
-              {calc.auditoria.verificaciones.map((v) => (
-                <li key={v.codigo}>
-                  <span className={`marca ${v.ok ? "marca-ok" : "marca-error"} !ml-0`}>{v.ok ? "Cumple" : "Revisar"}</span> <code className="text-xs">{v.codigo}</code> {v.titulo}
-                  {!v.ok && <ul className="ml-6 mt-1 list-disc text-xs">{v.detalle.map((d, i) => (<li key={i}>{d}</li>))}</ul>}
-                </li>
-              ))}
-            </ul>
-            <p className="texto-suave text-xs">
-              Partidas por observación:{" "}
-              {LETRAS_OBS.map((l) => (
-                <span key={l} className="mr-2" title={LEYENDA[l]}><strong>{l}</strong> {calc.auditoria.conteoObs[l]}</span>
-              ))}
-            </p>
+          <div className="panel space-y-3 p-5">
+            <button type="button" className="flex w-full flex-wrap items-center justify-between gap-2 text-left" aria-expanded={cumplimientoAbierto} aria-controls="cumplimiento-lista" onClick={() => setCumplimientoAbierto((a) => !a)}>
+              <span className="flex items-center gap-2">
+                <h3 id="cumplimiento-titulo" className="font-semibold">Cumplimiento de las reglas del ajuste</h3>
+                {porRevisar > 0 ? <span className="marca marca-error !ml-0">{porRevisar} por revisar</span> : <span className="marca marca-ok !ml-0">Todo cumple</span>}
+              </span>
+              <span className="flex items-center gap-3">
+                <span className="texto-suave text-sm">{calc.auditoria.partidasReclamadas} partida(s) leída(s) del presupuesto · {calc.auditoria.partidasAjustadas} ajustada(s)</span>
+                <span aria-hidden="true" className="inline-block text-lg transition-transform" style={{ transform: cumplimientoAbierto ? "rotate(180deg)" : "none" }}>▼</span>
+              </span>
+            </button>
+            {cumplimientoAbierto && (
+              <div id="cumplimiento-lista" className="space-y-3">
+                <ul className="space-y-1 text-sm">
+                  {calc.auditoria.verificaciones.map((v) => (
+                    <li key={v.codigo}>
+                      <span className={`marca ${v.ok ? "marca-ok" : "marca-error"} !ml-0`}>{v.ok ? "Cumple" : "Revisar"}</span> <code className="text-xs">{v.codigo}</code> {v.titulo}
+                      {!v.ok && <ul className="ml-6 mt-1 list-disc text-xs">{v.detalle.map((d, i) => (<li key={i}>{d}</li>))}</ul>}
+                    </li>
+                  ))}
+                </ul>
+                <p className="texto-suave text-xs">
+                  Partidas por observación:{" "}
+                  {LETRAS_OBS.map((l) => (
+                    <span key={l} className="mr-2" title={LEYENDA[l]}><strong>{l}</strong> {calc.auditoria.conteoObs[l]}</span>
+                  ))}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="panel overflow-x-auto p-3">
@@ -358,6 +390,21 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
           )}
         </>
       )}
+      {ufAbierta && (
+        <ValorUF
+          casoId={caso.id}
+          valor={valorUF}
+          fecha={caso.datos.fechas?.ocurrencia ?? ""}
+          motivo={ufAbierta === "previa" ? "Falta la UF de la fecha del siniestro para previsualizar el Excel. Agrégala y la previsualización se abre sola." : undefined}
+          onCerrar={() => setUfAbierta(null)}
+          onGuardada={() => {
+            const siguiente = ufAbierta;
+            setUfAbierta(null);
+            if (siguiente === "previa" && salida) setPrevia({ tipo: "excel", salida });
+            router.refresh();
+          }}
+        />
+      )}
       {previa && <Previa casoId={caso.id} cuerpo={previa} titulo="Excel del ajuste (vista previa)" onCerrar={() => setPrevia(null)} />}
     </section>
   );
@@ -382,12 +429,16 @@ function Valores({ v }: { v: { um: string; cantidad: number; pu: number } }) {
   );
 }
 
-function Kpi({ t, v, s }: { t: string; v: string; s: string }) {
+function Resumen({ items }: { items: { t: string; v: string; s: string }[] }) {
   return (
-    <div className="panel p-4">
-      <div className="texto-suave text-xs font-semibold uppercase">{t}</div>
-      <div className="text-2xl font-bold">{v}</div>
-      <div className="texto-suave text-sm">{s}</div>
+    <div role="group" aria-label="Resumen del ajuste" className="panel grid w-full max-w-full grid-cols-3 gap-4 p-4 sm:w-auto">
+      {items.map((i) => (
+        <div key={i.t}>
+          <div className="texto-suave text-xs font-semibold uppercase">{i.t}</div>
+          <div className="text-xl font-bold">{i.v}</div>
+          <div className="texto-suave text-sm">{i.s}</div>
+        </div>
+      ))}
     </div>
   );
 }

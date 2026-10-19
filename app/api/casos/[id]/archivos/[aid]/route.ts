@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { conUsuario, fallo, json } from "@/lib/api";
 import { clasificarArchivo, FORMATOS_DOCUMENTO, type TipoArchivo } from "@/lib/caso/clasificar";
 import { aplicarEdicion } from "@/lib/fotos/aplicar";
+import { fotoParaCopiar } from "@/lib/fotos/procesar";
 import { esEdicionNula, PROPORCION_FOTO } from "@/lib/fotos/recorte";
 import { auditar, contenidoArchivo, edicionDeFoto, eliminarArchivo, obtenerCaso, reemplazarArchivo } from "@/lib/caso/repositorio";
 
@@ -11,6 +12,12 @@ export const GET = conUsuario<{ id: string; aid: string }>(async (req, u, { id, 
   if (!a) return fallo("Archivo no encontrado", 404);
   const q = new URL(req.url).searchParams;
   const descargar = q.get("descargar") === "1";
+  // Copia: la foto tal como irá al informe (8,66 × 6,70 cm, 300 ppp, con la edición del usuario), en PNG para pegarla donde se quiera.
+  if (q.get("copia") === "1" && a.mime.startsWith("image/")) {
+    const png = await fotoParaCopiar({ buffer: a.contenido, recinto: "", edicion: await edicionDeFoto(aid, id) });
+    if (!png) return fallo("No se pudo leer la imagen", 422);
+    return new Response(new Uint8Array(png), { headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+  }
   // Miniatura para las galerías: evita descargar la foto completa solo para mostrar un cuadro pequeño.
   if (q.get("miniatura") === "1" && a.mime.startsWith("image/")) {
     // Si el usuario editó la foto (giro, recorte, ajustes), la miniatura es la foto tal como irá en el informe, no el original.

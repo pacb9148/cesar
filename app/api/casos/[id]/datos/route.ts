@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { conUsuario, fallo, json } from "@/lib/api";
+import { UF_MAX, UF_MIN } from "@/lib/domain/numero";
 import { actualizarCaso, auditar, casoConSiniestro, obtenerCaso } from "@/lib/caso/repositorio";
 
 const fecha = z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/, "Usa el formato dd/mm/aaaa");
@@ -17,7 +18,7 @@ const cuerpo = z
     textos: z.object({ caracteristicas: z.string().max(2000), evidencia: z.string().max(6000) }).partial(),
     entrega: z.object({ calidad: z.enum(["150", "300"]), anexoCompacto: z.boolean() }),
     // La UF ronda los 40.000 pesos: un valor fuera de rango es un error de tipeo (p. ej. 4.084.479 por borrar el decimal).
-    valor_uf: z.number().min(1000, "La UF parece demasiado baja").max(200000, "La UF parece demasiado alta: revisa el punto y la coma decimal"),
+    valor_uf: z.number().min(UF_MIN, "La UF parece demasiado baja").max(UF_MAX, "La UF parece demasiado alta: revisa el punto y la coma decimal"),
   })
   .partial();
 
