@@ -152,3 +152,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 19/10/2026 (4.ª tanda)
 - Botón «Copiar» en las miniaturas (foto de 8,66 × 6,70 cm). Botón «Agregar/Modificar UF» con búsqueda en mindicador.cl y previsualización del Excel sin bloqueo. Pantalla de Ajuste: resumen en el encabezado, información en iconos ⓘ y cumplimiento desplegable. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 20/10/2026
+- Ajuste automático con la hoja Datos (sin IA, equivalencias por trabajo y objeto) y mejor contraste en el agente con IA. Copia de la miniatura como captura de 8,66 × 6,70 cm con el aviso en la tarjeta. Evidencia observada en lenguaje técnico pericial (glosario del PDF) y glosario en el prompt de la IA. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.

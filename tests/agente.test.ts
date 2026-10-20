@@ -101,12 +101,12 @@ describe("ajuste: lectura partida por partida + motor + redacción", () => {
     void corta;
   });
 
-  it("una partida con respuesta inválida se resuelve por reglas automáticas y las demás siguen", async () => {
+  it("una partida con respuesta inválida se resuelve con la hoja Datos (o se deja tal cual) y las demás siguen", async () => {
     const { entrada } = await caso1();
     const malas = new Set(entrada.reclamacion.lineas.slice(0, 2).map((l) => l.item));
     const r = await ajustarCaso(entrada, clienteQueClasifica({ falla: (i) => malas.has(i) }));
     expect(r.validacion.errores, r.validacion.errores.join("\n")).toEqual([]);
-    expect(r.avisos.join(" ")).toMatch(/2 partida\(s\) no fueron clasificadas por la IA/);
+    expect(r.avisos.join(" ")).toMatch(/se contrastaron con la hoja Datos por equivalencia de trabajo|se dejaron tal cual, sin inventar valores/);
   });
 
   it("si el modelo contesta basura en todo, el motor resuelve por defecto y el resultado igual valida", async () => {
@@ -114,7 +114,7 @@ describe("ajuste: lectura partida por partida + motor + redacción", () => {
     const cliente: ClienteLlm = { generarJson: async () => ({ texto: "no es json", modelo: "simulado" }) };
     const r = await ajustarCaso(entrada, cliente);
     expect(r.validacion.errores, r.validacion.errores.join("\n")).toEqual([]);
-    expect(r.avisos.join(" ")).toMatch(/no fueron clasificadas por la IA/);
+    expect(r.avisos.join(" ")).toMatch(/se contrastaron con la hoja Datos por equivalencia de trabajo|se dejaron tal cual, sin inventar valores/);
     expect(r.avisos.join(" ")).toMatch(/texto automático/);
   });
 

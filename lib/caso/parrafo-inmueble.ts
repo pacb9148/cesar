@@ -1,4 +1,6 @@
 import type { ActaInspeccion, DanoActa } from "../extraccion/acta";
+import { descripcionPericial, type Elemento } from "./lexico-pericial";
+import { elementosDeHechos } from "./partidas-evidencia";
 
 type ConExtras = ActaInspeccion & { tipoInmueble?: string | null; causa?: string | null };
 
@@ -46,10 +48,19 @@ const ELEMENTOS: [RegExp, string][] = [
 ];
 
 /**
- * Viñeta de la evidencia de un recinto a partir de la tabla «Daños y perjuicios»: «Muro afectado por humedad.», «Cielo y muro afectado por humedad.».
- * Los elementos salen en el orden en que los nombra la descripción; el tipo de daño «por agua» se dice «por humedad».
+ * Viñeta de la evidencia de un recinto a partir de la tabla «Daños y perjuicios», en lenguaje técnico pericial cuando el acta lo sustenta
+ * («Huella de filtración en cielo (mácula oscura por ingreso de agua en el entrepiso), con escurrimiento (…).»). Si el elemento no consta en el acta, se toma de los
+ * hechos del siniestro. Cuando el texto no permite precisar el daño, queda la redacción simple: «Muro afectado por humedad.», «Cielo y muro afectado por humedad.».
  */
-export function vinetaDeDano(d: Pick<DanoActa, "descripcion" | "tipoDano">): string {
+export function vinetaDeDano(d: Pick<DanoActa, "descripcion" | "tipoDano"> & { recinto?: string }, hechos?: string | null): string {
+  const contexto = elementosDeHechos(hechos, d.recinto ?? "").map((e): Elemento => (e === "ventana" || e === "puerta" ? "accesorio" : e));
+  const pericial = descripcionPericial(`${d.descripcion} ${d.tipoDano ?? ""}`, contexto);
+  if (pericial) return pericial;
+  return vinetaSimple(d);
+}
+
+/** Redacción simple de la viñeta (sin léxico técnico): elementos nombrados + tipo de daño. */
+function vinetaSimple(d: Pick<DanoActa, "descripcion" | "tipoDano">): string {
   const desc = d.descripcion.toLowerCase();
   const hallados = ELEMENTOS.map(([re, nombre]) => ({ nombre, pos: desc.search(re) })).filter((x) => x.pos >= 0).sort((a, b) => a.pos - b.pos).map((x) => x.nombre);
   const tipo = (d.tipoDano || "afectado por agua").toLowerCase().replace(/por agua/, "por humedad").trim();
@@ -65,10 +76,10 @@ const AUTOMATICA = /registrado en el acta de inspecci[oó]n\.?$/i;
 const normaliza = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 
 /** Las viñetas automáticas antiguas («N m² con daño de tipo … registrado en el acta») pasan al formato de la tabla de daños; las que escribió una persona o la IA no se tocan. */
-export function modernizarEvidencia<T extends { recinto: string; vineta: string }>(evidencias: T[], danos: DanoActa[]): T[] {
+export function modernizarEvidencia<T extends { recinto: string; vineta: string }>(evidencias: T[], danos: DanoActa[], hechos?: string | null): T[] {
   return evidencias.map((e) => {
     if (!AUTOMATICA.test(e.vineta.trim())) return e;
     const d = danos.find((x) => normaliza(x.recinto) === normaliza(e.recinto));
-    return d ? { ...e, vineta: vinetaDeDano(d) } : e;
+    return d ? { ...e, vineta: vinetaDeDano(d, hechos) } : e;
   });
 }

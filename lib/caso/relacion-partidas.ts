@@ -15,10 +15,10 @@ const ACCIONES: [Accion, RegExp][] = [
   ["empaste", /empaste/],
   ["base", /aparejo|imprimante|puente adherente|base /],
   ["pintura", /pintura|esmalte|barniz|pintar/],
-  ["preparacion", /preparacion de superficie|lijado/],
+  ["preparacion", /preparacion de superficie|lijado|lijar|raspar|raspado|rasqueteo|enhuinch|limpieza y preparacion/],
   ["sello", /sello|sellado/],
   ["reparacion", /reparacion|fisura|grieta/],
-  ["retiro", /retiro|desarme|demolicion|picado|remocion/],
+  ["retiro", /retiro|desarme|demolicion|picado|remocion|extraccion|desmontaje/],
   ["reposicion", /reposicion|reinstalacion|instalacion|suministro|provision|colocacion/],
   ["limpieza", /limpieza|aseo|flete|excedentes|botadero|escombro/],
 ];

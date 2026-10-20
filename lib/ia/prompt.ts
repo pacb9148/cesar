@@ -1,6 +1,7 @@
 import { LEYENDA, MARCADOR_FALTA_DATO } from "../domain/constantes";
+import { glosarioParaPrompt, SEVERIDAD } from "../caso/lexico-pericial";
 
-export const PROMPT_VERSION = "v0.2";
+export const PROMPT_VERSION = "v0.3";
 
 const leyenda = (["A", "B", "C", "D", "E", "F"] as const).map((l) => `${l}: ${LEYENDA[l]}`).join("\n");
 
@@ -22,7 +23,7 @@ Devuelves:
   • "absorbida": mano de obra global, leyes sociales o insumos menores (silicona, clavos, lijas) que ya van incluidos en partidas a todo costo (letra E; el sistema deja la cantidad mínima 1: ninguna partida va a 0).
   • "ajena": daño por mantenimiento, oxidación o deterioro progresivo, o preexistente, que no es del evento (letra A; el sistema deja la cantidad mínima 1: ninguna partida va a 0).
   • "preventiva": preparación de superficie redundante o accesorio sin daño reportado (cornisas, guardapolvos, empastes de toda la pieza): se deja la cantidad mínima 1 (letra D).
-- baremo_id: el id del candidato de baremo que corresponde a la faena a todo costo (material + mano de obra). Solo ids de "baremo_candidatos" de esa partida; null si ninguno corresponde.
+- baremo_id: el id del baremo que corresponde a la faena a todo costo (material + mano de obra). Mira primero "baremo_equivalentes" (mismo trabajo sobre lo mismo, con su confianza "alta" o "media") y luego "baremo_candidatos"; solo ids de esas dos listas; null si ninguno corresponde. Si hay un equivalente de confianza "alta" y su precio es MENOR que el reclamado, la partida es "ajustar" (la mayoría de los precios de un presupuesto son ajustables); si el precio reclamado ya es igual o menor, o no reconoces la faena, deja la partida tal cual ("respetar") para no inventar valores.
 - base: contra qué medida se contrasta la cantidad. "acta_m2" para reparaciones estructurales (yeso, OSB, terciado, lana): solo los m² dañados del acta o el mínimo técnico ("plancha" = 2.88 m²). "pano" (o "muro_neto", "cielo", "piso", "ml") para terminaciones estéticas (pintura, papel mural, cerámica): la superficie continua de la habitación. "reclamada" si la cantidad reclamada ya es la correcta.
 - um_ajuste: solo si la partida está en unidades de compra (tarros, planchas sueltas, clavos por unidad) y debe convertirse a su métrica de instalación final ("m2" o "ml"); si no, null.
 - baremo_id_pintura: solo en "desglosar": id de baremo de la pintura; en los demás casos null.
@@ -44,7 +45,7 @@ Las partidas del presupuesto ya fueron ajustadas por el sistema; NO las decidas 
 
 Devuelves:
 1. caracteristicas: por cada clave, valor y estado "extraido" (acta o documento), "deducido" (cita los ids de las fotos) o "faltante".
-2. evidencia_observada: una viñeta precisa por habitación con los m² dañados reales según el acta y las fotos.
+2. evidencia_observada: una viñeta precisa por habitación con los m² dañados reales según el acta y las fotos, redactada en LENGUAJE TÉCNICO PERICIAL (ver el glosario más abajo): el acta describe los daños en términos coloquiales y tú los presentas con el término técnico y su descripción pericial, p. ej. «Se observa huella de filtración (mácula oscura por ingreso de agua) en cielo, con colonización fúngica asociada (crecimiento de moho en superficie).». Usa solo términos que el acta o las fotos sustenten: no agregues daños que no se ven y no atribuyas causa (en daños por viento describe la lesión sin decir por qué ocurrió). Nombra primero lo más leve y después lo más grave, según la jerarquía de severidad.
 3. ajuste_de_perdida_texto: párrafo estándar de justificación técnica y exclusión de daños por mantenimiento o desgaste.
 4. resumen_ajuste: 3 o 4 viñetas MUY claras y cortas que expliquen qué se recortó y por qué, relacionándolo con las letras A–F (usa el digesto de decisiones que recibes).
 5. lineas_adicionales: si el acta o las fotos muestran un daño que el contratista no cobró, agrégalo con sección, unidad, cantidad y precio de baremo ("baremo:<id>" de los candidatos entregados). En pérdida determinada (sin presupuesto), aquí va TODA la valorización de los trabajos necesarios.
@@ -52,6 +53,11 @@ Devuelves:
 
 LEYENDA DE OBSERVACIONES (letras exactas):
 ${leyenda}
+
+JERARQUÍA DE SEVERIDAD (de menor a mayor): ${SEVERIDAD.map((s, i) => `${i + 1}. ${s}`).join("; ")}. Si solo hay una zona oscura sin desprendimiento ni deformación, el término correcto es «mácula» (huella de filtración); si además se levantó la pintura, «mácula con descolamiento de pintura».
+
+GLOSARIO PERICIAL (término técnico = descripción pericial; combínalos según el nivel de detalle):
+${glosarioParaPrompt()}
 
 Plancha = 2.88 m²; cantidad preventiva = 1. Escribe en español de Chile, tono técnico y breve. Responde ÚNICAMENTE con el JSON del esquema.`;
 

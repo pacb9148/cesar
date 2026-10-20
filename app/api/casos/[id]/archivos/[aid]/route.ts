@@ -2,9 +2,11 @@ import sharp from "sharp";
 import { conUsuario, fallo, json } from "@/lib/api";
 import { clasificarArchivo, FORMATOS_DOCUMENTO, type TipoArchivo } from "@/lib/caso/clasificar";
 import { aplicarEdicion } from "@/lib/fotos/aplicar";
-import { fotoParaCopiar } from "@/lib/fotos/procesar";
 import { esEdicionNula, PROPORCION_FOTO } from "@/lib/fotos/recorte";
 import { auditar, contenidoArchivo, edicionDeFoto, eliminarArchivo, obtenerCaso, reemplazarArchivo } from "@/lib/caso/repositorio";
+
+// Ancho de la miniatura: el doble del que se ve en pantalla, para que la captura de la previsualización (que se copia a 8,66 × 6,70 cm) salga nítida.
+const MINIATURA_PX = 720;
 
 export const GET = conUsuario<{ id: string; aid: string }>(async (req, u, { id, aid }) => {
   if (!(await obtenerCaso(id, u.id))) return fallo("Caso no encontrado", 404);
@@ -12,20 +14,15 @@ export const GET = conUsuario<{ id: string; aid: string }>(async (req, u, { id, 
   if (!a) return fallo("Archivo no encontrado", 404);
   const q = new URL(req.url).searchParams;
   const descargar = q.get("descargar") === "1";
-  // Copia: la foto tal como irá al informe (8,66 × 6,70 cm, 300 ppp, con la edición del usuario), en PNG para pegarla donde se quiera.
-  if (q.get("copia") === "1" && a.mime.startsWith("image/")) {
-    const png = await fotoParaCopiar({ buffer: a.contenido, recinto: "", edicion: await edicionDeFoto(aid, id) });
-    if (!png) return fallo("No se pudo leer la imagen", 422);
-    return new Response(new Uint8Array(png), { headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
-  }
   // Miniatura para las galerías: evita descargar la foto completa solo para mostrar un cuadro pequeño.
   if (q.get("miniatura") === "1" && a.mime.startsWith("image/")) {
     // Si el usuario editó la foto (giro, recorte, ajustes), la miniatura es la foto tal como irá en el informe, no el original.
     const edicion = await edicionDeFoto(aid, id);
     const mini =
       edicion && !esEdicionNula(edicion)
-        ? await aplicarEdicion(a.contenido, edicion, { ancho: 360, alto: Math.round(360 / PROPORCION_FOTO) }, 72)
-        : await sharp(a.contenido).rotate().resize({ width: 360, withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
+        ? await aplicarEdicion(a.contenido, edicion, { ancho: MINIATURA_PX, alto: Math.round(MINIATURA_PX / PROPORCION_FOTO) }, 75)
+        : // Sin edición, el mismo recorte que lleva el informe (proporción 8,66 × 6,70 cm, encuadre inteligente): lo que se ve es lo que se inserta y se copia.
+          await sharp(a.contenido).rotate().resize(MINIATURA_PX, Math.round(MINIATURA_PX / PROPORCION_FOTO), { fit: "cover", position: sharp.strategy.attention }).jpeg({ quality: 75 }).toBuffer();
     return new Response(new Uint8Array(mini), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff" } });
   }
   return new Response(new Uint8Array(a.contenido), {

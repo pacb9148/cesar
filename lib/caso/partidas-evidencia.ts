@@ -51,7 +51,7 @@ const sinTildes = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-�
  * El acta a veces trae la descripción del daño cortada y sin nombrar el elemento («Escurrimiento de agua…»). Entonces se busca en los hechos del
  * siniestro el elemento nombrado justo antes del recinto («humedad en el cielo del quincho»); el más cercano al nombre es el que corresponde.
  */
-function elementosDeHechos(hechos: string | null | undefined, recinto: string): Elem[] {
+export function elementosDeHechos(hechos: string | null | undefined, recinto: string): Elem[] {
   const h = sinTildes(hechos ?? "");
   const nombre = sinTildes(recinto).trim();
   if (!h || !nombre) return [];

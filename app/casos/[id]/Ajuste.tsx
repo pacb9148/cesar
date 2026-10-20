@@ -148,7 +148,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
                 </p>
               )}
               {salida && !ajuste && !dos && <p>No subiste un presupuesto: la plantilla base parte de las partidas que salen de la evidencia de la inspección, a precio de la hoja Datos. Edítalas, inserta las que falten y guarda para fijar esta versión.</p>}
-              {salida && !ajuste && dos && <p>Partida a partida el presupuesto está <strong>sin ajustar</strong> (tal como lo reclamó el contratista). Ajusta a mano lo que corresponda, o ejecuta el ajuste con IA desde el menú; luego guarda para fijar esta versión.</p>}
+              {salida && !ajuste && dos && <p>Se aplicó un <strong>ajuste automático con la hoja Datos</strong>: donde el contratista cobra más que el trabajo equivalente de la hoja, el precio baja al de la hoja (letra B); lo que no se reconoce con seguridad, o ya cobra menos, queda tal cual. Revisa y ajusta a mano lo que corresponda, o ejecuta el ajuste con IA desde el menú (completa lo que falte y contrasta las cantidades con el acta); luego guarda para fijar esta versión.</p>}
             </TituloAyuda>
             {ia.cargando ? botonUF : <VistaPreviaAjuste casoId={caso.id} acciones={botonUF} />}
           </div>

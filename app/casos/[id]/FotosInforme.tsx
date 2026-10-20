@@ -10,6 +10,9 @@ import { FOTO_TAMANO_TEXTO, FOTO_ALTO_CM, FOTO_ANCHO_CM } from "@/lib/domain/con
 import EditorFoto from "./EditorFoto";
 import TituloAyuda from "@/components/Ayuda";
 import ImagenParaCopiar from "@/components/ImagenParaCopiar";
+import VentanaModal from "@/components/VentanaModal";
+import { pxDeCalidad } from "@/lib/fotos/calidad";
+import { conResolucion } from "@/lib/fotos/png-resolucion";
 import { copiarImagen, ErrorPortapapeles } from "@/lib/docs/portapapeles";
 
 type Props = {
@@ -43,7 +46,8 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
   const [editando, setEditando] = useState<ArchivoMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
-  const [copiado, setCopiado] = useState<string | null>(null);
+  // Resultado de la última copia, mostrado dentro de la tarjeta de la foto (un aviso al inicio de la lista quedaría fuera de pantalla).
+  const [copia, setCopia] = useState<{ id: string; ok: boolean; texto: string } | null>(null);
   const [respaldo, setRespaldo] = useState<Blob | null>(null);
   const [pies, setPies] = useState<Record<string, string>>(leyendasGrupos);
   const [borrador, setBorrador] = useState<Record<string, string[]>>({});
@@ -52,21 +56,36 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
   const [tocados, setTocados] = useState<string[]>([]); // estancias con fotos editadas o leyenda guardada en esta sesión
   const marcarTocado = (recinto: string) => setTocados((t) => (t.includes(recinto) ? t : [...t, recinto]));
 
-  /** Copia la foto tal como irá al informe (recorte de ${FOTO_TAMANO_TEXTO}, con su edición) al portapapeles, sin descargar nada. */
+  /**
+   * Copia la previsualización de la foto como una captura de ${FOTO_TAMANO_TEXTO} (1024 × 792 px a 300 ppp, con su resolución anotada) al portapapeles. Se toma de la imagen
+   * que ya está en pantalla —el servidor la recorta igual que el informe y con la edición aplicada—, así es instantáneo y no pierde el clic del usuario.
+   */
   async function copiarFoto(f: ArchivoMeta) {
-    setCopiado(null);
+    setCopia(null);
     setRespaldo(null);
-    setError(null);
-    const png = fetch(`/api/casos/${casoId}/archivos/${f.id}?copia=1`).then(async (r) => {
-      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo preparar la foto");
-      return r.blob();
-    });
+    const img = document.querySelector<HTMLImageElement>(`img[data-foto="${f.id}"]`);
+    if (!img || !img.complete || img.naturalWidth === 0) return setCopia({ id: f.id, ok: false, texto: "La foto aún no termina de cargar: espera un momento y vuelve a copiar." });
+    const { ancho, alto } = pxDeCalidad("300");
+    const png = (async () => {
+      const lienzo = document.createElement("canvas");
+      lienzo.width = ancho;
+      lienzo.height = alto;
+      const g = lienzo.getContext("2d")!;
+      g.imageSmoothingQuality = "high";
+      // Encuadre «cover» centrado: si la miniatura no tuviera exactamente la proporción de la foto del informe, se recorta en vez de deformarse.
+      const k = Math.max(ancho / img.naturalWidth, alto / img.naturalHeight);
+      const w = ancho / k;
+      const h = alto / k;
+      g.drawImage(img, (img.naturalWidth - w) / 2, (img.naturalHeight - h) / 2, w, h, 0, 0, ancho, alto);
+      const blob = await new Promise<Blob>((ok, mal) => lienzo.toBlob((x) => (x ? ok(x) : mal(new Error("No se pudo generar la imagen"))), "image/png"));
+      return conResolucion(blob, ancho / (FOTO_ANCHO_CM / 100));
+    })();
     try {
       await copiarImagen(png);
-      setCopiado(`Foto copiada (${FOTO_TAMANO_TEXTO}): pégala donde la necesites.`);
+      setCopia({ id: f.id, ok: true, texto: `Foto copiada (${FOTO_TAMANO_TEXTO}).` });
     } catch (e) {
       if (e instanceof ErrorPortapapeles && e.imagen) setRespaldo(e.imagen);
-      else setError(e instanceof Error ? e.message : "No se pudo copiar la foto");
+      else setCopia({ id: f.id, ok: false, texto: e instanceof Error ? e.message : "No se pudo copiar la foto" });
     }
   }
 
@@ -177,8 +196,11 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
         </button>
       )}
       {error && <p role="alert" className="aviso aviso-error">{error}</p>}
-      {copiado && <p role="status" className="aviso aviso-ok">{copiado}</p>}
-      {respaldo && <ImagenParaCopiar imagen={respaldo} />}
+      {respaldo && (
+        <VentanaModal etiqueta="Copiar foto" titulo="Copiar foto" onCerrar={() => setRespaldo(null)} ancho="max-w-3xl" nivel={60}>
+          {() => <ImagenParaCopiar imagen={respaldo} alto="60vh" />}
+        </VentanaModal>
+      )}
       {ocupado && <p role="status" className="aviso aviso-ok">Actualizando el informe, el anexo y el PDF con tus cambios… puede tardar unos segundos.</p>}
       {[...porRecinto.entries()].map(([recinto, listaOriginal]) => {
         const ids = actualDe(recinto);
@@ -251,7 +273,7 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
                   >
                     <div className="relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1&v=${versionDe(f.edicion)}`} alt={`${recinto}: ${f.nombre}`} loading="lazy" draggable={false} className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}`, opacity: incluida ? 1 : 0.55 }} />
+                      <img data-foto={f.id} src={`/api/casos/${casoId}/archivos/${f.id}?miniatura=1&v=${versionDe(f.edicion)}`} alt={`${recinto}: ${f.nombre}`} loading="lazy" draggable={false} className="block w-full bg-black object-cover" style={{ aspectRatio: `${FOTO_ANCHO_CM} / ${FOTO_ALTO_CM}`, opacity: incluida ? 1 : 0.55 }} />
                       {incluida && (
                         <span className="absolute left-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-sm font-bold" style={{ background: "var(--acento)", color: "var(--acento-texto)" }} title={`Posición ${indice} de ${ids.length} en el informe, de izquierda a derecha`}>{indice}</span>
                       )}
@@ -277,6 +299,7 @@ export default function FotosInforme({ casoId, fotos, enInforme, leyendasGrupos,
                           <BotonIcono icono="copiar" etiqueta={`Copiar ${f.nombre} (${FOTO_TAMANO_TEXTO})`} onClick={() => void copiarFoto(f)} />
                         </span>
                       </div>
+                      {copia?.id === f.id && <p role={copia.ok ? "status" : "alert"} className={`aviso ${copia.ok ? "aviso-ok" : "aviso-error"} !py-1 text-xs`}>{copia.texto}</p>}
                     </div>
                   </li>
                 );

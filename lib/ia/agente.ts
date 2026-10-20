@@ -7,12 +7,14 @@ import { armarFilas } from "../engine/filas";
 import { calcularTotales } from "../engine/totales";
 import { emitir } from "../traza";
 import { esquemaParaGemini, type ClienteLlm, type Parte } from "./gemini";
-import { clasificacionPorDefecto, clasificacionSchema, decidirLinea, type Clasificacion, type ContextoLinea } from "./motor-ajuste";
+import { clasificacionSchema, decidirLinea, type Clasificacion, type ContextoLinea } from "./motor-ajuste";
 import { PROMPT_VERSION, SYSTEM_CLASIFICAR, SYSTEM_NARRATIVA } from "./prompt";
 import { SinProveedores } from "./rotacion";
 import { validarSalida, type ResultadoValidacion } from "./validadores";
 import { vinetaDeDano } from "../caso/parrafo-inmueble";
 import { aprendidoVacio, baremoSugerido, type Aprendido } from "../conocimiento";
+import { completarClasificacion } from "../caso/ajuste-automatico";
+import { equivalentesDe } from "../caso/equivalencias";
 
 export type FotoModelo = { id: string; recinto: string; mime: string; base64: string };
 
@@ -58,7 +60,7 @@ export function cubicacionPorRecinto(a: ActaInspeccion): Record<string, Cubicaci
 const coincide = (a: string, b: string) => a !== "" && b !== "" && (a.includes(b) || b.includes(a));
 
 /** Medidas del recinto al que pertenece una partida: cubicación y m² dañados del acta. */
-export function contextoDe(e: EntradaAgente, l: LineaReclamacion): ContextoLinea {
+export function contextoDe(e: Pick<EntradaAgente, "acta">, l: LineaReclamacion): ContextoLinea {
   const s = norm(l.recinto);
   const cub = Object.entries(cubicacionPorRecinto(e.acta)).find(([k]) => coincide(s, k))?.[1] ?? null;
   const m2 = e.acta.danos.filter((d) => coincide(s, norm(d.recinto))).reduce((t, d) => t + (d.cantidad ?? 0), 0);
@@ -83,6 +85,8 @@ export function textoDePartida(e: EntradaAgente, l: LineaReclamacion): string {
       m2_danados_acta: c.m2Acta,
       dano_en_acta: dano ? { tipo: dano.tipoDano, descripcion: dano.descripcion } : null,
       medidas_recinto: c.cub ? { muro_neto: c.cub.muroNeto, pano: c.cub.pano, cielo: c.cub.cielo, piso: c.cub.piso, ml: c.cub.ml } : null,
+      // Equivalentes por trabajo y objeto (sinónimos, material y unidad) primero; después los parecidos por palabras. «alta» = mismo trabajo sobre lo mismo.
+      baremo_equivalentes: equivalentesDe(l.descripcion, { um: l.um, memoria: e.memoria, max: 4 }).map((q) => ({ id: q.id, descripcion: q.descripcion, pu: q.pu, confianza: q.confianza })),
       baremo_candidatos: candidatos(l.descripcion, 4),
       baremo_id_segun_memoria: baremoSugerido(e.memoria ?? aprendidoVacio(), l.descripcion),
     },
@@ -223,7 +227,7 @@ function narrativaAutomatica(e: EntradaAgente, d: Digesto): Narrativa {
   const letras = Object.entries(d.porLetra).map(([l, n]) => `${l}: ${n}`).join(", ") || "sin observaciones";
   return {
     caracteristicas,
-    evidencia_observada: e.acta.danos.map((x) => ({ recinto: x.recinto, vineta: vinetaDeDano(x), m2_acta: x.cantidad ?? null, atribuible: true, fotos: [] })),
+    evidencia_observada: e.acta.danos.map((x) => ({ recinto: x.recinto, vineta: vinetaDeDano(x, e.acta.hechos), m2_acta: x.cantidad ?? null, atribuible: true, fotos: [] })),
     lineas_adicionales: [],
     ajuste_de_perdida_texto:
       "El ajuste se realizó sobre la medición del acta de inspección y precios de baremo a todo costo, acotando las cantidades a los m² dañados y a los mínimos técnicos constructivos, y excluyendo los daños por mantenimiento, desgaste o deterioro progresivo.",
@@ -311,17 +315,27 @@ export async function ajustarCaso(e: EntradaAgente, cliente: ClienteLlm, almacen
   const clasif = await clasificarTodas(e, cliente, acu, almacen);
 
   const lineas: DecisionLinea[] = [];
-  let porDefecto = 0;
+  let sinReconocer = 0;
+  let porEquivalencia = 0;
+  let sobreescritas = 0;
   for (const l of e.modo === "reclamacion" ? e.reclamacion.lineas : []) {
-    const c0 = clasif.get(l.item) ?? (porDefecto++, clasificacionPorDefecto(l));
+    const ctx = contextoDe(e, l);
+    // La hoja Datos completa o corrige lo que la IA dejó sin partida de baremo o dio por bueno aunque exista el mismo trabajo a menor precio.
+    const { c: completada, origen } = completarClasificacion(l, clasif.get(l.item), ctx, e.memoria);
+    if (origen === "equivalencia") porEquivalencia++;
+    if (origen === "sobreescrita") sobreescritas++;
+    // Lo que no se reconoce con seguridad se deja tal cual: nunca se inventa un precio.
+    const c0: Clasificacion = completada ?? (sinReconocer++, { item: l.item, categoria: "respetar", baremo_id: null, base: "reclamada", um_ajuste: null, baremo_id_pintura: null });
     // Sin partida de baremo decidida, manda la memoria: lo que ya se asignó antes a una descripción igual.
-    const sugerido = c0.baremo_id == null ? baremoSugerido(e.memoria ?? aprendidoVacio(), l.descripcion) : null;
+    const sugerido = c0.categoria === "ajustar" && c0.baremo_id == null ? baremoSugerido(e.memoria ?? aprendidoVacio(), l.descripcion) : null;
     const c = sugerido != null ? { ...c0, baremo_id: sugerido } : c0;
-    const r = decidirLinea(l, c, contextoDe(e, l));
+    const r = decidirLinea(l, c, ctx);
     if (r.aviso) aviso(acu, r.aviso);
     lineas.push(r.decision);
   }
-  if (porDefecto > 0) aviso(acu, `${porDefecto} partida(s) no fueron clasificadas por la IA y se resolvieron con las reglas automáticas (precio al baremo más parecido, cantidad reclamada): revísalas.`);
+  if (porEquivalencia > 0) aviso(acu, `${porEquivalencia} partida(s) se contrastaron con la hoja Datos por equivalencia de trabajo (la IA no había elegido partida de baremo).`);
+  if (sobreescritas > 0) aviso(acu, `${sobreescritas} partida(s) que la IA dio por buenas se ajustaron: la hoja Datos trae el mismo trabajo a menor precio.`);
+  if (sinReconocer > 0) aviso(acu, `${sinReconocer} partida(s) no se reconocieron con seguridad en la hoja Datos ni fueron clasificadas por la IA: se dejaron tal cual, sin inventar valores.`);
   const d = digestoDe(e, lineas);
   emitir("ok", "motor", `Motor aplicado a ${lineas.length} partidas: UF reclamada ${d.ufReclamada} → ajustada ${d.ufAjustada}; observaciones ${Object.entries(d.porLetra).map(([l, n]) => `${l}=${n}`).join(" ") || "ninguna"}`);
 

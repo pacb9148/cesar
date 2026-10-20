@@ -36,6 +36,6 @@ export function textosDelInforme(datos: Pick<DatosCaso, "textos">, acta: ActaIns
   return {
     // Redacción de la plantilla con las características del ajuste (editables allí) o, si no hay, las de la inspección.
     caracteristicas: propios?.caracteristicas?.trim() || (salida.caracteristicas ? parrafoPlantilla(Object.fromEntries(Object.entries(salida.caracteristicas).map(([k, d]) => [k === "superficie_m2" ? "superficie" : k === "antiguedad_anios" ? "antiguedad" : k === "sistema_estructural" ? "sistema" : k, d.valor]))) : parrafoInmueble(acta)),
-    evidencia: propios?.evidencia?.trim() ? evidenciaDeTexto(propios.evidencia) : modernizarEvidencia(salida.evidencia_observada, acta.danos),
+    evidencia: propios?.evidencia?.trim() ? evidenciaDeTexto(propios.evidencia) : modernizarEvidencia(salida.evidencia_observada, acta.danos, acta.hechos),
   };
 }

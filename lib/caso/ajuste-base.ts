@@ -1,6 +1,7 @@
 import { CLAVES_CARACTERISTICAS, type Reclamacion, type SalidaAgente } from "../domain/tipos";
 import type { ActaInspeccion } from "../extraccion/acta";
-import { caracteristicasDelActa } from "../ia/agente";
+import { caracteristicasDelActa, contextoDe } from "../ia/agente";
+import { ajusteAutomatico } from "./ajuste-automatico";
 import { vinetaDeDano } from "./parrafo-inmueble";
 import { partidasDeEvidencia } from "./partidas-evidencia";
 import type { Aprendido } from "../conocimiento";
@@ -17,12 +18,13 @@ export function salidaBase(acta: ActaInspeccion | null, opciones: { conPartidas?
     caracteristicas,
     evidencia_observada: (acta?.danos ?? []).map((x) => ({
       recinto: x.recinto,
-      vineta: vinetaDeDano(x),
+      vineta: vinetaDeDano(x, acta?.hechos),
       m2_acta: x.cantidad ?? null,
       atribuible: true,
       fotos: [],
     })),
-    lineas: [],
+    // Con presupuesto: ajuste automático con la hoja Datos (precio al de la hoja cuando es menor; lo que no se reconoce queda tal cual). Sin presupuesto no hay partidas que ajustar.
+    lineas: acta && opciones.reclamacion && opciones.reclamacion.lineas.length > 0 ? ajusteAutomatico({ reclamacion: opciones.reclamacion, memoria: opciones.aprendido }, (l) => contextoDe({ acta }, l)).lineas : [],
     // Sin presupuesto: plantilla base con las partidas que salen de la evidencia de la inspección. Con presupuesto: solo las estancias de la evidencia que el presupuesto no trae. El usuario las edita y agrega las que falten.
     lineas_adicionales: (opciones.conPartidas || opciones.reclamacion) && acta ? partidasDeEvidencia(acta, { omitirEstancias: opciones.reclamacion?.secciones.map((s) => s.titulo), aprendido: opciones.aprendido }).partidas : [],
     ajuste_de_perdida_texto:

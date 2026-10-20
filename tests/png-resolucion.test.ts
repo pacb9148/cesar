@@ -15,17 +15,3 @@ describe("resolución del PNG copiado", () => {
     await expect(sharp(con).raw().toBuffer()).resolves.toBeTruthy(); // la imagen sigue decodificándose entera
   });
 });
-
-describe("foto para copiar desde la miniatura", () => {
-  it("sale a 1024 × 792 px (8,66 × 6,70 cm a 300 ppp) en PNG, con o sin edición", async () => {
-    const { fotoParaCopiar } = await import("../lib/fotos/procesar");
-    const original = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: "#6a8" } }).jpeg().toBuffer();
-    for (const edicion of [null, { giro: 90 as const, zoom: 1.5, cx: 0.4, cy: 0.6, brillo: 10, contraste: 0, saturacion: 0, volteoH: false, volteoV: false, angulo: 0 }]) {
-      const png = await fotoParaCopiar({ buffer: original, recinto: "X", edicion });
-      const meta = await sharp(png!).metadata();
-      expect(meta.format).toBe("png");
-      expect([meta.width, meta.height]).toEqual([1024, 792]);
-      expect(meta.density).toBe(300);
-    }
-  });
-});

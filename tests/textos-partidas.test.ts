@@ -89,10 +89,13 @@ describe("vista del informe sin aspecto de tabla", () => {
 });
 
 describe("viñetas de evidencia", () => {
-  it("concuerdan en género con un elemento femenino", async () => {
+  it("sin manifestación precisa en el acta queda la redacción simple (no se inventa nada)", async () => {
     const { vinetaDeDano } = await import("../lib/caso/parrafo-inmueble");
-    expect(vinetaDeDano({ descripcion: "Cubierta", tipoDano: "Roto" })).toBe("Cubierta rota.");
     expect(vinetaDeDano({ descripcion: "Daños en cielo y paredes por agua", tipoDano: "Afectado por agua" })).toBe("Cielo y muro afectado por humedad.");
+  });
+  it("con una manifestación precisa usa el término técnico y su descripción pericial", async () => {
+    const { vinetaDeDano } = await import("../lib/caso/parrafo-inmueble");
+    expect(vinetaDeDano({ descripcion: "Cubierta", tipoDano: "Roto" })).toBe("Rotura de elemento de cubierta (ruptura o perforación del material de cobertura).");
   });
 });
 
