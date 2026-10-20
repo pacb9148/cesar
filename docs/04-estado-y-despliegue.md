@@ -161,3 +161,6 @@ Lectura de presupuestos PDF con capítulos numerados (sección = capítulo, lín
 
 ## Cambios del 20/10/2026 (3.ª tanda)
 El ajuste nunca paga más que el presupuesto original (precio y total por partida) y se oculta la justificación repetida de las partidas absorbidas. Sin migraciones; los casos ya ajustados se corrigen al volver a ajustar.
+
+## Cambios del 20/10/2026 (4.ª tanda)
+Viñetas de la evidencia observada como frases completas («Se observa …, según consta en el acta de inspección.») y comparación con la hoja Datos en toda partida que se ajusta aunque la clasificación no traiga partida de referencia. Sin migraciones; los textos ya guardados no se reescriben (solo las viñetas automáticas antiguas).

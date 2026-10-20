@@ -25,3 +25,15 @@ describe("el ajuste nunca paga más que el presupuesto", () => {
     expect(decidirLinea(linea({}), c, ctx).decision.justificacion).toBe("");
   });
 });
+
+describe("toda partida que se ajusta se compara con la hoja Datos", () => {
+  it("si la clasificación no trae baremo, una equivalencia segura más barata baja el precio y una más cara no lo sube", () => {
+    const base = { categoria: "ajustar", baremo_id: null, base: "reclamada", um_ajuste: null, baremo_id_pintura: null } as const;
+    const caro = linea({ item: "5.1", descripcion: "Preparación de superficie cielo", um: "m2", cantidad: 10, pu: 99999999 });
+    const dc = decidirLinea(caro, { ...base, item: caro.item }, ctx).decision;
+    expect(dc.pu ?? 0).toBeLessThan(99999999);
+    const barato = linea({ item: "5.2", descripcion: "Preparación de superficie cielo", um: "m2", cantidad: 10, pu: 1 });
+    const db = decidirLinea(barato, { ...base, item: barato.item }, ctx).decision;
+    expect(db.pu ?? 1).toBe(1);
+  });
+});

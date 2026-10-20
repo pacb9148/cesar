@@ -3,6 +3,7 @@ import { PLANCHA_M2 } from "../domain/constantes";
 import { unidadSchema, type DecisionLinea, type LineaReclamacion, type Sublinea, type Unidad } from "../domain/tipos";
 import { candidatos, porId } from "../engine/baremo";
 import type { Cubicacion } from "../engine/cubicacion";
+import { mejorEquivalente } from "../caso/equivalencias";
 import { cantidadMinima, conMinimo } from "../engine/minimos";
 
 /**
@@ -86,7 +87,8 @@ function desglosar(l: LineaReclamacion, c: Clasificacion, ctx: ContextoLinea): D
 
 /** Contrasta una partida con sus máximos y devuelve la decisión final. Nunca lanza: lo que no se puede calcular se respeta y se avisa. */
 function decidirBruto(l: LineaReclamacion, c: Clasificacion, ctx: ContextoLinea): Decidida {
-  const baremo = c.baremo_id != null ? porId(c.baremo_id) : undefined;
+  // Si quien clasificó no eligió partida de la hoja Datos, se busca una equivalente segura: toda partida que se ajusta se compara con la hoja Datos.
+  const baremo = (c.baremo_id != null ? porId(c.baremo_id) : undefined) ?? (c.categoria === "desglosar" ? undefined : porId(mejorEquivalente(l.descripcion, { um: l.um })?.id ?? -1));
   if (c.categoria === "respetar") return { decision: decisionRespetar(l) };
 
   if (c.categoria === "desglosar") {

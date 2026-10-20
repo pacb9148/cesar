@@ -55,8 +55,13 @@ const ELEMENTOS: [RegExp, string][] = [
 export function vinetaDeDano(d: Pick<DanoActa, "descripcion" | "tipoDano"> & { recinto?: string }, hechos?: string | null): string {
   const contexto = elementosDeHechos(hechos, d.recinto ?? "").map((e): Elemento => (e === "ventana" || e === "puerta" ? "accesorio" : e));
   const pericial = descripcionPericial(`${d.descripcion} ${d.tipoDano ?? ""}`, contexto);
-  if (pericial) return pericial;
-  return vinetaSimple(d);
+  return ampliar(pericial ?? vinetaSimple(d));
+}
+
+/** Frase algo más larga y natural: «Se observa …, según consta en el acta de inspección.» («consta», no «registrado»: así no se confunde con las viñetas automáticas antiguas). */
+function ampliar(frase: string): string {
+  const sinPunto = frase.trim().replace(/\.$/, "");
+  return `Se observa ${sinPunto.charAt(0).toLowerCase()}${sinPunto.slice(1)}, según consta en el acta de inspección.`;
 }
 
 /** Redacción simple de la viñeta (sin léxico técnico): elementos nombrados + tipo de daño. */

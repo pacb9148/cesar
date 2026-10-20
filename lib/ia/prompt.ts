@@ -1,7 +1,7 @@
 import { LEYENDA, MARCADOR_FALTA_DATO } from "../domain/constantes";
 import { glosarioParaPrompt, SEVERIDAD } from "../caso/lexico-pericial";
 
-export const PROMPT_VERSION = "v0.3";
+export const PROMPT_VERSION = "v0.4";
 
 const leyenda = (["A", "B", "C", "D", "E", "F"] as const).map((l) => `${l}: ${LEYENDA[l]}`).join("\n");
 
@@ -45,7 +45,7 @@ Las partidas del presupuesto ya fueron ajustadas por el sistema; NO las decidas 
 
 Devuelves:
 1. caracteristicas: por cada clave, valor y estado "extraido" (acta o documento), "deducido" (cita los ids de las fotos) o "faltante".
-2. evidencia_observada: una viñeta precisa por habitación con los m² dañados reales según el acta y las fotos, redactada en LENGUAJE TÉCNICO PERICIAL (ver el glosario más abajo): el acta describe los daños en términos coloquiales y tú los presentas con el término técnico y su descripción pericial, p. ej. «Se observa huella de filtración (mácula oscura por ingreso de agua) en cielo, con colonización fúngica asociada (crecimiento de moho en superficie).». Usa solo términos que el acta o las fotos sustenten: no agregues daños que no se ven y no atribuyas causa (en daños por viento describe la lesión sin decir por qué ocurrió). Nombra primero lo más leve y después lo más grave, según la jerarquía de severidad.
+2. evidencia_observada: una viñeta precisa por habitación con los m² dañados reales según el acta y las fotos, en una frase completa de unas 25 a 40 palabras (que empiece con «Se observa…», nombre el elemento y su manifestación y cierre con la fuente, sin excederse), redactada en LENGUAJE TÉCNICO PERICIAL (ver el glosario más abajo): el acta describe los daños en términos coloquiales y tú los presentas con el término técnico y su descripción pericial, p. ej. «Se observa huella de filtración (mácula oscura por ingreso de agua) en cielo, con colonización fúngica asociada (crecimiento de moho en superficie).». Usa solo términos que el acta o las fotos sustenten: no agregues daños que no se ven y no atribuyas causa (en daños por viento describe la lesión sin decir por qué ocurrió). Nombra primero lo más leve y después lo más grave, según la jerarquía de severidad.
 3. ajuste_de_perdida_texto: párrafo estándar de justificación técnica y exclusión de daños por mantenimiento o desgaste.
 4. resumen_ajuste: 3 o 4 viñetas MUY claras y cortas que expliquen qué se recortó y por qué, relacionándolo con las letras A–F (usa el digesto de decisiones que recibes).
 5. lineas_adicionales: si el acta o las fotos muestran un daño que el contratista no cobró, agrégalo con sección, unidad, cantidad y precio de baremo ("baremo:<id>" de los candidatos entregados). En pérdida determinada (sin presupuesto), aquí va TODA la valorización de los trabajos necesarios.

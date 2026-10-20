@@ -34,8 +34,8 @@ describe("párrafo del inmueble y evidencia desde la inspección", () => {
     expect(p).toContain("Vivienda de 2 pisos de uso exclusivo habitacional con una superficie construida de 90 m² y una antigüedad de 7 años. Consta de 3 dormitorios, 2 baños, cocina, living comedor, entre otras dependencias.");
     expect(p).toContain("Edificación de madera, techumbre soportada por cerchas de madera, cubierta de planchas de zinc alum, revestimientos en muros y cielo con pinturas y pavimentos de losa de hormigón armado.");
     expect(p).toContain("\n\n"); // dos párrafos separados por una línea en blanco
-    expect(vinetaDeDano(a.danos[1])).toBe("Cielo y muro afectado por humedad.");
-    expect(vinetaDeDano(a.danos[2])).toBe("Muro afectado por humedad.");
+    expect(vinetaDeDano(a.danos[1])).toBe("Se observa cielo y muro afectado por humedad, según consta en el acta de inspección.");
+    expect(vinetaDeDano(a.danos[2])).toBe("Se observa muro afectado por humedad, según consta en el acta de inspección.");
   });
   it("solo dice lo que consta y no toca viñetas escritas por una persona", () => {
     expect(parrafoInmueble({ pisos: 1 } as never)).toContain("Vivienda de 1 piso de uso exclusivo habitacional con una superficie construida de [FALTA DATO");
@@ -47,7 +47,7 @@ describe("párrafo del inmueble y evidencia desde la inspección", () => {
       ],
       [{ recinto: "Living", alto: 2, ancho: 3, largo: 3, descripcion: "Daños en cielo y paredes por agua", tipoDano: "Afectado por agua", um: "m2", cantidad: 8 }],
     );
-    expect(out[0].vineta).toBe("Cielo y muro afectado por humedad.");
+    expect(out[0].vineta).toBe("Se observa cielo y muro afectado por humedad, según consta en el acta de inspección.");
     expect(out[1].vineta).toBe("Humedad por filtración propia.");
   });
 });

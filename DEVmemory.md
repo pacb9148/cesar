@@ -317,3 +317,9 @@ Caso 1978883 (presupuesto «el Espino 2503»): el lector tomaba los datos del de
 
 Caso 1978883: partidas 4.1–4.5 (p. ej. planchas 14 × 10.320 = 144.480) quedaban en 1 × 270.000 al marcarlas «absorbidas», porque al cambiar de unidad el motor tomaba el precio del baremo aunque fuera mayor y la cantidad mínima 1 encarecía la partida. Ahora `decidirLinea` pasa por `sinSobrepago` (lib/ia/motor-ajuste.ts): el precio nunca sube en la misma unidad, y el total de la partida (o la suma de sus sub-líneas) nunca supera cantidad × precio reclamados. Regla del dueño: precio del presupuesto mayor que la hoja Datos → hoja Datos; menor → se mantiene el del presupuesto.
 Se quitó la justificación «Actividad absorbida en gastos generales… nunca 0» (motor y pantalla, también en casos ya guardados). Prueba: tests/sin-sobrepago.test.ts. Verificado: 249 pruebas, tsc, eslint. Los casos ya ajustados conservan sus cifras hasta volver a ajustarlos.
+
+## Evidencia más desarrollada y comparación con la hoja Datos en todo ajuste (20/10/2026, 4.ª tanda)
+
+- Evidencia observada: las viñetas salen como frase completa «Se observa …, según consta en el acta de inspección.» (`ampliar` en lib/caso/parrafo-inmueble.ts; «consta» y no «registrado» para no confundirse con las viñetas automáticas antiguas que `modernizarEvidencia` reescribe). El prompt de la IA (v0.4) pide frases de 25 a 40 palabras que empiecen con «Se observa…».
+- Ajuste: si la clasificación no trae partida de la hoja Datos, `decidirBruto` busca una equivalente segura (`mejorEquivalente`). Regla del dueño: precio del presupuesto mayor que la hoja Datos → solo la columna de ajuste pasa al precio de la hoja; menor → se mantiene el del presupuesto (y `sinSobrepago` lo garantiza). La edición manual del usuario no se toca: manda lo que escribe.
+- Verificado: 250 pruebas, tsc, eslint. Sin prueba en navegador.

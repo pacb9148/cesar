@@ -53,7 +53,7 @@ describe("textos del informe editables", () => {
     const a = await acta();
     const auto = textosDelInforme({}, a, salidaBase(a));
     expect(auto.caracteristicas).toMatch(/^Vivienda de 2 pisos de uso exclusivo habitacional/);
-    expect(textoDeEvidencia(auto.evidencia).split("\n")[0]).toBe("Dormitorio 1: Muro y cielo afectado por humedad.");
+    expect(textoDeEvidencia(auto.evidencia).split("\n")[0]).toBe("Dormitorio 1: Se observa muro y cielo afectado por humedad, según consta en el acta de inspección.");
     const ev = evidenciaDeTexto("Dormitorio 1: Cielo con mancha\nSolo una nota sin recinto\n\n");
     expect(ev).toHaveLength(2);
     expect(ev[0]).toMatchObject({ recinto: "Dormitorio 1", vineta: "Cielo con mancha" });
@@ -91,11 +91,11 @@ describe("vista del informe sin aspecto de tabla", () => {
 describe("viñetas de evidencia", () => {
   it("sin manifestación precisa en el acta queda la redacción simple (no se inventa nada)", async () => {
     const { vinetaDeDano } = await import("../lib/caso/parrafo-inmueble");
-    expect(vinetaDeDano({ descripcion: "Daños en cielo y paredes por agua", tipoDano: "Afectado por agua" })).toBe("Cielo y muro afectado por humedad.");
+    expect(vinetaDeDano({ descripcion: "Daños en cielo y paredes por agua", tipoDano: "Afectado por agua" })).toBe("Se observa cielo y muro afectado por humedad, según consta en el acta de inspección.");
   });
   it("con una manifestación precisa usa el término técnico y su descripción pericial", async () => {
     const { vinetaDeDano } = await import("../lib/caso/parrafo-inmueble");
-    expect(vinetaDeDano({ descripcion: "Cubierta", tipoDano: "Roto" })).toBe("Rotura de elemento de cubierta (ruptura o perforación del material de cobertura).");
+    expect(vinetaDeDano({ descripcion: "Cubierta", tipoDano: "Roto" })).toBe("Se observa rotura de elemento de cubierta (ruptura o perforación del material de cobertura), según consta en el acta de inspección.");
   });
 });
 
