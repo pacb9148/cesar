@@ -158,3 +158,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 20/10/2026 (2.ª tanda)
 Lectura de presupuestos PDF con capítulos numerados (sección = capítulo, líneas = ítems editables), exclusión de datos de portada/firma, unidades de compra y contraste con IA cuando la lectura directa es dudosa. Sin migraciones. El push dispara despliegue automático en Coolify.
+
+## Cambios del 20/10/2026 (3.ª tanda)
+El ajuste nunca paga más que el presupuesto original (precio y total por partida) y se oculta la justificación repetida de las partidas absorbidas. Sin migraciones; los casos ya ajustados se corrigen al volver a ajustar.

@@ -85,7 +85,7 @@ function desglosar(l: LineaReclamacion, c: Clasificacion, ctx: ContextoLinea): D
 }
 
 /** Contrasta una partida con sus máximos y devuelve la decisión final. Nunca lanza: lo que no se puede calcular se respeta y se avisa. */
-export function decidirLinea(l: LineaReclamacion, c: Clasificacion, ctx: ContextoLinea): Decidida {
+function decidirBruto(l: LineaReclamacion, c: Clasificacion, ctx: ContextoLinea): Decidida {
   const baremo = c.baremo_id != null ? porId(c.baremo_id) : undefined;
   if (c.categoria === "respetar") return { decision: decisionRespetar(l) };
 
@@ -106,7 +106,7 @@ export function decidirLinea(l: LineaReclamacion, c: Clasificacion, ctx: Context
   }
   const precioCambia = origen !== "reclamacion";
 
-  if (c.categoria === "absorbida") return { decision: { item: l.item, accion: "ajustar", um: l.um, cantidad: cantidadMinima(l.cantidad), pu, pu_origen: origen, obs: ["E"], justificacion: "Actividad absorbida en gastos generales o en partidas a todo costo: se deja la cantidad mínima, nunca 0.", sublineas: [] } };
+  if (c.categoria === "absorbida") return { decision: { item: l.item, accion: "ajustar", um: l.um, cantidad: cantidadMinima(l.cantidad), pu, pu_origen: origen, obs: ["E"], justificacion: "", sublineas: [] } };
   if (c.categoria === "ajena") return { decision: { item: l.item, accion: "ajustar", um: l.um, cantidad: cantidadMinima(l.cantidad), pu, pu_origen: origen, obs: ["A"], justificacion: "Daño por mantenimiento o deterioro progresivo, ajeno al evento: se deja la cantidad mínima, nunca 0.", sublineas: [] } };
   if (c.categoria === "preventiva") {
     const cant = cantidadMinima(l.cantidad);
@@ -135,6 +135,39 @@ export function decidirLinea(l: LineaReclamacion, c: Clasificacion, ctx: Context
   const obs: DecisionLinea["obs"] = [...(precioFinalCambia ? (["B"] as const) : []), ...(cantidadCambia ? (["C"] as const) : [])];
   const justificacion = [precioFinalCambia ? "Precio unitario llevado al máximo del baremo a todo costo." : "", cantidadCambia ? "Cantidad acotada a la medición del acta o al mínimo técnico." : ""].filter(Boolean).join(" ");
   return { decision: { item: l.item, accion: "ajustar", um: umFinal, cantidad: r2(cantidad), pu, pu_origen: origen, obs, justificacion, sublineas: [] }, aviso };
+}
+
+/**
+ * Regla del ajustador: nunca se paga más que el presupuesto original. El precio solo baja al de la hoja Datos (nunca sube) y el total
+ * de la partida no supera el reclamado, aunque cambie la unidad o la cantidad mínima sea 1 (la cantidad mínima no justifica subir el valor).
+ */
+function sinSobrepago(l: LineaReclamacion, d: DecisionLinea): DecisionLinea {
+  const reclamado = l.cantidad * l.pu;
+  if (d.accion !== "ajustar") return d;
+  if (d.sublineas.length > 0) {
+    const suma = d.sublineas.reduce((a, x) => a + x.cantidad * x.pu, 0);
+    if (suma <= reclamado + 0.5 || suma <= 0) return d;
+    const k = reclamado / suma;
+    return { ...d, sublineas: d.sublineas.map((x) => ({ ...x, pu: Math.floor(x.pu * k) })) };
+  }
+  if (d.cantidad == null || d.pu == null) return d;
+  let pu = d.pu;
+  let origen = d.pu_origen;
+  if (d.um === l.um && pu > l.pu) {
+    pu = l.pu;
+    origen = "reclamacion";
+  }
+  if (d.cantidad * pu > reclamado + 0.5) {
+    pu = Math.floor(reclamado / d.cantidad);
+    origen = pu === l.pu ? "reclamacion" : origen;
+  }
+  return pu === d.pu ? d : { ...d, pu, pu_origen: origen };
+}
+
+/** Contrasta una partida con sus máximos y devuelve la decisión final, sin sobrepago respecto del presupuesto. */
+export function decidirLinea(l: LineaReclamacion, c: Clasificacion, ctx: ContextoLinea): Decidida {
+  const r = decidirBruto(l, c, ctx);
+  return { ...r, decision: sinSobrepago(l, r.decision) };
 }
 
 /** Toda partida del presupuesto debe tener decisión: las que nadie tocó se aceptan tal como se reclamaron (quedan «sin tocar»). */

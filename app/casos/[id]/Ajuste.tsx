@@ -273,7 +273,7 @@ export default function Ajuste({ caso, reclamacion, ajuste, ajusteBase, iaConfig
                             <td>
                               {f.descripcion}
                               <span className={`marca ${marca[0]}`}>{marca[1]}</span>
-                              {dec?.justificacion && est !== "sin_tocar" && <div className="texto-suave text-xs">{dec.justificacion}</div>}
+                              {dec?.justificacion && !dec.justificacion.startsWith("Actividad absorbida") && est !== "sin_tocar" && <div className="texto-suave text-xs">{dec.justificacion}</div>}
                             </td>
                             {dos && (f.rec ? <Valores v={f.rec} /> : <td colSpan={4} />)}
                             {f.aj ? (

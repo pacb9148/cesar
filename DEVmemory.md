@@ -312,3 +312,8 @@ Caso 1978883 (presupuesto «el Espino 2503»): el lector tomaba los datos del de
 - La aritmética cantidad × precio = total decide si una fila es partida; unidades de compra (galón, caja, uni) pasan a «un» y anotan la palabra original. El Excel usa el mismo reconocimiento de unidades.
 - `leerPresupuesto` contrasta con la IA cuando la lectura directa es dudosa (suma ≠ costo directo, línea no interpretada, total inconsistente) y conserva la directa si la IA falla.
 - Verificado: 246 pruebas, tsc, eslint, batería de seguridad. NO verificado: el PDF real (solo una reconstrucción desde las capturas) ni la lectura de Excel con unidades de compra (sin prueba propia).
+
+## Nunca pagar más que el presupuesto y partidas «absorbidas» sin justificación repetida (20/10/2026, 3.ª tanda)
+
+Caso 1978883: partidas 4.1–4.5 (p. ej. planchas 14 × 10.320 = 144.480) quedaban en 1 × 270.000 al marcarlas «absorbidas», porque al cambiar de unidad el motor tomaba el precio del baremo aunque fuera mayor y la cantidad mínima 1 encarecía la partida. Ahora `decidirLinea` pasa por `sinSobrepago` (lib/ia/motor-ajuste.ts): el precio nunca sube en la misma unidad, y el total de la partida (o la suma de sus sub-líneas) nunca supera cantidad × precio reclamados. Regla del dueño: precio del presupuesto mayor que la hoja Datos → hoja Datos; menor → se mantiene el del presupuesto.
+Se quitó la justificación «Actividad absorbida en gastos generales… nunca 0» (motor y pantalla, también en casos ya guardados). Prueba: tests/sin-sobrepago.test.ts. Verificado: 249 pruebas, tsc, eslint. Los casos ya ajustados conservan sus cifras hasta volver a ajustarlos.
