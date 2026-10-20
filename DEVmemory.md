@@ -303,3 +303,12 @@ El documento plantea tres mejoras; las tres quedan implementadas.
 3. **Léxico pericial.** `lib/caso/lexico-pericial.ts` recoge el glosario del PDF (término técnico + descripción pericial por categoría, jerarquía de severidad). `vinetaDeDano` traduce el acta coloquial a lenguaje técnico solo cuando el texto lo sustenta, del hallazgo más leve al más grave, y toma el elemento de los hechos si el acta no lo nombra; sin elemento queda «superficie» (no se inventa). Ejemplo: «Huella de filtración en cielo (mácula oscura por ingreso de agua en el entrepiso), con escurrimiento (…)». Términos genéricos propios (n.º ≥ 1000) para lo que el acta no precisa (p. ej. «rotura de elemento de cubierta», no «policarbonato»). El glosario y la jerarquía también van al prompt de redacción de la IA, con la regla de no atribuir causa en daños por viento.
 - **Verificado:** 241 pruebas, tsc, lint, e2e sin FALLA, batería de seguridad y navegador (copia de miniatura; ajuste base con presupuesto). La IA real no se probó (sin proveedor activo): el prompt nuevo y `completarClasificacion` están probados con clientes simulados.
 - **Límite conocido:** el ajuste automático solo ajusta precio (y acota cantidades por superficie física); contrastar cantidades con los m² dañados del acta, desglosar partidas agrupadas y marcar absorbidas/ajenas sigue siendo trabajo de la IA o manual.
+
+## Lectura de presupuestos PDF por capítulos y unidades de compra (20/10/2026, 2.ª tanda)
+
+Caso 1978883 (presupuesto «el Espino 2503»): el lector tomaba los datos del destinatario como partidas y los ítems 1.1, 1.2… como partidas primarias. Ahora `parsearPresupuestoPdf` (lib/extraccion/presupuesto.ts):
+- La tabla empieza tras la cabecera o el primer ítem numerado y se cierra al llegar a los totales; portada y firma quedan fuera.
+- Cada capítulo (`1. Daños en cielo`) es una sección; sus ítems `1.1…` son líneas con cantidad y precio editables. Títulos y descripciones partidos en dos filas se unen.
+- La aritmética cantidad × precio = total decide si una fila es partida; unidades de compra (galón, caja, uni) pasan a «un» y anotan la palabra original. El Excel usa el mismo reconocimiento de unidades.
+- `leerPresupuesto` contrasta con la IA cuando la lectura directa es dudosa (suma ≠ costo directo, línea no interpretada, total inconsistente) y conserva la directa si la IA falla.
+- Verificado: 246 pruebas, tsc, eslint, batería de seguridad. NO verificado: el PDF real (solo una reconstrucción desde las capturas) ni la lectura de Excel con unidades de compra (sin prueba propia).

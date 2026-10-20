@@ -27,9 +27,17 @@ class Constructor {
   private n = 0; // sección actual
   private k = 0; // línea dentro de la sección
   private titulos = new Map<string, number>();
+  // La sección se abre al llegar su primera partida: un título suelto (portada, firma) nunca queda como sección vacía.
+  private pendiente: string | null = null;
 
   seccion(titulo: string) {
-    const base = titulo.replace(/\s+/g, " ").trim();
+    this.pendiente = titulo.replace(/\s+/g, " ").trim();
+  }
+  /** El título del capítulo seguía en la línea siguiente («…cielo Living - comedor,» / «dormitorio N°1 y N°2»). */
+  ampliarTitulo(texto: string) {
+    if (this.pendiente) this.pendiente = `${this.pendiente} ${texto}`.replace(/\s+/g, " ").trim();
+  }
+  private abrir(base: string) {
     const veces = (this.titulos.get(base.toLowerCase()) ?? 0) + 1;
     this.titulos.set(base.toLowerCase(), veces);
     this.n += 1;
@@ -37,7 +45,10 @@ class Constructor {
     this.b.secciones.push({ numero: `${this.n}.0`, titulo: veces > 1 ? `${base} (${veces})` : base });
   }
   linea(descripcion: string, um: Unidad, cantidad: number, pu: number) {
-    if (this.n === 0) this.seccion("GENERAL");
+    if (this.pendiente !== null) {
+      this.abrir(this.pendiente);
+      this.pendiente = null;
+    } else if (this.n === 0) this.abrir("GENERAL");
     this.k += 1;
     const sec = this.b.secciones[this.b.secciones.length - 1];
     this.b.lineas.push({ item: `${this.n}.${this.k}`, recinto: sec.titulo, descripcion: descripcion.replace(/\s+/g, " ").trim(), um, cantidad, pu });
@@ -173,7 +184,9 @@ export async function parsearPresupuestoXlsx(buf: Buffer): Promise<ResultadoPres
     if (r <= hdr) return;
     const desc = celdaTxt(row.getCell(col.desc));
     if (!desc) return;
-    const um = unidadDe(celdaTxt(row.getCell(col.um)));
+    // Unidades de compra (uni, galón, caja…) también valen: si no, la fila se perdía en silencio como si fuera un título.
+    const unidad = unidadPdf(celdaTxt(row.getCell(col.um)));
+    const um = unidad?.um ?? null;
     const cant = celdaNum(row.getCell(col.cant));
     let pu = celdaNum(row.getCell(col.pu));
     // Sin precio unitario pero con el total de la línea: se deduce de ahí (el total es lo que cobra el contratista).
@@ -181,7 +194,7 @@ export async function parsearPresupuestoXlsx(buf: Buffer): Promise<ResultadoPres
       const t = celdaNum(row.getCell(col.total));
       if (t != null) pu = t / cant;
     }
-    if (um && cant != null && pu != null) return void c.linea(desc, um, cant, pu);
+    if (um && cant != null && pu != null) return void c.linea(unidad?.nota ? `${desc} (${unidad.nota})` : desc, um, cant, pu);
     if (/^(SUB\s?TOTAL NETO|COSTO DIRECTO|TOTAL DIRECTO|TOTAL COSTO DIRECTO|NETO\b)/i.test(desc)) decl.directo = importeDeResumen(row, col);
     else if (/^(GGUU|GG\s?(Y|&)\s?UU|GASTOS GENERALES|GG\b)/i.test(desc)) decl.gg = importeDeResumen(row, col);
     else if (/^UTILIDAD/i.test(desc)) decl.util = importeDeResumen(row, col);
@@ -201,51 +214,149 @@ export async function parsearPresupuestoXlsx(buf: Buffer): Promise<ResultadoPres
 const LINEA_PARTIDA = /^(?:\d+\s+)?(.+?)\s+(m²|m2|m3|m³|ml|gl|un|und|kg)\s+([\d.,]+)\s+\$?\s*([\d.]+)\s+\$?\s*([\d.]+)\s*$/i;
 /** Algunos PDF pegan la unidad al texto anterior ("…daño menorM2 20,00 $11.000 $220.000"). */
 const LINEA_PEGADA = /^(?:\d+\s+)?(.+?[a-záéíóúñ.,)])(M2|M²|ML|GL|UN)\s+([\d.,]+)\s+\$?\s*([\d.]+)\s+\$?\s*([\d.]+)\s*$/;
+/** Fila de la tabla con cualquier unidad: «[ítem] descripción unidad cantidad P.U. total» (la unidad es la última palabra antes de los tres números). */
+const LINEA_GENERAL = /^(?:\d+(?:\.\d+)*[.)]?\s+)?(.+?)\s+([A-Za-zÁÉÍÓÚÑáéíóúñ²³][A-Za-zÁÉÍÓÚÑáéíóúñ²³0-9./]{0,9})\s+(\d[\d.,]*)\s+\$?\s*(\d[\d.,]*)\s+\$?\s*(\d[\d.,]*)\s*$/;
 const MONTO = /\$?\s*([\d]{1,3}(?:\.\d{3})+|\d+)\s*$/;
+/** «4.1 Planchas…»: ítem numerado dentro de un capítulo. */
+const NUM_ITEM = /^(\d+(?:\.\d+)+)[.)]?\s+/;
+/** «1 Desarme cubierta»: capítulo numerado (el nombre empieza con letra). */
+const NUM_CAPITULO = /^(\d+)[.)]?\s+(?=[A-Za-zÁÉÍÓÚÑáéíóúñ])/;
+/** Fila de títulos de la tabla: «Ítem Partida Unidad Cantidad P.U. Total». */
+const CABECERA_TABLA = /^(?:[IÍ]tem\b.*\b(?:partida|descripci[oó]n|detalle)\b|.*\bunidad\b.*\bcantidad\b)/i;
+const RESUMEN = /^(costo directo|gastos generales|utilidades?|iva\b|total|subtotal|sub total|resumen general|condiciones comerciales|forma de pago|estados de pago|plazo de entrega|validez)/i;
+/** Datos de quien recibe o emite el presupuesto: nunca son partidas ni secciones. */
+const DATOS_DE_PORTADA = /^(sr\.?|sra\.?|se[ñn]or(?:es|a)?|don|do[ñn]a|fono|fecha|tel[ée]fono|celular|cel\.?|e-?mail|correo|direcci[oó]n|atenci[oó]n|ref\.?|referencia|rut|cliente|obra|proyecto|presupuesto|cotizaci[oó]n|propuesta|contratista|profesi[oó]n|siniestro|mail|item\b|n[°º] partida|identificaci[oó]n)/i;
 
+/**
+ * Unidades que usan los presupuestos y su equivalente en el sistema. Las unidades de compra (caja, galón, saco…) se leen como «un»; la palabra original
+ * se deja anotada en la descripción para no perder lo que escribió el contratista.
+ */
+const UNIDADES_PDF: Record<string, { um: Unidad; nota?: string }> = {
+  uni: { um: "un" }, unid: { um: "un" }, unidad: { um: "un" }, unidades: { um: "un" }, pza: { um: "un" }, pz: { um: "un" }, pieza: { um: "un" }, piezas: { um: "un" },
+  caja: { um: "un", nota: "caja" }, cajas: { um: "un", nota: "caja" }, galon: { um: "un", nota: "galón" }, galón: { um: "un", nota: "galón" }, galones: { um: "un", nota: "galón" }, gal: { um: "un", nota: "galón" },
+  saco: { um: "un", nota: "saco" }, sacos: { um: "un", nota: "saco" }, rollo: { um: "un", nota: "rollo" }, rollos: { um: "un", nota: "rollo" }, tarro: { um: "un", nota: "tarro" }, tarros: { um: "un", nota: "tarro" },
+  plancha: { um: "un", nota: "plancha" }, planchas: { um: "un", nota: "plancha" }, juego: { um: "un", nota: "juego" }, jgo: { um: "un", nota: "juego" }, par: { um: "un", nota: "par" },
+  lt: { um: "un", nota: "litro" }, lts: { um: "un", nota: "litro" }, litro: { um: "un", nota: "litro" }, litros: { um: "un", nota: "litro" },
+  m: { um: "ml" }, mt: { um: "ml" }, mts: { um: "ml" }, metro: { um: "ml" }, metros: { um: "ml" }, mt2: { um: "m2" }, mts2: { um: "m2" },
+  global: { um: "gl" }, glob: { um: "gl" }, kgs: { um: "kg" },
+  hr: { um: "gl", nota: "hora" }, hrs: { um: "gl", nota: "hora" }, hora: { um: "gl", nota: "hora" }, horas: { um: "gl", nota: "hora" }, dia: { um: "gl", nota: "día" }, días: { um: "gl", nota: "día" }, dias: { um: "gl", nota: "día" }, jornada: { um: "gl", nota: "jornada" },
+};
+function unidadPdf(token: string): { um: Unidad; nota?: string } | null {
+  const t = token.trim().toLowerCase().replace(/\.$/, "");
+  const base = unidadDe(t);
+  return base ? { um: base } : (UNIDADES_PDF[t] ?? null);
+}
+
+const coherente = (cant: number, pu: number, total: number) => Math.abs(cant * pu - total) <= Math.max(2, total * 0.002);
+
+/**
+ * Presupuesto en PDF. La estructura es capítulo → elementos: cada capítulo («1 Desarme cubierta», «Dormitorio 1») es una sección y TODA fila con
+ * cantidad, precio y total es una línea editable de esa sección, sea cual sea su unidad. Lo que va antes de la tabla (destinatario, dirección, fono,
+ * fecha) y lo que va después de los totales (firma) no son partidas ni secciones.
+ */
 export function parsearPresupuestoPdf(paginas: string[]): ResultadoPresupuesto {
-  const lineas = paginas
+  const todas = paginas
     .join("\n")
     .split("\n")
     .map((l) => l.replace(/\s+/g, " ").trim())
     .filter(Boolean);
+  // La tabla empieza tras su fila de títulos o, si no la hay, en el primer ítem numerado; antes de eso solo hay datos de portada.
+  const iCabecera = todas.findIndex((l) => CABECERA_TABLA.test(l));
+  const iNumerado = todas.findIndex((l) => NUM_ITEM.test(l));
+  const inicio = iCabecera >= 0 ? iCabecera + 1 : iNumerado >= 0 ? Math.max(0, iNumerado - 1) : 0;
+  const lineas = todas.slice(inicio);
+  const numerado = lineas.filter((l) => NUM_ITEM.test(l)).length >= 2;
+
   const c = new Constructor();
   const decl = { directo: null as number | null, gg: null as number | null, util: null as number | null, iva: null as number | null };
   const alertas: string[] = [];
-  let ggUnico = false;
+  let cerrada = false; // ya pasaron los totales: lo que sigue (firma, nombre del ingeniero) no es presupuesto
+  let continuaTitulo = false; // el título del capítulo anterior quedó a medias («…cielo Living - comedor,») y sigue en la línea siguiente
+  let fragmento: string | null = null; // primera mitad de un título cuyo número y resto vienen en la línea siguiente («…comedor,» / «4 dormitorio N°1 y N°2»)
+  let itemPartido: string | null = null; // «4.2 Perfiles metálicos, fijaciones y» sin importes: la descripción sigue en la fila siguiente
 
-  for (const l of lineas) {
+  for (let i = 0; i < lineas.length; i++) {
+    const siguiente = lineas[i + 1] ?? "";
+    let l = lineas[i];
+    if (itemPartido) {
+      l = `${itemPartido} ${l}`;
+      itemPartido = null;
+    }
+    const monto = MONTO.exec(l);
+    if (RESUMEN.test(l)) {
+      if (/^costo directo/i.test(l) && monto) decl.directo = numeroCL(monto[1]);
+      else if (/^gastos generales/i.test(l) && monto) decl.gg = numeroCL(monto[1]);
+      else if (/^utilidad/i.test(l) && monto) decl.util = numeroCL(monto[1]);
+      else if (/^iva\b/i.test(l) && monto) decl.iva = numeroCL(monto[1]);
+      if (/^(costo directo|gastos generales|utilidades?|iva\b|total\b|subtotal neto)/i.test(l) && c.lineas.length > 0) cerrada = true;
+      continue;
+    }
+    if (cerrada) continue;
+
     const m = LINEA_PARTIDA.exec(l) ?? LINEA_PEGADA.exec(l);
     if (m) {
       const um = unidadDe(m[2])!;
       const cant = numeroCL(m[3]);
       const pu = numeroCL(m[4]);
       const total = numeroCL(m[5]);
-      if (Math.abs(cant * pu - total) > Math.max(2, total * 0.002))
-        alertas.push(`Partida con total inconsistente: "${l}" (${cant} × ${pu} ≠ ${total}).`);
-      c.linea(m[1], um, cant, pu);
+      if (!coherente(cant, pu, total)) alertas.push(`Partida con total inconsistente: "${l}" (${cant} × ${pu} ≠ ${total}).`);
+      c.linea(m[1].replace(NUM_ITEM, ""), um, cant, pu);
+      continuaTitulo = false;
       continue;
     }
-    if (/^(sub\s?total|subtotal)\b/i.test(l)) continue;
-    if (/^(cliente|direcci[óo]n|mail|tel[ée]fono|rut|profesi[óo]n|contratista|item\b|n[°º] partida|identificaci[óo]n|presupuesto|siniestro)/i.test(l)) continue;
-    const monto = MONTO.exec(l);
-    if (/^costo directo/i.test(l) && monto) decl.directo = numeroCL(monto[1]);
-    else if (/^gastos generales/i.test(l) && monto) decl.gg = numeroCL(monto[1]);
-    else if (/^utilidad/i.test(l) && monto) decl.util = numeroCL(monto[1]);
-    else if (/^iva/i.test(l) && monto) decl.iva = numeroCL(monto[1]);
-    else if (/^(total neto|total presupuesto|total\b|subtotal neto|resumen general|condiciones comerciales|forma de pago|estados de pago|plazo de entrega|validez)/i.test(l)) {
-      if (/^resumen general/i.test(l)) ggUnico = false;
+    const g = LINEA_GENERAL.exec(l);
+    if (g) {
+      const cant = numeroCL(g[3]);
+      const pu = numeroCL(g[4]);
+      const total = numeroCL(g[5]);
+      const u = unidadPdf(g[2]);
+      // Con una unidad desconocida solo es partida si la aritmética cuadra: así no se confunden direcciones o textos con números.
+      if (u || coherente(cant, pu, total)) {
+        if (!coherente(cant, pu, total)) alertas.push(`Partida con total inconsistente: "${l}" (${cant} × ${pu} ≠ ${total}).`);
+        const nota = u ? u.nota : g[2];
+        c.linea(`${g[1].replace(NUM_ITEM, "")}${nota ? ` (${nota})` : ""}`, u?.um ?? "un", cant, pu);
+        continuaTitulo = false;
+        continue;
+      }
+    }
+    if (/^\d+$/.test(l)) continue; // número de capítulo suelto (celda combinada)
+    if (DATOS_DE_PORTADA.test(l)) continue;
+
+    const cap = NUM_CAPITULO.exec(l);
+    const sinImportes = (t: string) => !/\$/.test(t) && !/(?:\d[\d.,]*\s+){2,}\d/.test(t);
+    // Ítem numerado sin importes: la descripción sigue en la fila de abajo (texto largo que se partió en dos líneas).
+    if (NUM_ITEM.test(l) && sinImportes(l) && LINEA_GENERAL.test(siguiente) && !NUM_ITEM.test(siguiente)) {
+      itemPartido = l;
       continue;
-    } else if (/[A-Za-zÁÉÍÓÚáéíóú]/.test(l) && !/\$/.test(l) && l.length < 80 && !/^\d+\s/.test(l)) {
+    }
+    if (cap && sinImportes(l) && !NUM_ITEM.test(l)) {
+      const resto = l.slice(cap[0].length);
+      c.seccion(fragmento ? `${fragmento} ${resto}` : resto);
+      fragmento = null;
+      continuaTitulo = /[,\-–]\s*$|\s(?:y|e|de)\s*$/i.test(l);
+      continue;
+    }
+    if (/[A-Za-zÁÉÍÓÚáéíóú]/.test(l) && !/\$/.test(l) && l.length < 80 && !/^\d+\s/.test(l)) {
+      if (numerado) {
+        // En un presupuesto numerado solo cuenta lo que forma el título de un capítulo; lo demás no abre secciones.
+        if (continuaTitulo || /^[a-záéíóúñ]/.test(l)) {
+          c.ampliarTitulo(l);
+          continuaTitulo = /[,\-–]\s*$/.test(l);
+        } else if (NUM_CAPITULO.test(siguiente) && sinImportes(siguiente) && !NUM_ITEM.test(siguiente)) {
+          fragmento = l; // el número del capítulo y el resto del título vienen en la línea siguiente
+        } else if (NUM_ITEM.test(siguiente)) {
+          c.seccion(l); // título sin número seguido de sus ítems
+        }
+        continue;
+      }
       // Encabezado de recinto, p. ej. "Dormitorio 1 3,4x2,8x2,4" o "COBERTIZO · 17,82 m²".
       c.seccion(l.replace(/\s*\d+(?:,\d+)?x\d+(?:,\d+)?x\d+(?:,\d+)?\s*$/i, ""));
-    } else if (/\d/.test(l) && /(m2|m²|ml|gl)/i.test(l)) {
+    } else if (/\d/.test(l) && (NUM_ITEM.test(l) || /(m2|m²|ml|gl)/i.test(l))) {
       alertas.push(`Línea no interpretada (revisar a mano): "${l}"`);
     }
   }
-  void ggUnico;
   // Presupuestos con "Costo directo (suma de recintos) 8.060.090 / Gastos Generales (12%) 967.211 / Utilidades (10%) 806.009"
-  const mDirecto = lineas.find((l) => /^costo directo/i.test(l));
+  const mDirecto = todas.find((l) => /^costo directo/i.test(l));
   if (mDirecto && decl.directo == null) decl.directo = numeroCL(MONTO.exec(mDirecto)?.[1] ?? "0");
   return cerrar(c.resultado(), decl, alertas);
 }

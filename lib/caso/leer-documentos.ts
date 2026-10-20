@@ -9,6 +9,8 @@ export type ObtenerCliente = () => ClienteLlm;
 
 const actaBuena = (a: ActaInspeccion) => !!a.siniestro && a.danos.length > 0;
 const vacio = (r: ResultadoPresupuesto) => r.reclamacion.lineas.length === 0;
+/** Una lectura directa con la suma de partidas distinta del costo directo declarado, filas sin interpretar o totales que no cuadran es dudosa: se contrasta con IA. */
+const dudosa = (r: ResultadoPresupuesto) => r.alertas.some((a) => /no coincide con el costo directo|Línea no interpretada|total inconsistente/.test(a));
 
 /**
  * Lee la inspección en cualquier formato. Primero lo determinista (PDF o texto con el formato de Beckett: exacto y gratis); si el documento
@@ -49,18 +51,21 @@ export async function leerInspeccion(docs: Fuente[], cliente: ObtenerCliente, al
  * leen directamente; imágenes, escaneos y Word se transcriben con IA. Nunca se inventan partidas: si no se puede, queda la alerta.
  */
 export async function leerPresupuesto(docs: Fuente[], cliente: ObtenerCliente, alertas: string[]): Promise<ResultadoPresupuesto | null> {
+  let directa: ResultadoPresupuesto | null = null; // lectura directa con dudas: se usa si la IA no mejora el resultado
   for (const original of docs) {
     try {
       const d = await modernizar(original);
       const f = formatoDe(d.nombre, d.mime);
       if (f === "xlsx") {
         const r = await parsearPresupuestoXlsx(d.contenido);
-        if (!vacio(r)) return r;
+        if (!vacio(r) && !dudosa(r)) return r;
+        if (!vacio(r)) directa ??= r;
       } else if (f === "pdf") {
         const l = await leerTexto(d);
         if (l.legible) {
           const r = parsearPresupuestoPdf(l.paginas);
-          if (!vacio(r)) return r;
+          if (!vacio(r) && !dudosa(r)) return r;
+          if (!vacio(r)) directa ??= r;
         }
       }
     } catch (e) {
@@ -68,15 +73,19 @@ export async function leerPresupuesto(docs: Fuente[], cliente: ObtenerCliente, a
     }
   }
   try {
-    emitir("info", "presupuesto", "El presupuesto no tiene un formato de tabla reconocible o es una imagen/escaneo: se transcribe con IA");
+    emitir("info", "presupuesto", directa ? `La lectura directa del presupuesto tiene ${directa.alertas.length} aviso(s) (la suma no cuadra o hay filas sin interpretar): se contrasta con IA` : "El presupuesto no tiene un formato de tabla reconocible o es una imagen/escaneo: se transcribe con IA");
     const r = await presupuestoConIa(cliente(), docs);
     if (vacio(r)) {
+      if (directa) return directa;
       alertas.push("No se encontraron partidas en el presupuesto.");
       return null;
     }
+    // Con una lectura directa dudosa y una transcripción también dudosa manda la directa (exacta); solo una transcripción limpia la reemplaza.
+    if (directa && dudosa(r)) return directa;
     emitir("ok", "presupuesto", `Presupuesto transcrito con IA: ${r.reclamacion.lineas.length} partidas`);
     return r;
   } catch (e) {
+    if (directa) return directa; // sin proveedor de IA: se entrega la lectura directa con sus avisos para que el usuario la revise
     alertas.push(`No se pudo leer el presupuesto: ${e instanceof Error ? e.message : "error"}`);
     return null;
   }

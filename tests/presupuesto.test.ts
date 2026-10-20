@@ -47,3 +47,85 @@ describe("presupuesto con otros títulos de columna (caso 1990660)", () => {
     expect(r.reclamacion.secciones).toHaveLength(8);
   });
 });
+
+describe("presupuesto PDF con capítulos numerados, unidades de compra y datos de portada (caso Espino 2503)", () => {
+  const texto = [
+    "Presupuesto de obras reparación techumbre (cubierta) y cielo raso;",
+    "Sr. René Chamorro Villalobos",
+    "El Espino 2503, Las Araucarias, Tomé.",
+    "Fono: 995329352",
+    "Fecha: 19 de agosto de 2026",
+    "Item Partida Unidad Cantidad P.U. Total",
+    "1 Desarme cubierta",
+    "1.1 Retiro y disposición de escombros gl 1 $ 270.000 $ 270.000",
+    "1.2 Mano de obra gl 1 $ 500.000 $ 500.000",
+    "2 Reparación y reposición de cubierta",
+    "2.1 Tableros OSB estructurales 15 mm uni 38 $ 23.290 $ 884.020",
+    "2.2 Membrana hidrófuga Tyvek uni 2 $ 121.900 $ 243.800",
+    "2.3 Zinc acanalado 0,35 mm uni 37 $ 14.290 $ 528.730",
+    "2.4 Costaneras impregnadas uni 60 $ 3.190 $ 191.400",
+    "2.5 Tornillos y fijaciones caja 3 $ 33.590 $ 100.770",
+    "2.6 Selladores y siliconas uni 8 $ 9.990 $ 79.920",
+    "2.7 Canaletas uni 8 $ 19.990 $ 159.920",
+    "2.8 Bajadas ALL uni 8 $ 8.290 $ 66.320",
+    "2.9 Caballetes uni 5 $ 23.030 $ 115.150",
+    "2.10 Tapacanes metálicos y madera uni 8 $ 11.450 $ 91.600",
+    "2.11 Mano de obra gl 1 $ 2.900.000 $ 2.900.000",
+    "3 Desarme cielos interiores",
+    "3.1 Retiro y disposición de escombros gl 1 $ 270.000 $ 270.000",
+    "3.2 Mano de obra gl 1 $ 280.000 $ 280.000",
+    "Reparación y reposición cielo Living - comedor,",
+    "4 dormitorio N°1 y N°2",
+    "4.1 Planchas para reposición de cielos uni 14 10320 144480",
+    "4.2 Perfiles metálicos, fijaciones y tornillería gl 1 220000 220000",
+    "4.3 Pasta muro y materiales de empaste m2 35 3285 114975",
+    "4.4 Selladores antihumedad galon 1 120000 120000",
+    "4.5 Pintura premium para cielos galon 1 129000 129000",
+    "4.6 Pintura premium para muros galon 1 129000 129000",
+    "4.7 Insumos menores, plásticos y protecciones gl 1 140000 140000",
+    "4.8 Mano de obra gl 1 $ 1.180.000 $ 1.180.000",
+    "Costo directo $ 8.860.085",
+    "Gastos generales 20% $ 1.772.017",
+    "Utilidades 15% $ 1.329.013",
+    "Subtotal $ 11.961.115",
+    "IVA $ 2.272.612",
+    "TOTAL $ 14.233.727",
+    "Nora Arteaga Sepúlveda",
+    "Ingeniero Constructor",
+  ];
+  const r = parsearPresupuestoPdf([texto.join("\n")]).reclamacion;
+  const alertas = parsearPresupuestoPdf([texto.join("\n")]).alertas;
+
+  it("los datos del destinatario, la fecha y la firma no son secciones ni partidas", () => {
+    const titulos = r.secciones.map((s) => s.titulo);
+    for (const t of titulos) expect(t).not.toMatch(/Ren[eé]|Espino|Fono|Fecha|Ingeniero|Nora|Presupuesto de obras/i);
+    expect(r.lineas.some((l) => /Chamorro|Fono|Fecha|Ingeniero/i.test(l.descripcion))).toBe(false);
+  });
+  it("cada capítulo es una sección y sus elementos son líneas con su cantidad y precio", () => {
+    expect(r.secciones.map((s) => s.titulo)).toEqual(["Desarme cubierta", "Reparación y reposición de cubierta", "Desarme cielos interiores", "Reparación y reposición cielo Living - comedor, dormitorio N°1 y N°2"]);
+    expect(r.lineas).toHaveLength(2 + 11 + 2 + 8);
+    const cap4 = r.lineas.filter((l) => l.recinto.startsWith("Reparación y reposición cielo"));
+    expect(cap4.map((l) => l.item)).toEqual(["4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8"]);
+    expect(cap4[0]).toMatchObject({ descripcion: "Planchas para reposición de cielos", um: "un", cantidad: 14, pu: 10320 });
+    expect(cap4[2]).toMatchObject({ um: "m2", cantidad: 35, pu: 3285 });
+    expect(r.lineas.some((l) => /^\d+\.\d+\s/.test(l.descripcion))).toBe(false); // sin el número del ítem pegado a la descripción
+  });
+  it("las unidades de compra (uni, galón, caja) se leen, y la palabra original queda anotada", () => {
+    const l = (d: string) => r.lineas.find((x) => x.descripcion.startsWith(d))!;
+    expect(l("Tableros OSB")).toMatchObject({ um: "un", cantidad: 38, pu: 23290 });
+    expect(l("Tableros OSB").descripcion).not.toMatch(/\(/);
+    expect(l("Selladores antihumedad").descripcion).toMatch(/\(galón\)$/);
+    expect(l("Tornillos y fijaciones").descripcion).toMatch(/\(caja\)$/);
+  });
+  it("la suma de las partidas coincide con el costo directo declarado y no quedan alertas", () => {
+    expect(r.lineas.reduce((s, x) => s + x.cantidad * x.pu, 0)).toBe(8860085);
+    expect(r.totalDirectoDeclarado).toBe(8860085);
+    expect(alertas).toEqual([]);
+  });
+  it("también lee el título partido con el número en la primera línea y una descripción larga partida en dos filas", () => {
+    const otro = parsearPresupuestoPdf([["Item Partida Unidad Cantidad P.U. Total", "4 Reparación y reposición cielo Living - comedor,", "dormitorio N°1 y N°2", "4.1 Perfiles metálicos, fijaciones y", "tornillería gl 1 220000 220000", "4.2 Mano de obra gl 1 100000 100000", "Costo directo $ 320.000"].join(String.fromCharCode(10))]);
+    expect(otro.reclamacion.secciones.map((x) => x.titulo)).toEqual(["Reparación y reposición cielo Living - comedor, dormitorio N°1 y N°2"]);
+    expect(otro.reclamacion.lineas.map((x) => x.descripcion)).toEqual(["Perfiles metálicos, fijaciones y tornillería", "Mano de obra"]);
+    expect(otro.alertas).toEqual([]);
+  });
+});

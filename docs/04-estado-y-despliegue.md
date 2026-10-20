@@ -155,3 +155,6 @@ npx tsx scripts/e2e.mts 1981023
 
 ## Cambios del 20/10/2026
 - Ajuste automático con la hoja Datos (sin IA, equivalencias por trabajo y objeto) y mejor contraste en el agente con IA. Copia de la miniatura como captura de 8,66 × 6,70 cm con el aviso en la tarjeta. Evidencia observada en lenguaje técnico pericial (glosario del PDF) y glosario en el prompt de la IA. Sin migraciones. El push a `main` dispara el despliegue automático en Coolify.
+
+## Cambios del 20/10/2026 (2.ª tanda)
+Lectura de presupuestos PDF con capítulos numerados (sección = capítulo, líneas = ítems editables), exclusión de datos de portada/firma, unidades de compra y contraste con IA cuando la lectura directa es dudosa. Sin migraciones. El push dispara despliegue automático en Coolify.
